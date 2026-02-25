@@ -97,21 +97,22 @@ This is a **Kleisli arrow** in the `Task` monad, lifting a pure effect descripti
 
 ### How Each Runtime Instantiates the Fold
 
-All three runtimes are the *same* fold with different observer and interpreter:
+MVU and Actor share the `AutomatonRuntime` directly, with different observer and interpreter:
 
 | Runtime | Observer | Interpreter | Character |
 |---------|----------|-------------|-----------|
 | **MVU** | Render state → view | Execute commands → feedback events | Interactive loop |
-| **Event Sourcing** | Append event to store | No-op (empty) | Persistent log |
 | **Actor** | No-op (state is internal) | Execute effect via self-reference | Concurrent mailbox |
 
-The structural identity is the key insight: swapping the observer/interpreter transforms the behavior while preserving the core loop.
+**Event Sourcing** uses a conceptually identical fold but a separate implementation (see ADR-006). The `AggregateRunner` is synchronous, command-driven via the Decider constraint, and does not depend on `AutomatonRuntime`. Its fold is the same left fold mathematically — `state = foldl transition init events` — but the implementation is a direct `Decide → Transition → Append` loop without the async Observer/Interpreter layer.
+
+The structural identity across MVU and Actor is the key insight: swapping the observer/interpreter transforms the behavior while preserving the core loop. ES preserves the *mathematical* identity (left fold) while using a different runtime suited to its command-driven, synchronous nature.
 
 ## Consequences
 
 ### Positive
 
-- **Single implementation** — `AutomatonRuntime` is written once and shared by all three runtimes.
+- **Shared implementation** — `AutomatonRuntime` is written once and shared by MVU and Actor. Event Sourcing uses a separate synchronous implementation (ADR-006) but the same mathematical fold.
 - **Separation of concerns** — the transition function is pure; the observer and interpreter handle effects.
 - **Composable observers** — `Then` allows stacking render + log + metrics without modifying the runtime.
 - **Testable** — inject test observers/interpreters to verify behavior without real infrastructure.

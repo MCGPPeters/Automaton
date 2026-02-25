@@ -82,10 +82,10 @@ public sealed class EventStore<TEvent>
 /// <para>
 /// The aggregate runner implements the decide-then-append pattern:
 /// <list type="number">
-///     <item>Receive a command (user intent)</item>
-///     <item>Validate via <c>Decide(state, command)</c> → events or error</item>
-///     <item>On success: transition state for each event, append to store</item>
-///     <item>On failure: return error, state unchanged, nothing persisted</item>
+///     <item><description>Receive a command (user intent)</description></item>
+///     <item><description>Validate via <c>Decide(state, command)</c> → events or error</description></item>
+///     <item><description>On success: transition state for each event, append to store</description></item>
+///     <item><description>On failure: return error, state unchanged, nothing persisted</description></item>
 /// </list>
 /// </para>
 /// <example>
@@ -170,21 +170,46 @@ public sealed class AggregateRunner<TDecider, TState, TCommand, TEvent, TEffect,
     /// each produced event on success. Returns the new state or an error.
     /// </summary>
     /// <remarks>
-    /// On error, the aggregate state is unchanged and no events are appended.
-    /// On success, all events are appended atomically and the state reflects
-    /// the full sequence of transitions.
+    /// <para>
+    /// On validation error, the aggregate state is unchanged and no events are appended.
+    /// </para>
+    /// <para>
+    /// On success, events are materialized and transitions are computed in isolation.
+    /// State and effects are only committed after all transitions and store appends succeed,
+    /// ensuring the state/store invariant is preserved on partial failure.
+    /// </para>
     /// </remarks>
     public Result<TState, TError> Handle(TCommand command) =>
         TDecider.Decide(_state, command).Match<Result<TState, TError>>(
             events =>
             {
+                // Materialize events to avoid issues with lazy enumerables throwing mid-iteration.
+                var materializedEvents = new List<TEvent>();
                 foreach (var @event in events)
                 {
-                    var (newState, effect) = TDecider.Transition(_state, @event);
-                    _state = newState;
-                    _store.Append(@event);
-                    _effects.Add(effect);
+                    materializedEvents.Add(@event);
                 }
+
+                // Compute new state and effects in locals to preserve invariants on failure.
+                var newState = _state;
+                var newEffects = new List<TEffect>();
+
+                foreach (var @event in materializedEvents)
+                {
+                    var (transitioned, effect) = TDecider.Transition(newState, @event);
+                    newState = transitioned;
+                    newEffects.Add(effect);
+                }
+
+                // Append to store only after all transitions succeed.
+                foreach (var @event in materializedEvents)
+                {
+                    _store.Append(@event);
+                }
+
+                // Commit state and effects only after successful append.
+                _state = newState;
+                _effects.AddRange(newEffects);
 
                 return new Result<TState, TError>.Ok(_state);
             },

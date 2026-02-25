@@ -43,13 +43,19 @@ public Result<TState, TError> Handle(TCommand command) =>
     TDecider.Decide(_state, command).Match<Result<TState, TError>>(
         events =>
         {
-            foreach (var @event in events)
+            // Materialize, compute in locals, then commit — preserves state/store invariant.
+            var materialized = events.ToList();
+            var newState = _state;
+            var newEffects = new List<TEffect>();
+            foreach (var e in materialized)
             {
-                var (newState, effect) = TDecider.Transition(_state, @event);
-                _state = newState;
-                _store.Append(@event);
-                _effects.Add(effect);
+                var (s, f) = TDecider.Transition(newState, e);
+                newState = s;
+                newEffects.Add(f);
             }
+            foreach (var e in materialized) _store.Append(e);
+            _state = newState;
+            _effects.AddRange(newEffects);
             return new Result<TState, TError>.Ok(_state);
         },
         error => new Result<TState, TError>.Err(error));
@@ -58,7 +64,7 @@ public Result<TState, TError> Handle(TCommand command) =>
 Key design choices:
 
 1. **Synchronous** — no `async/await`, no `AutomatonRuntime` dependency. ES is a simple fold.
-2. **Atomic** — on success, all events are appended and state is updated. On failure, nothing changes.
+2. **Commit-on-success** — events are materialized, transitions are computed in locals, and only committed (appended + state updated) after all transitions succeed. On validation error, nothing changes. On `Transition` failure, state is preserved (store appends are sequential, not transactional).
 3. **No Observer/Interpreter** — the aggregate runner does not use the shared runtime. It directly calls `Decide` + `Transition` + `Store.Append`.
 
 ### Why Not AutomatonRuntime?
@@ -169,7 +175,7 @@ This is safe because **stored events are already validated facts**. They passed 
 | Criterion | Handle(command) | Dispatch(event) |
 |-----------|----------------|-----------------|
 | **Validation** | ✅ Decide validates before persist | ❌ No validation — invalid events corrupt store |
-| **Atomicity** | ✅ All-or-nothing (error = no persist) | ❌ Partial append possible |
+| **Atomicity** | ✅ Commit-on-success (error = no persist, state preserved on failure) | ❌ Partial append possible |
 | **Domain integrity** | ✅ Only valid events enter the stream | ❌ Stream can contain invalid states |
 | **Error feedback** | ✅ Caller gets Result<State, Error> | ❌ No error channel |
 | **Undo** | ✅ Invalid commands are simply rejected | ❌ No undo in append-only store |
