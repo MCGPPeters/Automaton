@@ -153,4 +153,4 @@ MVU, Event Sourcing, and the Actor Model are all left folds over an event stream
 
 ## License
 
-MIT
+Apache 2.0
