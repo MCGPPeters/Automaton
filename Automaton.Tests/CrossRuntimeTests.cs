@@ -40,7 +40,7 @@ public class CrossRuntimeTests
     {
         // --- MVU ---
         var mvu = await MvuRuntime<Counter, CounterState, CounterEvent, CounterEffect, string>
-            .Start(s => $"Count: {s.Count}", _ => Task.FromResult<IEnumerable<CounterEvent>>([]));;
+            .Start(s => $"Count: {s.Count}", _ => Task.FromResult<IEnumerable<CounterEvent>>([]));
 
         foreach (var e in _scenario)
         {
@@ -82,7 +82,7 @@ public class CrossRuntimeTests
     {
         // Run through MVU
         var mvu = await MvuRuntime<Counter, CounterState, CounterEvent, CounterEffect, string>
-            .Start(s => s.Count.ToString(), _ => Task.FromResult<IEnumerable<CounterEvent>>([]));;
+            .Start(s => s.Count.ToString(), _ => Task.FromResult<IEnumerable<CounterEvent>>([]));
 
         foreach (var e in _scenario)
         {

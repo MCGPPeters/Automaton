@@ -128,7 +128,7 @@ public sealed class ActorInstance<TAutomaton, TState, TEvent, TEffect>
                 await effectHandler(effect, actorRef);
                 return [];
             }
-            : _ => Task.FromResult<IEnumerable<TEvent>>([]);
+        : _ => Task.FromResult<IEnumerable<TEvent>>([]);
 
         var core = new AutomatonRuntime<TAutomaton, TState, TEvent, TEffect>(
             state, observer, interpreter);
