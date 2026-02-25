@@ -62,6 +62,56 @@ public class Counter : Automaton<CounterState, CounterEvent, CounterEffect>
 
 This single definition drives all three runtimes below.
 
+## The Shared Runtime
+
+All three runtimes are structurally identical: a **monadic left fold** over an event stream, parameterized by two extension points:
+
+| Extension Point | Signature | Purpose |
+| --------------- | --------- | ------- |
+| **Observer** | `(State, Event, Effect) → Task` | See each transition triple (render, persist, log) |
+| **Interpreter** | `Effect → Task<IEnumerable<Event>>` | Convert effects to feedback events |
+
+```csharp
+// Observer: sees each (state, event, effect) triple after transition
+public delegate Task Observer<in TState, in TEvent, in TEffect>(
+    TState state, TEvent @event, TEffect effect);
+
+// Interpreter: converts effects to feedback events
+public delegate Task<IEnumerable<TEvent>> Interpreter<in TEffect, TEvent>(TEffect effect);
+```
+
+The `AutomatonRuntime` executes the loop: **dispatch → transition → observe → interpret**.
+
+```csharp
+var runtime = await AutomatonRuntime<Counter, CounterState, CounterEvent, CounterEffect>
+    .Start(
+        observer: (state, @event, effect) =>
+        {
+            Console.WriteLine($"{@event} → {state}");
+            return Task.CompletedTask;
+        },
+        interpreter: _ => Task.FromResult<IEnumerable<CounterEvent>>([]));
+
+await runtime.Dispatch(new CounterEvent.Increment());
+// Prints: Increment → CounterState { Count = 1 }
+```
+
+### Observer Composition
+
+Observers compose sequentially with `Then`:
+
+```csharp
+var combined = renderObserver.Then(logObserver).Then(metricsObserver);
+```
+
+### How Each Runtime Wires the Shared Core
+
+| Runtime | Observer | Interpreter |
+| ------- | -------- | ----------- |
+| **MVU** | Render the new state | Execute effects, return feedback events |
+| **Event Sourcing** | Append event to store + record effect | No-op (empty) |
+| **Actor** | No-op (state is internal) | Execute effect with self-reference |
+
 ## Three Runtimes
 
 ### MVU (Model-View-Update)
@@ -74,7 +124,7 @@ using Automaton.Mvu;
 var runtime = await MvuRuntime<Counter, CounterState, CounterEvent, CounterEffect, string>
     .Start(
         render: state => $"Count: {state.Count}",
-        effectHandler: _ => Task.FromResult<IEnumerable<CounterEvent>>([]));
+        interpreter: _ => Task.FromResult<IEnumerable<CounterEvent>>([]));;
 
 await runtime.Dispatch(new CounterEvent.Increment());
 // runtime.State.Count == 1
@@ -90,9 +140,9 @@ using Automaton.EventSourcing;
 
 var aggregate = AggregateRunner<Counter, CounterState, CounterEvent, CounterEffect>.Create();
 
-aggregate.Dispatch(new CounterEvent.Increment());
-aggregate.Dispatch(new CounterEvent.Increment());
-aggregate.Dispatch(new CounterEvent.Decrement());
+await aggregate.Dispatch(new CounterEvent.Increment());
+await aggregate.Dispatch(new CounterEvent.Increment());
+await aggregate.Dispatch(new CounterEvent.Decrement());
 // aggregate.State.Count == 1
 // aggregate.Store.Events.Count == 3
 
@@ -148,11 +198,30 @@ MVU, Event Sourcing, and the Actor Model are all left folds over an event stream
 | Test through infrastructure | Test the transition function directly |
 | Framework dictates architecture | Math dictates architecture, framework is pluggable |
 
+## Architecture
+
+```text
+┌───────────────────────────────────────────────┐
+│             Automaton<S, E, F>              │
+│     Init() + Transition(state, event)       │
+└───────────────────────┬───────────────────────┘
+                        │
+          ┌─────────────┴─────────────┐
+          │    AutomatonRuntime<A,S,E,F>  │
+          │  Observer + Interpreter       │
+          └─────┬──────────┬─────────┬────┘
+                │          │         │
+          ┌─────┴───┐  ┌──┴─────┐  ┌─┴──────┐
+          │ MVU      │  │ ES      │  │ Actor   │
+          │ Runtime  │  │ Runtime │  │ Runtime │
+          └──────────┘  └────────┘  └────────┘
+```
+
 ## Namespaces
 
 | Namespace | Contains |
 | --------- | -------- |
-| `Automaton` | The kernel interface |
+| `Automaton` | The kernel interface, shared runtime, Observer, Interpreter |
 | `Automaton.Mvu` | Headless MVU runtime |
 | `Automaton.EventSourcing` | Event store, aggregate runner, projections |
 | `Automaton.Actor` | Actor reference, mailbox instance |
