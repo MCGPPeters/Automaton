@@ -175,6 +175,136 @@ await actor.DrainMailbox();
 // actor.State.Count == 2
 ```
 
+## The Decider — Command Validation
+
+The **Decider pattern** ([Chassaing, 2021](https://thinkbeforecoding.com/post/2021/12/17/functional-event-sourcing-decider)) adds a command validation layer to the Automaton. It separates *intent* (commands) from *facts* (events):
+
+```text
+Command → Decide(state) → Result<Events, Error> → Transition(state, event) → (State', Effect)
+```
+
+A Decider is an Automaton that also validates commands:
+
+```csharp
+public interface Decider<TState, TCommand, TEvent, TEffect, TError>
+    : Automaton<TState, TEvent, TEffect>
+{
+    static abstract Result<IEnumerable<TEvent>, TError> Decide(TState state, TCommand command);
+    static virtual bool IsTerminal(TState state) => false;
+}
+```
+
+Together with the Automaton's `Init` and `Transition`, this gives the seven elements of the Decider pattern:
+
+| Element | Provided by | Method |
+| ------- | ----------- | ------ |
+| Command type | Type parameter | `TCommand` |
+| Event type | Type parameter | `TEvent` |
+| State type | Type parameter | `TState` |
+| Initial state | Automaton | `Init()` |
+| Decide | Decider | `Decide(state, command)` |
+| Evolve | Automaton | `Transition(state, event)` |
+| Is terminal | Decider | `IsTerminal(state)` |
+
+### Example: Bounded Counter
+
+The same Counter gains command validation by implementing `Decider` instead of `Automaton`:
+
+```csharp
+public interface CounterCommand
+{
+    record struct Add(int Amount) : CounterCommand;
+    record struct Reset : CounterCommand;
+}
+
+public interface CounterError
+{
+    record struct Overflow(int Current, int Amount, int Max) : CounterError;
+    record struct Underflow(int Current, int Amount) : CounterError;
+    record struct AlreadyAtZero : CounterError;
+}
+
+public class Counter
+    : Decider<CounterState, CounterCommand, CounterEvent, CounterEffect, CounterError>
+{
+    public const int MaxCount = 100;
+
+    // Init and Transition remain unchanged — same pure functions as before
+
+    public static Result<IEnumerable<CounterEvent>, CounterError> Decide(
+        CounterState state, CounterCommand command) =>
+        command switch
+        {
+            CounterCommand.Add(var n) when state.Count + n > MaxCount =>
+                new Result<IEnumerable<CounterEvent>, CounterError>
+                    .Err(new CounterError.Overflow(state.Count, n, MaxCount)),
+
+            CounterCommand.Add(var n) when state.Count + n < 0 =>
+                new Result<IEnumerable<CounterEvent>, CounterError>
+                    .Err(new CounterError.Underflow(state.Count, n)),
+
+            CounterCommand.Add(var n) when n >= 0 =>
+                new Result<IEnumerable<CounterEvent>, CounterError>
+                    .Ok(Enumerable.Repeat<CounterEvent>(new CounterEvent.Increment(), n)),
+
+            CounterCommand.Add(var n) =>
+                new Result<IEnumerable<CounterEvent>, CounterError>
+                    .Ok(Enumerable.Repeat<CounterEvent>(new CounterEvent.Decrement(), Math.Abs(n))),
+
+            CounterCommand.Reset when state.Count is 0 =>
+                new Result<IEnumerable<CounterEvent>, CounterError>
+                    .Err(new CounterError.AlreadyAtZero()),
+
+            CounterCommand.Reset =>
+                new Result<IEnumerable<CounterEvent>, CounterError>
+                    .Ok([new CounterEvent.Reset()]),
+
+            _ => throw new UnreachableException()
+        };
+}
+```
+
+### DecidingRuntime
+
+The `DecidingRuntime` wraps `AutomatonRuntime` and adds `Handle(command)`:
+
+```csharp
+var runtime = await DecidingRuntime<Counter, CounterState, CounterCommand,
+    CounterEvent, CounterEffect, CounterError>.Start(observer, interpreter);
+
+// Valid command → events dispatched, state updated
+var result = await runtime.Handle(new CounterCommand.Add(5));
+// result is Ok(CounterState { Count = 5 })
+
+// Invalid command → error returned, state unchanged
+var overflow = await runtime.Handle(new CounterCommand.Add(200));
+// overflow is Err(CounterError.Overflow { Current = 5, Amount = 200, Max = 100 })
+// runtime.State.Count is still 5
+```
+
+### Result Type
+
+`Result<TSuccess, TError>` is the standard functional error handling type — a sum type that is either `Ok(value)` or `Err(error)`:
+
+```csharp
+var result = Counter.Decide(state, command);
+
+// Exhaustive pattern match
+var message = result.Match(
+    events => $"Produced {events.Count()} events",
+    error => $"Rejected: {error}");
+
+// Functor (Map), Monad (Bind), Bifunctor (MapError)
+result.Map(events => events.Count())
+      .Bind(count => count > 0
+          ? new Result<string, CounterError>.Ok($"{count} events")
+          : new Result<string, CounterError>.Err(new CounterError.AlreadyAtZero()));
+```
+
+### Backward Compatibility
+
+Since `Decider<...> : Automaton<...>`, upgrading from Automaton to Decider is **non-breaking**. All existing runtime usages (MVU, ES, Actor) continue to work unchanged — the Counter still satisfies `Automaton<CounterState, CounterEvent, CounterEffect>`.
+
 ## The Proof: It's All the Same Fold
 
 ```csharp
@@ -197,31 +327,38 @@ MVU, Event Sourcing, and the Actor Model are all left folds over an event stream
 | Rewrite business rules for each tier | Write once, run in browser + server + actor |
 | Test through infrastructure | Test the transition function directly |
 | Framework dictates architecture | Math dictates architecture, framework is pluggable |
+| Validation scattered across layers | Validation is a pure function on the Decider |
 
 ## Architecture
 
 ```text
 ┌───────────────────────────────────────────────┐
-│             Automaton<S, E, F>              │
-│     Init() + Transition(state, event)       │
+│             Automaton<S, E, F>                 │
+│     Init() + Transition(state, event)          │
 └───────────────────────┬───────────────────────┘
                         │
+         ┌──────────────┴──────────────┐
+         │  Decider<S, C, E, F, Err>   │
+         │  Decide(state, command)      │
+         │  IsTerminal(state)           │
+         └──────────────┬──────────────┘
+                        │
           ┌─────────────┴─────────────┐
-          │    AutomatonRuntime<A,S,E,F>  │
-          │  Observer + Interpreter       │
-          └─────┬──────────┬─────────┬────┘
-                │          │         │
-          ┌─────┴───┐  ┌──┴─────┐  ┌─┴──────┐
-          │ MVU      │  │ ES      │  │ Actor   │
-          │ Runtime  │  │ Runtime │  │ Runtime │
-          └──────────┘  └────────┘  └────────┘
+          │  AutomatonRuntime<A,S,E,F> │
+          │  Observer + Interpreter    │
+          └─────┬────┬────┬────┬──────┘
+                │    │    │    │
+          ┌─────┴─┐ ┌┴────┐ ┌─┴────┐ ┌──────────┐
+          │ MVU   │ │ ES  │ │Actor │ │ Deciding │
+          │Runtime│ │Rntm │ │Rntm  │ │ Runtime  │
+          └───────┘ └─────┘ └──────┘ └──────────┘
 ```
 
 ## Namespaces
 
 | Namespace | Contains |
 | --------- | -------- |
-| `Automaton` | The kernel interface, shared runtime, Observer, Interpreter |
+| `Automaton` | The kernel interface, Decider interface, Result type, shared runtime, Observer, Interpreter |
 | `Automaton.Mvu` | Headless MVU runtime |
 | `Automaton.EventSourcing` | Event store, aggregate runner, projections |
 | `Automaton.Actor` | Actor reference, mailbox instance |
