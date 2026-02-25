@@ -1,0 +1,28 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+  </PropertyGroup>
+
+  <!-- NuGet package metadata -->
+  <PropertyGroup>
+    <PackageId>Automaton</PackageId>
+    <Title>Automaton</Title>
+    <Description>Write once, run everywhere. A unified Mealy machine kernel for MVU, Event Sourcing, and the Actor Model. Define pure domain logic as a transition function — then run it in a browser, an event store, or a mailbox without changing a line.</Description>
+    <Authors>Maurice Peters</Authors>
+    <PackageTags>automaton;mealy-machine;mvu;event-sourcing;actor-model;ddd;functional;cqrs;state-machine</PackageTags>
+    <PackageLicenseExpression>MIT</PackageLicenseExpression>
+    <PackageReadmeFile>README.md</PackageReadmeFile>
+    <RepositoryUrl>https://github.com/MCGPPeters/Automaton</RepositoryUrl>
+    <RepositoryType>git</RepositoryType>
+    <PackageProjectUrl>https://github.com/MCGPPeters/Automaton</PackageProjectUrl>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <None Include="README.md" Pack="true" PackagePath="\" />
+  </ItemGroup>
+
+</Project>

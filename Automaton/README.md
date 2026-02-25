@@ -10,12 +10,6 @@ transition : (State × Event) → (State × Effect)
 
 Define your pure domain logic once as a transition function. Then execute it in a browser UI loop, an event-sourced aggregate, or a mailbox actor — without changing a single line.
 
-## Installation
-
-```bash
-dotnet add package Automaton
-```
-
 ## The Kernel
 
 ```csharp
