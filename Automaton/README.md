@@ -65,15 +65,6 @@ All three runtimes are structurally identical: a **monadic left fold** over an e
 | **Observer** | `(State, Event, Effect) → Task` | See each transition triple (render, persist, log) |
 | **Interpreter** | `Effect → Task<IEnumerable<Event>>` | Convert effects to feedback events |
 
-```csharp
-// Observer: sees each (state, event, effect) triple after transition
-public delegate Task Observer<in TState, in TEvent, in TEffect>(
-    TState state, TEvent @event, TEffect effect);
-
-// Interpreter: converts effects to feedback events
-public delegate Task<IEnumerable<TEvent>> Interpreter<in TEffect, TEvent>(TEffect effect);
-```
-
 The `AutomatonRuntime` executes the loop: **dispatch → transition → observe → interpret**.
 
 ### How Each Runtime Wires the Shared Core
@@ -147,6 +138,62 @@ await actor.DrainMailbox();
 // actor.State.Count == 2
 ```
 
+## The Decider — Command Validation
+
+The **Decider pattern** ([Chassaing, 2021](https://thinkbeforecoding.com/post/2021/12/17/functional-event-sourcing-decider)) adds a command validation layer to the Automaton. It separates *intent* (commands) from *facts* (events):
+
+```text
+Command → Decide(state) → Result<Events, Error> → Transition(state, event) → (State', Effect)
+```
+
+A Decider is an Automaton that also validates commands:
+
+```csharp
+public interface Decider<TState, TCommand, TEvent, TEffect, TError>
+    : Automaton<TState, TEvent, TEffect>
+{
+    static abstract Result<IEnumerable<TEvent>, TError> Decide(TState state, TCommand command);
+    static virtual bool IsTerminal(TState state) => false;
+}
+```
+
+### Example: Bounded Counter
+
+```csharp
+public class Counter
+    : Decider<CounterState, CounterCommand, CounterEvent, CounterEffect, CounterError>
+{
+    public const int MaxCount = 100;
+
+    public static Result<IEnumerable<CounterEvent>, CounterError> Decide(
+        CounterState state, CounterCommand command) =>
+        command switch
+        {
+            CounterCommand.Add(var n) when state.Count + n > MaxCount =>
+                new Result<IEnumerable<CounterEvent>, CounterError>
+                    .Err(new CounterError.Overflow(state.Count, n, MaxCount)),
+
+            CounterCommand.Add(var n) when n >= 0 =>
+                new Result<IEnumerable<CounterEvent>, CounterError>
+                    .Ok(Enumerable.Repeat<CounterEvent>(new CounterEvent.Increment(), n)),
+
+            // ... Init and Transition remain unchanged
+        };
+}
+
+// Usage with DecidingRuntime
+var runtime = await DecidingRuntime<Counter, CounterState, CounterCommand,
+    CounterEvent, CounterEffect, CounterError>.Start(observer, interpreter);
+
+var result = await runtime.Handle(new CounterCommand.Add(5));
+// result is Ok(CounterState { Count = 5 })
+
+var overflow = await runtime.Handle(new CounterCommand.Add(200));
+// overflow is Err(CounterError.Overflow { ... }) — state unchanged
+```
+
+Since `Decider<...> : Automaton<...>`, upgrading is **non-breaking** — all existing runtimes continue to work.
+
 ## The Proof: It's All the Same Fold
 
 ```csharp
@@ -169,12 +216,13 @@ MVU, Event Sourcing, and the Actor Model are all left folds over an event stream
 | Rewrite business rules for each tier | Write once, run in browser + server + actor |
 | Test through infrastructure | Test the transition function directly |
 | Framework dictates architecture | Math dictates architecture, framework is pluggable |
+| Validation scattered across layers | Validation is a pure function on the Decider |
 
 ## Namespaces
 
 | Namespace | Contains |
 | --------- | -------- |
-| `Automaton` | The kernel interface, shared runtime, Observer, Interpreter |
+| `Automaton` | The kernel interface, Decider interface, Result type, shared runtime, Observer, Interpreter |
 | `Automaton.Mvu` | Headless MVU runtime |
 | `Automaton.EventSourcing` | Event store, aggregate runner, projections |
 | `Automaton.Actor` | Actor reference, mailbox instance |
