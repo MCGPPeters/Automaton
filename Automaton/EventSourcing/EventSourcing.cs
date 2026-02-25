@@ -9,9 +9,9 @@
 //
 //     state = events.Aggregate(init, transition)
 //
-// Structurally, ES is the shared AutomatonRuntime with:
-// - Observer = append event to store + record effect
-// - Interpreter = no-op (ES does not produce feedback events)
+// Event Sourcing is fundamentally command-driven: commands arrive, are validated
+// against the current state via Decide, and only the resulting events are
+// persisted. This makes ES the natural home of the Decider pattern.
 //
 // This runtime provides:
 // - In-memory event store (append + replay)
@@ -71,50 +71,53 @@ public sealed class EventStore<TEvent>
 }
 
 /// <summary>
-/// Runs an automaton as an event-sourced aggregate.
+/// Runs a Decider as an event-sourced aggregate.
 /// </summary>
 /// <remarks>
 /// <para>
-/// Internally delegates to <see cref="AutomatonRuntime{TAutomaton,TState,TEvent,TEffect}"/>
-/// with a persistence observer (append to store) and a no-op interpreter.
+/// Event Sourcing is fundamentally command-driven: commands arrive, are validated
+/// against the current state via <c>Decide</c>, and only the resulting events
+/// are persisted. This is the natural home of the Decider pattern.
 /// </para>
 /// <para>
 /// The aggregate runner implements the decide-then-append pattern:
-/// 1. Rebuild current state from event stream (left fold)
-/// 2. Execute a command (transition) to produce new events + effects
-/// 3. Append new events to the store
-/// 4. Handle effects
-/// </para>
-/// <para>
-/// The transition function IS the aggregate's decide function.
-/// The event IS both the input and the persisted fact.
+/// <list type="number">
+///     <item><description>Receive a command (user intent)</description></item>
+///     <item><description>Validate via <c>Decide(state, command)</c> → events or error</description></item>
+///     <item><description>On success: transition state for each event, append to store</description></item>
+///     <item><description>On failure: return error, state unchanged, nothing persisted</description></item>
+/// </list>
 /// </para>
 /// <example>
 /// <code>
-/// var aggregate = AggregateRunner&lt;Counter, CounterState, CounterEvent, CounterEffect&gt;.Create();
+/// var aggregate = AggregateRunner&lt;Counter, CounterState, CounterCommand,
+///     CounterEvent, CounterEffect, CounterError&gt;.Create();
 ///
-/// await aggregate.Dispatch(new CounterEvent.Increment());
-/// await aggregate.Dispatch(new CounterEvent.Increment());
-/// // aggregate.State.Count == 2
-/// // aggregate.Store.Events.Count == 2
+/// var result = aggregate.Handle(new CounterCommand.Add(3));
+/// // result is Ok(CounterState { Count = 3 })
+/// // aggregate.Store.Events.Count == 3  (3 Increment events)
+///
+/// var overflow = aggregate.Handle(new CounterCommand.Add(200));
+/// // overflow is Err(CounterError.Overflow { ... })
+/// // aggregate.State.Count is still 3 — nothing persisted
 ///
 /// // Rebuild from scratch (simulates loading from disk)
 /// var rebuilt = aggregate.Rebuild();
-/// // rebuilt.Count == 2
+/// // rebuilt.Count == 3
 /// </code>
 /// </example>
 /// </remarks>
-public sealed class AggregateRunner<TAutomaton, TState, TEvent, TEffect>
-    where TAutomaton : Automaton<TState, TEvent, TEffect>
+public sealed class AggregateRunner<TDecider, TState, TCommand, TEvent, TEffect, TError>
+    where TDecider : Decider<TState, TCommand, TEvent, TEffect, TError>
 {
-    private readonly AutomatonRuntime<TAutomaton, TState, TEvent, TEffect> _core;
     private readonly EventStore<TEvent> _store;
-    private readonly List<TEffect> _effects;
+    private readonly List<TEffect> _effects = [];
+    private TState _state;
 
     /// <summary>
     /// The current state of the aggregate (rebuilt from events).
     /// </summary>
-    public TState State => _core.State;
+    public TState State => _state;
 
     /// <summary>
     /// All effects produced during the aggregate's lifetime.
@@ -126,80 +129,100 @@ public sealed class AggregateRunner<TAutomaton, TState, TEvent, TEffect>
     /// </summary>
     public EventStore<TEvent> Store => _store;
 
-    private AggregateRunner(
-        AutomatonRuntime<TAutomaton, TState, TEvent, TEffect> core,
-        EventStore<TEvent> store,
-        List<TEffect> effects)
+    /// <summary>
+    /// Whether the aggregate has reached a terminal state.
+    /// </summary>
+    public bool IsTerminal => TDecider.IsTerminal(_state);
+
+    private AggregateRunner(TState state, EventStore<TEvent> store)
     {
-        _core = core;
+        _state = state;
         _store = store;
-        _effects = effects;
     }
 
     /// <summary>
     /// Creates a new aggregate from its initial state.
     /// </summary>
-    public static AggregateRunner<TAutomaton, TState, TEvent, TEffect> Create()
+    public static AggregateRunner<TDecider, TState, TCommand, TEvent, TEffect, TError> Create()
     {
-        var (state, _) = TAutomaton.Init();
-        var store = new EventStore<TEvent>();
-        var effects = new List<TEffect>();
-
-        var (observer, interpreter) = BuildWiring(store, effects);
-        var core = new AutomatonRuntime<TAutomaton, TState, TEvent, TEffect>(state, observer, interpreter);
-
-        return new AggregateRunner<TAutomaton, TState, TEvent, TEffect>(core, store, effects);
+        var (state, _) = TDecider.Init();
+        return new AggregateRunner<TDecider, TState, TCommand, TEvent, TEffect, TError>(
+            state, new EventStore<TEvent>());
     }
 
     /// <summary>
     /// Creates an aggregate and hydrates it from an existing event store.
     /// </summary>
-    public static AggregateRunner<TAutomaton, TState, TEvent, TEffect> FromStore(EventStore<TEvent> store)
+    /// <remarks>
+    /// Stored events are already validated facts — they are replayed through
+    /// <c>Transition</c> without re-validation via <c>Decide</c>.
+    /// </remarks>
+    public static AggregateRunner<TDecider, TState, TCommand, TEvent, TEffect, TError> FromStore(
+        EventStore<TEvent> store)
     {
-        var (seed, _) = TAutomaton.Init();
-        var state = store.Replay(seed, (s, e) => TAutomaton.Transition(s, e).State);
-        var effects = new List<TEffect>();
-
-        var (observer, interpreter) = BuildWiring(store, effects);
-        var core = new AutomatonRuntime<TAutomaton, TState, TEvent, TEffect>(state, observer, interpreter);
-
-        return new AggregateRunner<TAutomaton, TState, TEvent, TEffect>(core, store, effects);
+        var (seed, _) = TDecider.Init();
+        var state = store.Replay(seed, (s, e) => TDecider.Transition(s, e).State);
+        return new AggregateRunner<TDecider, TState, TCommand, TEvent, TEffect, TError>(state, store);
     }
 
     /// <summary>
-    /// Dispatches an event: transitions state, appends the event, and records effects.
+    /// Handles a command: validates via <c>Decide</c>, then transitions and persists
+    /// each produced event on success. Returns the new state or an error.
     /// </summary>
-    public async Task Dispatch(TEvent @event) =>
-        await _core.Dispatch(@event);
+    /// <remarks>
+    /// <para>
+    /// On validation error, the aggregate state is unchanged and no events are appended.
+    /// </para>
+    /// <para>
+    /// On success, events are materialized and transitions are computed in isolation.
+    /// State and effects are only committed after all transitions and store appends succeed,
+    /// ensuring the state/store invariant is preserved on partial failure.
+    /// </para>
+    /// </remarks>
+    public Result<TState, TError> Handle(TCommand command) =>
+        TDecider.Decide(_state, command).Match<Result<TState, TError>>(
+            events =>
+            {
+                // Materialize events to avoid issues with lazy enumerables throwing mid-iteration.
+                var materializedEvents = new List<TEvent>();
+                foreach (var @event in events)
+                {
+                    materializedEvents.Add(@event);
+                }
+
+                // Compute new state and effects in locals to preserve invariants on failure.
+                var newState = _state;
+                var newEffects = new List<TEffect>();
+
+                foreach (var @event in materializedEvents)
+                {
+                    var (transitioned, effect) = TDecider.Transition(newState, @event);
+                    newState = transitioned;
+                    newEffects.Add(effect);
+                }
+
+                // Append to store only after all transitions succeed.
+                foreach (var @event in materializedEvents)
+                {
+                    _store.Append(@event);
+                }
+
+                // Commit state and effects only after successful append.
+                _state = newState;
+                _effects.AddRange(newEffects);
+
+                return new Result<TState, TError>.Ok(_state);
+            },
+            error => new Result<TState, TError>.Err(error));
 
     /// <summary>
     /// Rebuilds state from scratch by replaying all stored events.
     /// </summary>
     public TState Rebuild()
     {
-        var (seed, _) = TAutomaton.Init();
-        var state = _store.Replay(seed, (s, e) => TAutomaton.Transition(s, e).State);
-        _core.Reset(state);
-        return state;
-    }
-
-    /// <summary>
-    /// Builds the observer and interpreter wiring for event-sourced aggregates.
-    /// </summary>
-    private static (Observer<TState, TEvent, TEffect> Observer, Interpreter<TEffect, TEvent> Interpreter)
-        BuildWiring(EventStore<TEvent> store, List<TEffect> effects)
-    {
-        Observer<TState, TEvent, TEffect> observer = (_, @event, effect) =>
-        {
-            store.Append(@event);
-            effects.Add(effect);
-            return Task.CompletedTask;
-        };
-
-        Interpreter<TEffect, TEvent> interpreter =
-            _ => Task.FromResult<IEnumerable<TEvent>>([]);
-
-        return (observer, interpreter);
+        var (seed, _) = TDecider.Init();
+        _state = _store.Replay(seed, (s, e) => TDecider.Transition(s, e).State);
+        return _state;
     }
 }
 

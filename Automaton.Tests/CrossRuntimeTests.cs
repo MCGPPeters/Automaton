@@ -4,8 +4,11 @@
 // Proves the SAME automaton (Counter) produces identical results when executed
 // by the MVU, Event Sourcing, and Actor runtimes.
 //
-// This is the key insight: the transition function is the invariant.
-// The runtime is the variable.
+// The transition function is the invariant. The runtime is the variable.
+//
+// MVU and Actor receive events directly (Automaton runtimes).
+// ES receives commands (Decider runtime) — commands are validated by Decide,
+// producing the same events that MVU/Actor receive directly.
 // =============================================================================
 
 using Automaton.Actor;
@@ -17,9 +20,9 @@ namespace Automaton.Tests;
 public class CrossRuntimeTests
 {
     /// <summary>
-    /// The canonical event sequence used across all runtimes.
+    /// The canonical event sequence used by MVU and Actor runtimes.
     /// </summary>
-    private static readonly CounterEvent[] _scenario =
+    private static readonly CounterEvent[] _eventScenario =
     [
         new CounterEvent.Increment(),
         new CounterEvent.Increment(),
@@ -31,6 +34,19 @@ public class CrossRuntimeTests
     ];
 
     /// <summary>
+    /// The equivalent command sequence used by the ES runtime.
+    /// Commands express intent; Decide validates and produces the same events.
+    /// </summary>
+    private static readonly CounterCommand[] _commandScenario =
+    [
+        new CounterCommand.Add(3),   // → 3 Increment events
+        new CounterCommand.Add(-1),  // → 1 Decrement event
+        new CounterCommand.Add(1),   // → 1 Increment event
+        new CounterCommand.Reset(),  // → 1 Reset event
+        new CounterCommand.Add(1)    // → 1 Increment event
+    ];
+
+    /// <summary>
     /// Expected final state: inc(3) - dec(1) + inc(1) = 3, reset → 0, inc(1) = 1
     /// </summary>
     private const int _expectedFinalCount = 1;
@@ -38,27 +54,28 @@ public class CrossRuntimeTests
     [Fact]
     public async Task AllThreeRuntimes_ProduceIdenticalFinalState()
     {
-        // --- MVU ---
+        // --- MVU (receives events) ---
         var mvu = await MvuRuntime<Counter, CounterState, CounterEvent, CounterEffect, string>
             .Start(s => $"Count: {s.Count}", _ => Task.FromResult<IEnumerable<CounterEvent>>([]));
 
-        foreach (var e in _scenario)
+        foreach (var e in _eventScenario)
         {
             await mvu.Dispatch(e);
         }
 
-        // --- Event Sourcing ---
-        var aggregate = AggregateRunner<Counter, CounterState, CounterEvent, CounterEffect>.Create();
+        // --- Event Sourcing (receives commands) ---
+        var aggregate = AggregateRunner<Counter, CounterState, CounterCommand,
+            CounterEvent, CounterEffect, CounterError>.Create();
 
-        foreach (var e in _scenario)
+        foreach (var cmd in _commandScenario)
         {
-            await aggregate.Dispatch(e);
+            aggregate.Handle(cmd);
         }
 
-        // --- Actor ---
+        // --- Actor (receives events) ---
         var actor = ActorInstance<Counter, CounterState, CounterEvent, CounterEffect>.Spawn("cross-test");
 
-        foreach (var e in _scenario)
+        foreach (var e in _eventScenario)
         {
             await actor.Ref.Tell(e);
         }
@@ -80,21 +97,22 @@ public class CrossRuntimeTests
     [Fact]
     public async Task EventSourcing_CanRebuild_ToSameStateAsMvu()
     {
-        // Run through MVU
+        // Run through MVU (events)
         var mvu = await MvuRuntime<Counter, CounterState, CounterEvent, CounterEffect, string>
             .Start(s => s.Count.ToString(), _ => Task.FromResult<IEnumerable<CounterEvent>>([]));
 
-        foreach (var e in _scenario)
+        foreach (var e in _eventScenario)
         {
             await mvu.Dispatch(e);
         }
 
-        // Run through ES and rebuild from scratch
-        var aggregate = AggregateRunner<Counter, CounterState, CounterEvent, CounterEffect>.Create();
+        // Run through ES (commands) and rebuild from scratch
+        var aggregate = AggregateRunner<Counter, CounterState, CounterCommand,
+            CounterEvent, CounterEffect, CounterError>.Create();
 
-        foreach (var e in _scenario)
+        foreach (var cmd in _commandScenario)
         {
-            await aggregate.Dispatch(e);
+            aggregate.Handle(cmd);
         }
 
         var rebuilt = aggregate.Rebuild();
@@ -122,7 +140,7 @@ public class CrossRuntimeTests
         // This IS event sourcing. This IS MVU. This IS actor state.
         var (seed, _) = Counter.Init();
 
-        var finalState = _scenario.Aggregate(seed, (state, @event) =>
+        var finalState = _eventScenario.Aggregate(seed, (state, @event) =>
             Counter.Transition(state, @event).State);
 
         Assert.Equal(_expectedFinalCount, finalState.Count);
