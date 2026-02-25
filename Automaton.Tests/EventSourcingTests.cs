@@ -20,25 +20,25 @@ public class EventSourcingTests
     }
 
     [Fact]
-    public void Aggregate_DispatchEvents_UpdatesState()
+    public async Task Aggregate_DispatchEvents_UpdatesState()
     {
         var aggregate = AggregateRunner<Counter, CounterState, CounterEvent, CounterEffect>.Create();
 
-        aggregate.Dispatch(new CounterEvent.Increment());
-        aggregate.Dispatch(new CounterEvent.Increment());
-        aggregate.Dispatch(new CounterEvent.Increment());
+        await aggregate.Dispatch(new CounterEvent.Increment());
+        await aggregate.Dispatch(new CounterEvent.Increment());
+        await aggregate.Dispatch(new CounterEvent.Increment());
 
         Assert.Equal(3, aggregate.State.Count);
     }
 
     [Fact]
-    public void EventStore_PersistsAllEvents()
+    public async Task EventStore_PersistsAllEvents()
     {
         var aggregate = AggregateRunner<Counter, CounterState, CounterEvent, CounterEffect>.Create();
 
-        aggregate.Dispatch(new CounterEvent.Increment());
-        aggregate.Dispatch(new CounterEvent.Decrement());
-        aggregate.Dispatch(new CounterEvent.Reset());
+        await aggregate.Dispatch(new CounterEvent.Increment());
+        await aggregate.Dispatch(new CounterEvent.Decrement());
+        await aggregate.Dispatch(new CounterEvent.Reset());
 
         Assert.Equal(3, aggregate.Store.Events.Count);
         Assert.IsType<CounterEvent.Increment>(aggregate.Store.Events[0].Event);
@@ -47,13 +47,13 @@ public class EventSourcingTests
     }
 
     [Fact]
-    public void EventStore_SequenceNumbers_AreMonotonicallyIncreasing()
+    public async Task EventStore_SequenceNumbers_AreMonotonicallyIncreasing()
     {
         var aggregate = AggregateRunner<Counter, CounterState, CounterEvent, CounterEffect>.Create();
 
-        aggregate.Dispatch(new CounterEvent.Increment());
-        aggregate.Dispatch(new CounterEvent.Increment());
-        aggregate.Dispatch(new CounterEvent.Increment());
+        await aggregate.Dispatch(new CounterEvent.Increment());
+        await aggregate.Dispatch(new CounterEvent.Increment());
+        await aggregate.Dispatch(new CounterEvent.Increment());
 
         Assert.Equal(1, aggregate.Store.Events[0].SequenceNumber);
         Assert.Equal(2, aggregate.Store.Events[1].SequenceNumber);
@@ -61,14 +61,14 @@ public class EventSourcingTests
     }
 
     [Fact]
-    public void Rebuild_ReconstructsStateFromEventStream()
+    public async Task Rebuild_ReconstructsStateFromEventStream()
     {
         var aggregate = AggregateRunner<Counter, CounterState, CounterEvent, CounterEffect>.Create();
 
-        aggregate.Dispatch(new CounterEvent.Increment());
-        aggregate.Dispatch(new CounterEvent.Increment());
-        aggregate.Dispatch(new CounterEvent.Increment());
-        aggregate.Dispatch(new CounterEvent.Decrement());
+        await aggregate.Dispatch(new CounterEvent.Increment());
+        await aggregate.Dispatch(new CounterEvent.Increment());
+        await aggregate.Dispatch(new CounterEvent.Increment());
+        await aggregate.Dispatch(new CounterEvent.Decrement());
 
         // Rebuild from scratch (simulates loading from disk)
         var rebuilt = aggregate.Rebuild();
@@ -94,14 +94,14 @@ public class EventSourcingTests
     }
 
     [Fact]
-    public void Projection_BuildsReadModel_FromEventStream()
+    public async Task Projection_BuildsReadModel_FromEventStream()
     {
         var aggregate = AggregateRunner<Counter, CounterState, CounterEvent, CounterEffect>.Create();
 
-        aggregate.Dispatch(new CounterEvent.Increment());
-        aggregate.Dispatch(new CounterEvent.Increment());
-        aggregate.Dispatch(new CounterEvent.Reset());
-        aggregate.Dispatch(new CounterEvent.Increment());
+        await aggregate.Dispatch(new CounterEvent.Increment());
+        await aggregate.Dispatch(new CounterEvent.Increment());
+        await aggregate.Dispatch(new CounterEvent.Reset());
+        await aggregate.Dispatch(new CounterEvent.Increment());
 
         // Projection: count total number of increments (different from current state!)
         var incrementCount = new Projection<CounterEvent, int>(
@@ -116,13 +116,13 @@ public class EventSourcingTests
     }
 
     [Fact]
-    public void Projection_BuildsAuditLog_FromEventStream()
+    public async Task Projection_BuildsAuditLog_FromEventStream()
     {
         var aggregate = AggregateRunner<Counter, CounterState, CounterEvent, CounterEffect>.Create();
 
-        aggregate.Dispatch(new CounterEvent.Increment());
-        aggregate.Dispatch(new CounterEvent.Decrement());
-        aggregate.Dispatch(new CounterEvent.Reset());
+        await aggregate.Dispatch(new CounterEvent.Increment());
+        await aggregate.Dispatch(new CounterEvent.Decrement());
+        await aggregate.Dispatch(new CounterEvent.Reset());
 
         // Projection: build an audit log of all event types
         var auditLog = new Projection<CounterEvent, List<string>>(
@@ -139,12 +139,12 @@ public class EventSourcingTests
     }
 
     [Fact]
-    public void Effects_AreRecorded()
+    public async Task Effects_AreRecorded()
     {
         var aggregate = AggregateRunner<Counter, CounterState, CounterEvent, CounterEffect>.Create();
 
-        aggregate.Dispatch(new CounterEvent.Increment());
-        aggregate.Dispatch(new CounterEvent.Reset());
+        await aggregate.Dispatch(new CounterEvent.Increment());
+        await aggregate.Dispatch(new CounterEvent.Reset());
 
         Assert.Equal(2, aggregate.Effects.Count);
         Assert.IsType<CounterEffect.None>(aggregate.Effects[0]);

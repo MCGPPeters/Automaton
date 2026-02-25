@@ -7,6 +7,10 @@
 // are processed sequentially, and transitions may produce effects that send
 // messages to other actors or spawn new ones.
 //
+// Structurally, an Actor is the shared AutomatonRuntime with:
+// - Observer = no-op (actor state is internal)
+// - Interpreter = execute effect with self-reference, no feedback events
+//
 // Historical lineage:
 //     Mealy Machine (1955) → Actor Model (Hewitt, 1973) → Erlang/OTP (1986)
 //     → Akka (2009) → Orleans (2014) → Automaton (2025)
@@ -47,6 +51,10 @@ public sealed class ActorRef<TEvent>
 /// </summary>
 /// <remarks>
 /// <para>
+/// Internally delegates to <see cref="AutomatonRuntime{TAutomaton,TState,TEvent,TEffect}"/>
+/// with a no-op observer and an interpreter that wraps the effect handler.
+/// </para>
+/// <para>
 /// Each actor processes messages sequentially from its mailbox channel,
 /// running the automaton's transition function for each message.
 /// Effects are handled via an optional callback.
@@ -65,16 +73,14 @@ public sealed class ActorRef<TEvent>
 public sealed class ActorInstance<TAutomaton, TState, TEvent, TEffect>
     where TAutomaton : Automaton<TState, TEvent, TEffect>
 {
-    private TState _state;
+    private readonly AutomatonRuntime<TAutomaton, TState, TEvent, TEffect> _core;
     private readonly Channel<TEvent> _mailbox;
-    private readonly Func<TEffect, ActorRef<TEvent>, Task>? _effectHandler;
     private readonly CancellationTokenSource _cts = new();
-    private readonly List<TEvent> _processedMessages = [];
 
     /// <summary>
     /// The current state of the actor.
     /// </summary>
-    public TState State => _state;
+    public TState State => _core.State;
 
     /// <summary>
     /// A reference to send messages to this actor.
@@ -84,18 +90,16 @@ public sealed class ActorInstance<TAutomaton, TState, TEvent, TEffect>
     /// <summary>
     /// All messages processed by this actor.
     /// </summary>
-    public IReadOnlyList<TEvent> ProcessedMessages => _processedMessages;
+    public IReadOnlyList<TEvent> ProcessedMessages => _core.Events;
 
     private ActorInstance(
-        string name,
-        TState initialState,
+        AutomatonRuntime<TAutomaton, TState, TEvent, TEffect> core,
         Channel<TEvent> mailbox,
-        Func<TEffect, ActorRef<TEvent>, Task>? effectHandler)
+        ActorRef<TEvent> actorRef)
     {
-        _state = initialState;
+        _core = core;
         _mailbox = mailbox;
-        _effectHandler = effectHandler;
-        Ref = new ActorRef<TEvent>(name, mailbox.Writer);
+        Ref = actorRef;
     }
 
     /// <summary>
@@ -112,8 +116,25 @@ public sealed class ActorInstance<TAutomaton, TState, TEvent, TEffect>
             SingleWriter = false
         });
 
+        var actorRef = new ActorRef<TEvent>(name, mailbox.Writer);
+
+        // Observer: no-op — actor state is internal
+        Observer<TState, TEvent, TEffect> observer = (_, _, _) => Task.CompletedTask;
+
+        // Interpreter: wraps the effect handler with self-reference
+        Interpreter<TEffect, TEvent> interpreter = effectHandler is not null
+            ? async effect =>
+            {
+                await effectHandler(effect, actorRef);
+                return [];
+            }
+            : _ => Task.FromResult<IEnumerable<TEvent>>([]);
+
+        var core = new AutomatonRuntime<TAutomaton, TState, TEvent, TEffect>(
+            state, observer, interpreter);
+
         var actor = new ActorInstance<TAutomaton, TState, TEvent, TEffect>(
-            name, state, mailbox, effectHandler);
+            core, mailbox, actorRef);
 
         // Start the processing loop
         _ = actor.ProcessLoop();
@@ -151,15 +172,7 @@ public sealed class ActorInstance<TAutomaton, TState, TEvent, TEffect>
         {
             await foreach (var message in _mailbox.Reader.ReadAllAsync(_cts.Token))
             {
-                _processedMessages.Add(message);
-
-                var (newState, effect) = TAutomaton.Transition(_state, message);
-                _state = newState;
-
-                if (_effectHandler is not null)
-                {
-                    await _effectHandler(effect, Ref);
-                }
+                await _core.Dispatch(message);
             }
         }
         catch (OperationCanceledException)

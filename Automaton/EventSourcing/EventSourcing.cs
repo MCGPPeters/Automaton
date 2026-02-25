@@ -9,6 +9,10 @@
 //
 //     state = events.Aggregate(init, transition)
 //
+// Structurally, ES is the shared AutomatonRuntime with:
+// - Observer = append event to store + record effect
+// - Interpreter = no-op (ES does not produce feedback events)
+//
 // This runtime provides:
 // - In-memory event store (append + replay)
 // - Aggregate runner (load → decide → append)
@@ -56,10 +60,8 @@ public sealed class EventStore<TEvent>
     /// <summary>
     /// Appends a single event to the store.
     /// </summary>
-    public void Append(TEvent @event)
-    {
+    public void Append(TEvent @event) =>
         _events.Add(new StoredEvent<TEvent>(++_sequence, @event, DateTimeOffset.UtcNow));
-    }
 
     /// <summary>
     /// Replays all events through a fold function to rebuild state.
@@ -72,6 +74,10 @@ public sealed class EventStore<TEvent>
 /// Runs an automaton as an event-sourced aggregate.
 /// </summary>
 /// <remarks>
+/// <para>
+/// Internally delegates to <see cref="AutomatonRuntime{TAutomaton,TState,TEvent,TEffect}"/>
+/// with a persistence observer (append to store) and a no-op interpreter.
+/// </para>
 /// <para>
 /// The aggregate runner implements the decide-then-append pattern:
 /// 1. Rebuild current state from event stream (left fold)
@@ -87,8 +93,8 @@ public sealed class EventStore<TEvent>
 /// <code>
 /// var aggregate = AggregateRunner&lt;Counter, CounterState, CounterEvent, CounterEffect&gt;.Create();
 ///
-/// aggregate.Dispatch(new CounterEvent.Increment());
-/// aggregate.Dispatch(new CounterEvent.Increment());
+/// await aggregate.Dispatch(new CounterEvent.Increment());
+/// await aggregate.Dispatch(new CounterEvent.Increment());
 /// // aggregate.State.Count == 2
 /// // aggregate.Store.Events.Count == 2
 ///
@@ -101,14 +107,14 @@ public sealed class EventStore<TEvent>
 public sealed class AggregateRunner<TAutomaton, TState, TEvent, TEffect>
     where TAutomaton : Automaton<TState, TEvent, TEffect>
 {
+    private readonly AutomatonRuntime<TAutomaton, TState, TEvent, TEffect> _core;
     private readonly EventStore<TEvent> _store;
-    private readonly List<TEffect> _effects = [];
-    private TState _state;
+    private readonly List<TEffect> _effects;
 
     /// <summary>
     /// The current state of the aggregate (rebuilt from events).
     /// </summary>
-    public TState State => _state;
+    public TState State => _core.State;
 
     /// <summary>
     /// All effects produced during the aggregate's lifetime.
@@ -120,10 +126,14 @@ public sealed class AggregateRunner<TAutomaton, TState, TEvent, TEffect>
     /// </summary>
     public EventStore<TEvent> Store => _store;
 
-    private AggregateRunner(TState state, EventStore<TEvent> store)
+    private AggregateRunner(
+        AutomatonRuntime<TAutomaton, TState, TEvent, TEffect> core,
+        EventStore<TEvent> store,
+        List<TEffect> effects)
     {
-        _state = state;
+        _core = core;
         _store = store;
+        _effects = effects;
     }
 
     /// <summary>
@@ -132,7 +142,13 @@ public sealed class AggregateRunner<TAutomaton, TState, TEvent, TEffect>
     public static AggregateRunner<TAutomaton, TState, TEvent, TEffect> Create()
     {
         var (state, _) = TAutomaton.Init();
-        return new AggregateRunner<TAutomaton, TState, TEvent, TEffect>(state, new EventStore<TEvent>());
+        var store = new EventStore<TEvent>();
+        var effects = new List<TEffect>();
+
+        var (observer, interpreter) = BuildWiring(store, effects);
+        var core = new AutomatonRuntime<TAutomaton, TState, TEvent, TEffect>(state, observer, interpreter);
+
+        return new AggregateRunner<TAutomaton, TState, TEvent, TEffect>(core, store, effects);
     }
 
     /// <summary>
@@ -142,19 +158,19 @@ public sealed class AggregateRunner<TAutomaton, TState, TEvent, TEffect>
     {
         var (seed, _) = TAutomaton.Init();
         var state = store.Replay(seed, (s, e) => TAutomaton.Transition(s, e).State);
-        return new AggregateRunner<TAutomaton, TState, TEvent, TEffect>(state, store);
+        var effects = new List<TEffect>();
+
+        var (observer, interpreter) = BuildWiring(store, effects);
+        var core = new AutomatonRuntime<TAutomaton, TState, TEvent, TEffect>(state, observer, interpreter);
+
+        return new AggregateRunner<TAutomaton, TState, TEvent, TEffect>(core, store, effects);
     }
 
     /// <summary>
     /// Dispatches an event: transitions state, appends the event, and records effects.
     /// </summary>
-    public void Dispatch(TEvent @event)
-    {
-        var (newState, effect) = TAutomaton.Transition(_state, @event);
-        _state = newState;
-        _store.Append(@event);
-        _effects.Add(effect);
-    }
+    public async Task Dispatch(TEvent @event) =>
+        await _core.Dispatch(@event);
 
     /// <summary>
     /// Rebuilds state from scratch by replaying all stored events.
@@ -162,8 +178,28 @@ public sealed class AggregateRunner<TAutomaton, TState, TEvent, TEffect>
     public TState Rebuild()
     {
         var (seed, _) = TAutomaton.Init();
-        _state = _store.Replay(seed, (s, e) => TAutomaton.Transition(s, e).State);
-        return _state;
+        var state = _store.Replay(seed, (s, e) => TAutomaton.Transition(s, e).State);
+        _core.Reset(state);
+        return state;
+    }
+
+    /// <summary>
+    /// Builds the observer and interpreter wiring for event-sourced aggregates.
+    /// </summary>
+    private static (Observer<TState, TEvent, TEffect> Observer, Interpreter<TEffect, TEvent> Interpreter)
+        BuildWiring(EventStore<TEvent> store, List<TEffect> effects)
+    {
+        Observer<TState, TEvent, TEffect> observer = (_, @event, effect) =>
+        {
+            store.Append(@event);
+            effects.Add(effect);
+            return Task.CompletedTask;
+        };
+
+        Interpreter<TEffect, TEvent> interpreter =
+            _ => Task.FromResult<IEnumerable<TEvent>>([]);
+
+        return (observer, interpreter);
     }
 }
 
