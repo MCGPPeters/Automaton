@@ -9,10 +9,10 @@ namespace Automaton.Tests;
 
 public class DeciderTests
 {
-    private static readonly Observer<CounterState, CounterEvent, CounterEffect> NoOpObserver =
+    private static readonly Observer<CounterState, CounterEvent, CounterEffect> _noOpObserver =
         (_, _, _) => Task.CompletedTask;
 
-    private static readonly Interpreter<CounterEffect, CounterEvent> NoOpInterpreter =
+    private static readonly Interpreter<CounterEffect, CounterEvent> _noOpInterpreter =
         _ => Task.FromResult<IEnumerable<CounterEvent>>([]);
 
     // =========================================================================
@@ -157,7 +157,7 @@ public class DeciderTests
         };
 
         var runtime = await DecidingRuntime<Counter, CounterState, CounterCommand,
-            CounterEvent, CounterEffect, CounterError>.Start(observer, NoOpInterpreter);
+            CounterEvent, CounterEffect, CounterError>.Start(observer, _noOpInterpreter);
 
         await runtime.Handle(new CounterCommand.Add(2));
 
@@ -177,7 +177,7 @@ public class DeciderTests
         };
 
         var runtime = await DecidingRuntime<Counter, CounterState, CounterCommand,
-            CounterEvent, CounterEffect, CounterError>.Start(observer, NoOpInterpreter);
+            CounterEvent, CounterEffect, CounterError>.Start(observer, _noOpInterpreter);
 
         await runtime.Handle(new CounterCommand.Add(-1));
 
@@ -209,7 +209,11 @@ public class DeciderTests
         var result1 = Counter.Decide(state, command);
         var result2 = Counter.Decide(state, command);
 
-        Assert.Equal(result1, result2);
+        // Record equality doesn't work for IEnumerable<T> (reference comparison),
+        // so we unwrap and compare materialized sequences element-wise.
+        var ok1 = Assert.IsType<Result<IEnumerable<CounterEvent>, CounterError>.Ok>(result1);
+        var ok2 = Assert.IsType<Result<IEnumerable<CounterEvent>, CounterError>.Ok>(result2);
+        Assert.Equal(ok1.Value.ToList(), ok2.Value.ToList());
     }
 
     [Fact]
@@ -341,5 +345,5 @@ public class DeciderTests
     private static Task<DecidingRuntime<Counter, CounterState, CounterCommand,
         CounterEvent, CounterEffect, CounterError>> CreateRuntime() =>
         DecidingRuntime<Counter, CounterState, CounterCommand,
-            CounterEvent, CounterEffect, CounterError>.Start(NoOpObserver, NoOpInterpreter);
+            CounterEvent, CounterEffect, CounterError>.Start(_noOpObserver, _noOpInterpreter);
 }
