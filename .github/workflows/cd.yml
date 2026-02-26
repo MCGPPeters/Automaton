@@ -25,7 +25,10 @@ jobs:
 
       - name: Set version
         id: version
-        run: echo "VERSION=$(nbgv get-version -v NuGetPackageVersion)" >> $GITHUB_OUTPUT
+        run: |
+          VERSION=$(nbgv get-version -v NuGetPackageVersion)
+          echo "VERSION=$VERSION" >> $GITHUB_OUTPUT
+          echo "📦 Package version: $VERSION"
 
       - name: Restore dependencies
         run: dotnet restore
@@ -50,7 +53,7 @@ jobs:
 
       - name: Pack
         if: github.event_name != 'pull_request'
-        run: dotnet pack ./Automaton/Automaton.csproj --configuration Release --output ./nupkg /p:PackageVersion=${{ steps.version.outputs.VERSION }}
+        run: dotnet pack ./Automaton/Automaton.csproj --configuration Release --output ./nupkg
 
       - name: Publish to NuGet
         if: github.event_name != 'pull_request'
