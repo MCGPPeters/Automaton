@@ -131,7 +131,7 @@ jobs:
       - name: Get changed C# files
         id: changed-files
         run: |
-          CHANGED_FILES=$(git diff --name-only --diff-filter=ACMRT origin/${{ github.event.pull_request.base.ref }}...HEAD | grep '\.cs$' || true)
+          CHANGED_FILES=$(git diff --name-only --diff-filter=ACMRT ${{ github.event.pull_request.base.sha }}...${{ github.event.pull_request.head.sha }} | grep '\.cs$' || true)
 
           if [ -z "$CHANGED_FILES" ]; then
             echo "has_cs_files=false" >> $GITHUB_OUTPUT
@@ -212,7 +212,7 @@ jobs:
   pr-validation-summary:
     name: PR Validation Summary
     runs-on: ubuntu-latest
-    if: github.event.pull_request.draft == false
+    if: github.event.pull_request.draft == false && github.event.pull_request.user.login != 'dependabot[bot]'
     needs: [validate-pr-title, validate-pr-description, check-pr-size, lint-check, security-scan, check-todos]
 
     steps:
