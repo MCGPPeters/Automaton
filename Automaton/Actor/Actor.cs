@@ -27,6 +27,7 @@ namespace Automaton.Actor;
 public sealed class ActorRef<TEvent>
 {
     private readonly ChannelWriter<TEvent> _writer;
+    internal int _sentCount;
 
     /// <summary>
     /// The unique name of the actor.
@@ -42,8 +43,11 @@ public sealed class ActorRef<TEvent>
     /// <summary>
     /// Sends a message to the actor's mailbox (fire-and-forget, tell pattern).
     /// </summary>
-    public async ValueTask Tell(TEvent message) =>
+    public async ValueTask Tell(TEvent message)
+    {
+        Interlocked.Increment(ref _sentCount);
         await _writer.WriteAsync(message);
+    }
 }
 
 /// <summary>
@@ -76,6 +80,7 @@ public sealed class ActorInstance<TAutomaton, TState, TEvent, TEffect>
     private readonly AutomatonRuntime<TAutomaton, TState, TEvent, TEffect> _core;
     private readonly Channel<TEvent> _mailbox;
     private readonly CancellationTokenSource _cts = new();
+    private int _processedCount;
 
     /// <summary>
     /// The current state of the actor.
@@ -152,18 +157,21 @@ public sealed class ActorInstance<TAutomaton, TState, TEvent, TEffect>
     }
 
     /// <summary>
-    /// Waits until the mailbox is drained (all pending messages processed).
+    /// Waits until the mailbox is drained (all sent messages have been processed).
     /// </summary>
+    /// <remarks>
+    /// Uses a counter-based approach: each <see cref="ActorRef{TEvent}.Tell"/> increments
+    /// a sent counter, and each completed dispatch increments a processed counter.
+    /// This avoids the race condition where the channel appears empty (message read)
+    /// but dispatch is still in-flight.
+    /// </remarks>
     public async Task DrainMailbox()
     {
-        // Give the processing loop time to consume pending messages
-        while (_mailbox.Reader.CanCount && _mailbox.Reader.Count > 0)
+        var sent = Volatile.Read(ref Ref._sentCount);
+        while (Volatile.Read(ref _processedCount) < sent)
         {
-            await Task.Delay(1);
+            await Task.Yield();
         }
-
-        // One more yield to let the loop finish the current iteration
-        await Task.Delay(10);
     }
 
     private async Task ProcessLoop()
@@ -173,6 +181,7 @@ public sealed class ActorInstance<TAutomaton, TState, TEvent, TEffect>
             await foreach (var message in _mailbox.Reader.ReadAllAsync(_cts.Token))
             {
                 await _core.Dispatch(message);
+                Interlocked.Increment(ref _processedCount);
             }
         }
         catch (OperationCanceledException)
