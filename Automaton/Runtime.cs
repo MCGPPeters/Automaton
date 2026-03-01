@@ -518,7 +518,8 @@ public sealed class AutomatonRuntime<TAutomaton, TState, TEvent, TEffect> : IDis
         if (_threadSafe)
         {
             _gate.Wait();
-            try { _state = state; }
+            try
+            { _state = state; }
             finally { _gate.Release(); }
         }
         else

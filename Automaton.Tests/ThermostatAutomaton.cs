@@ -166,7 +166,7 @@ public class Thermostat
                     .Ok([new ThermostatEvent.TemperatureRecorded(temp)]),
 
             // ── SetTarget ────────────────────────────────────────
-            ThermostatCommand.SetTarget(var target) when target < MinTarget || target > MaxTarget =>
+            ThermostatCommand.SetTarget(var target) when target is < MinTarget or > MaxTarget =>
                 Result<ThermostatEvent[], ThermostatError>
                     .Err(new ThermostatError.InvalidTarget(target, MinTarget, MaxTarget)),
 
