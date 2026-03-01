@@ -291,8 +291,8 @@ public class DeciderTests
     [Fact]
     public void Result_Match_DispatchesCorrectly()
     {
-        Result<int, string> ok = Result<int, string>.Ok(42);
-        Result<int, string> err = Result<int, string>.Err("fail");
+        var ok = Result<int, string>.Ok(42);
+        var err = Result<int, string>.Err("fail");
 
         Assert.Equal("42", ok.Match(v => v.ToString(), e => e));
         Assert.Equal("fail", err.Match(v => v.ToString(), e => e));
@@ -301,7 +301,7 @@ public class DeciderTests
     [Fact]
     public void Result_Map_TransformsSuccess()
     {
-        Result<int, string> ok = Result<int, string>.Ok(21);
+        var ok = Result<int, string>.Ok(21);
 
         var mapped = ok.Map(v => v * 2);
 
@@ -312,7 +312,7 @@ public class DeciderTests
     [Fact]
     public void Result_Map_PreservesError()
     {
-        Result<int, string> err = Result<int, string>.Err("fail");
+        var err = Result<int, string>.Err("fail");
 
         var mapped = err.Map(v => v * 2);
 
@@ -323,7 +323,7 @@ public class DeciderTests
     [Fact]
     public void Result_Bind_ChainsSuccess()
     {
-        Result<int, string> ok = Result<int, string>.Ok(21);
+        var ok = Result<int, string>.Ok(21);
 
         var bound = ok.Bind(v => Result<string, string>.Ok($"value: {v * 2}"));
 
@@ -334,7 +334,7 @@ public class DeciderTests
     [Fact]
     public void Result_Bind_ShortCircuitsOnError()
     {
-        Result<int, string> err = Result<int, string>.Err("fail");
+        var err = Result<int, string>.Err("fail");
 
         var bound = err.Bind(v => Result<string, string>.Ok($"value: {v}"));
 
@@ -345,7 +345,7 @@ public class DeciderTests
     [Fact]
     public void Result_MapError_TransformsError()
     {
-        Result<int, string> err = Result<int, string>.Err("fail");
+        var err = Result<int, string>.Err("fail");
 
         var mapped = err.MapError(e => e.Length);
 
@@ -356,7 +356,7 @@ public class DeciderTests
     [Fact]
     public void Result_MapError_PreservesSuccess()
     {
-        Result<int, string> ok = Result<int, string>.Ok(42);
+        var ok = Result<int, string>.Ok(42);
 
         var mapped = ok.MapError(e => e.Length);
 
