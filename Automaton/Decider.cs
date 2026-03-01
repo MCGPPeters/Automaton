@@ -150,8 +150,8 @@ public sealed class DecidingRuntime<TDecider, TState, TCommand, TEvent, TEffect,
     where TDecider : Decider<TState, TCommand, TEvent, TEffect, TError>
 {
     // ── Cached type names for tracing (avoid per-Handle reflection) ──
-    private static readonly string DeciderTypeName = typeof(TDecider).Name;
-    private static readonly string StateTypeName = typeof(TState).Name;
+    private static readonly string _deciderTypeName = typeof(TDecider).Name;
+    private static readonly string _stateTypeName = typeof(TState).Name;
 
     private readonly AutomatonRuntime<TDecider, TState, TEvent, TEffect> _core;
 
@@ -198,8 +198,8 @@ public sealed class DecidingRuntime<TDecider, TState, TCommand, TEvent, TEffect,
         CancellationToken cancellationToken = default)
     {
         using var activity = AutomatonDiagnostics.Source.StartActivity("Automaton.Decider.Start");
-        activity?.SetTag("automaton.type", DeciderTypeName);
-        activity?.SetTag("automaton.state.type", StateTypeName);
+        activity?.SetTag("automaton.type", _deciderTypeName);
+        activity?.SetTag("automaton.state.type", _stateTypeName);
 
         var core = await AutomatonRuntime<TDecider, TState, TEvent, TEffect>
             .Start(observer, interpreter, threadSafe, trackEvents, cancellationToken).ConfigureAwait(false);
@@ -231,7 +231,7 @@ public sealed class DecidingRuntime<TDecider, TState, TCommand, TEvent, TEffect,
     public ValueTask<Result<TState, TError>> Handle(TCommand command, CancellationToken cancellationToken = default)
     {
         var activity = AutomatonDiagnostics.Source.StartActivity("Automaton.Decider.Handle");
-        activity?.SetTag("automaton.type", DeciderTypeName);
+        activity?.SetTag("automaton.type", _deciderTypeName);
         activity?.SetTag("automaton.command.type", command?.GetType().Name);
 
         if (_core.IsThreadSafe)

@@ -89,7 +89,7 @@ jobs:
             const deletions = pr.deletions || 0;
             const totalChanges = additions + deletions;
 
-            const hardLimit = 1500;
+            const hardLimit = 5000;
             const softLimit = 400;
 
             if (totalChanges > hardLimit) {

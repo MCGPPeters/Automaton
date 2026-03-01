@@ -125,8 +125,8 @@ public sealed class AutomatonRuntime<TAutomaton, TState, TEvent, TEffect> : IDis
     public const int MaxFeedbackDepth = 64;
 
     // ── Cached type names for tracing (avoid per-dispatch reflection) ──
-    private static readonly string AutomatonTypeName = typeof(TAutomaton).Name;
-    private static readonly string StateTypeName = typeof(TState).Name;
+    private static readonly string _automatonTypeName = typeof(TAutomaton).Name;
+    private static readonly string _stateTypeName = typeof(TState).Name;
 
     private TState _state;
     private readonly Observer<TState, TEvent, TEffect> _observer;
@@ -208,8 +208,8 @@ public sealed class AutomatonRuntime<TAutomaton, TState, TEvent, TEffect> : IDis
         CancellationToken cancellationToken = default)
     {
         using var activity = AutomatonDiagnostics.Source.StartActivity("Automaton.Start");
-        activity?.SetTag("automaton.type", AutomatonTypeName);
-        activity?.SetTag("automaton.state.type", StateTypeName);
+        activity?.SetTag("automaton.type", _automatonTypeName);
+        activity?.SetTag("automaton.state.type", _stateTypeName);
 
         var (state, effect) = TAutomaton.Init();
         var runtime = new AutomatonRuntime<TAutomaton, TState, TEvent, TEffect>(state, observer, interpreter, threadSafe, trackEvents);
@@ -238,7 +238,7 @@ public sealed class AutomatonRuntime<TAutomaton, TState, TEvent, TEffect> : IDis
     public ValueTask Dispatch(TEvent @event, CancellationToken cancellationToken = default)
     {
         var activity = AutomatonDiagnostics.Source.StartActivity("Automaton.Dispatch");
-        activity?.SetTag("automaton.type", AutomatonTypeName);
+        activity?.SetTag("automaton.type", _automatonTypeName);
         activity?.SetTag("automaton.event.type", @event?.GetType().Name);
 
         if (_threadSafe)
@@ -378,7 +378,7 @@ public sealed class AutomatonRuntime<TAutomaton, TState, TEvent, TEffect> : IDis
     public ValueTask InterpretEffect(TEffect effect, CancellationToken cancellationToken = default)
     {
         var activity = AutomatonDiagnostics.Source.StartActivity("Automaton.InterpretEffect");
-        activity?.SetTag("automaton.type", AutomatonTypeName);
+        activity?.SetTag("automaton.type", _automatonTypeName);
         activity?.SetTag("automaton.effect.type", effect?.GetType().Name);
 
         if (_threadSafe)
