@@ -60,7 +60,7 @@ public class TracingTests
     {
         using var collector = new ActivityCollector();
 
-        var runtime = await AutomatonRuntime<Thermostat, ThermostatState, ThermostatEvent, ThermostatEffect>
+        _ = await AutomatonRuntime<Thermostat, ThermostatState, ThermostatEvent, ThermostatEffect>
             .Start(ThermostatObservers.NoOp, ThermostatInterpreters.NoOp);
 
         var start = collector.Activities.FirstOrDefault(a => a.DisplayName == "Automaton.Start");
@@ -182,7 +182,7 @@ public class TracingTests
     {
         using var collector = new ActivityCollector();
 
-        var runtime = await DecidingRuntime<Thermostat, ThermostatState, ThermostatCommand,
+        _ = await DecidingRuntime<Thermostat, ThermostatState, ThermostatCommand,
             ThermostatEvent, ThermostatEffect, ThermostatError>.Start(ThermostatObservers.NoOp, ThermostatInterpreters.NoOp);
 
         var start = collector.Activities.FirstOrDefault(a => a.DisplayName == "Automaton.Decider.Start");

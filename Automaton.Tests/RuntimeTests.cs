@@ -554,12 +554,10 @@ public class RuntimeTests
     [Fact]
     public async Task Dispose_AfterUse_DoesNotThrow()
     {
-        var runtime = new AutomatonRuntime<Thermostat, ThermostatState, ThermostatEvent, ThermostatEffect>(
+        using var runtime = new AutomatonRuntime<Thermostat, ThermostatState, ThermostatEvent, ThermostatEffect>(
             new ThermostatState(20m, 22m, false, true), ThermostatObservers.NoOp, ThermostatInterpreters.NoOp);
 
         await runtime.Dispatch(new ThermostatEvent.TemperatureRecorded(18m));
         Assert.Equal(18m, runtime.State.CurrentTemp);
-
-        runtime.Dispose();
     }
 }
