@@ -279,6 +279,7 @@ public sealed class AutomatonRuntime<TAutomaton, TState, TEvent, TEffect> : IDis
     [AsyncMethodBuilder(typeof(PoolingAsyncValueTaskMethodBuilder))]
     private async ValueTask AwaitCoreUnserialized(ValueTask coreTask, Activity? activity)
     {
+        using var _ = activity;
         try
         {
             await coreTask.ConfigureAwait(false);
@@ -288,10 +289,6 @@ public sealed class AutomatonRuntime<TAutomaton, TState, TEvent, TEffect> : IDis
         {
             activity?.SetStatus(ActivityStatusCode.Error, ex.Message);
             throw;
-        }
-        finally
-        {
-            activity?.Dispose();
         }
     }
 
@@ -322,6 +319,7 @@ public sealed class AutomatonRuntime<TAutomaton, TState, TEvent, TEffect> : IDis
     [AsyncMethodBuilder(typeof(PoolingAsyncValueTaskMethodBuilder))]
     private async ValueTask AwaitCoreThenRelease(ValueTask coreTask, Activity? activity)
     {
+        using var _ = activity;
         try
         {
             await coreTask.ConfigureAwait(false);
@@ -334,7 +332,6 @@ public sealed class AutomatonRuntime<TAutomaton, TState, TEvent, TEffect> : IDis
         }
         finally
         {
-            activity?.Dispose();
             _gate.Release();
         }
     }
@@ -343,6 +340,7 @@ public sealed class AutomatonRuntime<TAutomaton, TState, TEvent, TEffect> : IDis
     private async ValueTask AwaitGateThenDispatch(
         Task waitTask, TEvent @event, CancellationToken cancellationToken, Activity? activity)
     {
+        using var _ = activity;
         await waitTask.ConfigureAwait(false);
         try
         {
@@ -356,7 +354,6 @@ public sealed class AutomatonRuntime<TAutomaton, TState, TEvent, TEffect> : IDis
         }
         finally
         {
-            activity?.Dispose();
             _gate.Release();
         }
     }
@@ -422,6 +419,7 @@ public sealed class AutomatonRuntime<TAutomaton, TState, TEvent, TEffect> : IDis
     [AsyncMethodBuilder(typeof(PoolingAsyncValueTaskMethodBuilder))]
     private async ValueTask AwaitInterpretCoreUnserialized(ValueTask coreTask, Activity? activity)
     {
+        using var _ = activity;
         try
         {
             await coreTask.ConfigureAwait(false);
@@ -431,10 +429,6 @@ public sealed class AutomatonRuntime<TAutomaton, TState, TEvent, TEffect> : IDis
         {
             activity?.SetStatus(ActivityStatusCode.Error, ex.Message);
             throw;
-        }
-        finally
-        {
-            activity?.Dispose();
         }
     }
 
@@ -465,6 +459,7 @@ public sealed class AutomatonRuntime<TAutomaton, TState, TEvent, TEffect> : IDis
     [AsyncMethodBuilder(typeof(PoolingAsyncValueTaskMethodBuilder))]
     private async ValueTask AwaitInterpretCoreThenRelease(ValueTask coreTask, Activity? activity)
     {
+        using var _ = activity;
         try
         {
             await coreTask.ConfigureAwait(false);
@@ -477,7 +472,6 @@ public sealed class AutomatonRuntime<TAutomaton, TState, TEvent, TEffect> : IDis
         }
         finally
         {
-            activity?.Dispose();
             _gate.Release();
         }
     }
@@ -486,6 +480,7 @@ public sealed class AutomatonRuntime<TAutomaton, TState, TEvent, TEffect> : IDis
     private async ValueTask AwaitGateThenInterpret(
         Task waitTask, TEffect effect, CancellationToken cancellationToken, Activity? activity)
     {
+        using var _ = activity;
         await waitTask.ConfigureAwait(false);
         try
         {
@@ -499,7 +494,6 @@ public sealed class AutomatonRuntime<TAutomaton, TState, TEvent, TEffect> : IDis
         }
         finally
         {
-            activity?.Dispose();
             _gate.Release();
         }
     }

@@ -298,6 +298,7 @@ public sealed class DecidingRuntime<TDecider, TState, TCommand, TEvent, TEffect,
         ValueTask pendingTask, TEvent[] events, int startIndex,
         CancellationToken cancellationToken, Activity? activity)
     {
+        using var _ = activity;
         try
         {
             await pendingTask.ConfigureAwait(false);
@@ -315,10 +316,6 @@ public sealed class DecidingRuntime<TDecider, TState, TCommand, TEvent, TEffect,
         {
             activity?.SetStatus(ActivityStatusCode.Error, ex.Message);
             throw;
-        }
-        finally
-        {
-            activity?.Dispose();
         }
     }
 
@@ -376,6 +373,7 @@ public sealed class DecidingRuntime<TDecider, TState, TCommand, TEvent, TEffect,
         ValueTask pendingTask, TEvent[] events, int startIndex,
         CancellationToken cancellationToken, Activity? activity)
     {
+        using var _ = activity;
         try
         {
             await pendingTask.ConfigureAwait(false);
@@ -396,7 +394,6 @@ public sealed class DecidingRuntime<TDecider, TState, TCommand, TEvent, TEffect,
         }
         finally
         {
-            activity?.Dispose();
             _core.Gate.Release();
         }
     }
@@ -405,6 +402,7 @@ public sealed class DecidingRuntime<TDecider, TState, TCommand, TEvent, TEffect,
     private async ValueTask<Result<TState, TError>> AwaitGateThenHandle(
         Task waitTask, TCommand command, CancellationToken cancellationToken, Activity? activity)
     {
+        using var _ = activity;
         await waitTask.ConfigureAwait(false);
         try
         {
@@ -437,7 +435,6 @@ public sealed class DecidingRuntime<TDecider, TState, TCommand, TEvent, TEffect,
         }
         finally
         {
-            activity?.Dispose();
             _core.Gate.Release();
         }
     }
