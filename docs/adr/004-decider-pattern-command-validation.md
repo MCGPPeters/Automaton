@@ -1,7 +1,7 @@
 # ADR-004: Decider Pattern for Command Validation
 
-**Status:** Accepted  
-**Date:** 2025-06-01  
+**Status:** Accepted
+**Date:** 2025-06-01
 **Deciders:** Maurice Peters
 
 ## Context

@@ -1,6 +1,6 @@
 # ADR 011 — Performance Optimizations: Allocation Reduction
 
-**Status:** Accepted  
+**Status:** Accepted
 **Date:** 2025-02-28
 
 ## Context
