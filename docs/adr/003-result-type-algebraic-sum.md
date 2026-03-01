@@ -1,7 +1,7 @@
 # ADR-003: Result Type as Algebraic Sum Type
 
-**Status:** Accepted  
-**Date:** 2025-06-01  
+**Status:** Accepted
+**Date:** 2025-06-01
 **Deciders:** Maurice Peters
 
 ## Context
@@ -15,13 +15,18 @@ The Decider pattern (ADR-004) needs to express that command validation can eithe
 
 ## Decision
 
-Use `Result<TSuccess, TError>` — an algebraic sum type (coproduct) with two cases:
+Use `Result<TSuccess, TError>` — an algebraic sum type (coproduct) implemented as a **readonly struct** with two cases:
 
 ```csharp
-public abstract record Result<TSuccess, TError>
+public readonly struct Result<TSuccess, TError>
 {
-    public sealed record Ok(TSuccess Value) : Result<TSuccess, TError>;
-    public sealed record Err(TError Error) : Result<TSuccess, TError>;
+    public static Result<TSuccess, TError> Ok(TSuccess value) => ...;
+    public static Result<TSuccess, TError> Err(TError error) => ...;
+
+    public bool IsOk { get; }
+    public bool IsErr { get; }
+    public TSuccess Value { get; }   // throws on Err
+    public TError Error { get; }     // throws on Ok
 }
 ```
 
@@ -119,14 +124,16 @@ Exceptions are reserved for *programmer bugs* and *unrecoverable infrastructure 
 
 ### Negative
 
-- **Verbosity** — `new Result<T, E>.Ok(value)` is more verbose than just returning `value`. (Mitigated by pattern matching and potential future C# union types.)
+- **Verbosity** — `Result<T, E>.Ok(value)` is more verbose than just returning `value`. (Mitigated by pattern matching and potential future C# union types.)
 - **No stack trace** — error values don't carry stack traces. (By design — domain errors are not infrastructure failures.)
 - **Nesting** — `Result<Result<T, E1>, E2>` requires flattening. (Use `Bind` to compose.)
 
 ### Neutral
 
-- C# does not have built-in discriminated unions (yet). The `abstract record` + `sealed record` pattern is the closest approximation.
+- Implemented as a `readonly struct` for zero-allocation on the heap. The `IsOk`/`IsErr` properties and `Value`/`Error` accessors replace the previous `sealed record` subtype pattern matching.
+- C# does not have built-in discriminated unions (yet). The `readonly struct` with static factory methods is the most allocation-efficient approximation.
 - Future C# versions may add native union types, which would simplify the encoding.
+- The `Map`, `Bind`, and `MapError` operations use `if/else` with `IsOk` rather than `switch` expressions. This is both idiomatic for structs and avoids the allocation overhead of the `Func` delegates that `Match` requires.
 
 ## References
 

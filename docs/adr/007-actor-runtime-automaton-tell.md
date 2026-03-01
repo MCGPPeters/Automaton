@@ -1,8 +1,11 @@
 # ADR-007: Actor Runtime — Automaton Constraint with Tell
 
-**Status:** Accepted  
-**Date:** 2025-06-01  
+**Status:** Accepted
+**Date:** 2025-06-01
+**Updated:** 2025-06-14
 **Deciders:** Maurice Peters
+
+> **Note:** The Actor runtime implementation has been moved from the core library to the test project as a reference implementation (see ADR-010). The design decisions in this ADR remain valid — only the location changed.
 
 ## Context
 

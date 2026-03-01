@@ -1,0 +1,60 @@
+# =============================================================================
+# Continuous Benchmarking — BenchmarkDotNet + GitHub Pages
+# =============================================================================
+# Runs benchmarks on every push to main. Results are tracked on GitHub Pages
+# with interactive charts. Performance regressions exceeding the threshold
+# fail the build and leave a comment on the offending commit.
+#
+# Dashboard: https://MCGPPeters.github.io/Automaton/dev/bench/
+# =============================================================================
+
+name: Benchmarks
+
+on:
+  push:
+    branches: [ main ]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  deployments: write
+
+jobs:
+  benchmark:
+    name: Run benchmarks
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+
+      - name: Run BenchmarkDotNet
+        run: >
+          dotnet run
+          --project Automaton.Benchmarks/Automaton.Benchmarks.csproj
+          -c Release
+          --
+          --filter '*'
+          --exporters json
+
+      - name: Store benchmark result
+        uses: benchmark-action/github-action-benchmark@v1
+        with:
+          name: Automaton Benchmarks
+          tool: 'benchmarkdotnet'
+          output-file-path: BenchmarkDotNet.Artifacts/results/Automaton.Benchmarks.AutomatonBenchmarks-report-full-compressed.json
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          auto-push: true
+          # ── Regression detection ────────────────────────────
+          # Alert at 150%, fail at 150% (any benchmark 50% slower → red build)
+          alert-threshold: '150%'
+          fail-on-alert: true
+          comment-on-alert: true
+          alert-comment-cc-users: '@MCGPPeters'
+          # ── Job summary in PR / commit view ─────────────────
+          summary-always: true

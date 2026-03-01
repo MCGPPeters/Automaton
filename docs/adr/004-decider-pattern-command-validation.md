@@ -23,7 +23,7 @@ Adopt the **Decider pattern** (Chassaing, 2021) as an extension of the Automaton
 public interface Decider<TState, TCommand, TEvent, TEffect, TError>
     : Automaton<TState, TEvent, TEffect>
 {
-    static abstract Result<IEnumerable<TEvent>, TError> Decide(TState state, TCommand command);
+    static abstract Result<TEvent[], TError> Decide(TState state, TCommand command);
     static virtual bool IsTerminal(TState state) => false;
 }
 ```

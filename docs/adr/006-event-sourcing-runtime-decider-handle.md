@@ -1,8 +1,11 @@
 # ADR-006: Event Sourcing Runtime — Decider Constraint with Handle
 
-**Status:** Accepted  
-**Date:** 2025-06-01  
+**Status:** Accepted
+**Date:** 2025-06-01
+**Updated:** 2025-06-14
 **Deciders:** Maurice Peters
+
+> **Note:** The Event Sourcing runtime implementation has been moved from the core library to the test project as a reference implementation (see ADR-010). The `Handle` method was also refactored to use C# pattern matching (`switch`) instead of `Result.Match()`. The design decisions in this ADR remain valid — only the location and code style changed.
 
 ## Context
 
@@ -56,9 +59,9 @@ public Result<TState, TError> Handle(TCommand command) =>
             foreach (var e in materialized) _store.Append(e);
             _state = newState;
             _effects.AddRange(newEffects);
-            return new Result<TState, TError>.Ok(_state);
+            return Result<TState, TError>.Ok(_state);
         },
-        error => new Result<TState, TError>.Err(error));
+        error => Result<TState, TError>.Err(error));
 ```
 
 Key design choices:

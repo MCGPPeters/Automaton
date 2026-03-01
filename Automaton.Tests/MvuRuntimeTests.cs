@@ -1,10 +1,11 @@
 // =============================================================================
 // MVU Runtime Tests
 // =============================================================================
-// Proves the counter automaton works as an MVU application:
+// Proves the thermostat automaton works as an MVU application:
 // dispatch events → state transitions → views rendered → effects handled.
 // =============================================================================
 
+using System.Globalization;
 using Automaton.Mvu;
 
 namespace Automaton.Tests;
@@ -12,106 +13,84 @@ namespace Automaton.Tests;
 public class MvuRuntimeTests
 {
     /// <summary>
-    /// Simple view: just renders the count as a string.
-    /// In real Abies this would be a Document (virtual DOM).
+    /// Simple view: renders thermostat state as a status string.
+    /// Uses InvariantCulture so decimal formatting is locale-independent.
     /// </summary>
-    private static string RenderCounter(CounterState state) =>
-        $"Count: {state.Count}";
-
-    /// <summary>
-    /// Effect handler that collects log messages and produces no follow-up events.
-    /// </summary>
-    private static Task<IEnumerable<CounterEvent>> HandleEffect(CounterEffect effect) =>
-        Task.FromResult<IEnumerable<CounterEvent>>(effect switch
-        {
-            CounterEffect.Log log => [],
-            CounterEffect.None => [],
-            _ => []
-        });
+    private static string RenderThermostat(ThermostatState state) =>
+        string.Create(CultureInfo.InvariantCulture,
+            $"{state.CurrentTemp}°C (target: {state.TargetTemp}°C, heating: {state.Heating})");
 
     [Fact]
-    public async Task Init_ProducesZeroState_AndRendersInitialView()
+    public async Task Init_ProducesInitialState_AndRendersInitialView()
     {
-        var runtime = await MvuRuntime<Counter, CounterState, CounterEvent, CounterEffect, string>
-            .Start(RenderCounter, HandleEffect);
+        var runtime = await MvuRuntime<Thermostat, ThermostatState, ThermostatEvent, ThermostatEffect, string>
+            .Start(RenderThermostat, ThermostatInterpreters.NoOp);
 
-        Assert.Equal(0, runtime.State.Count);
+        Assert.Equal(20m, runtime.State.CurrentTemp);
         Assert.Single(runtime.Views);
-        Assert.Equal("Count: 0", runtime.Views[0]);
+        Assert.Equal("20.0°C (target: 22.0°C, heating: False)", runtime.Views[0]);
     }
 
     [Fact]
-    public async Task Dispatch_Increment_UpdatesStateAndRendersNewView()
+    public async Task Dispatch_TemperatureRecorded_UpdatesStateAndRendersNewView()
     {
-        var runtime = await MvuRuntime<Counter, CounterState, CounterEvent, CounterEffect, string>
-            .Start(RenderCounter, HandleEffect);
+        var runtime = await MvuRuntime<Thermostat, ThermostatState, ThermostatEvent, ThermostatEffect, string>
+            .Start(RenderThermostat, ThermostatInterpreters.NoOp);
 
-        await runtime.Dispatch(new CounterEvent.Increment());
+        await runtime.Dispatch(new ThermostatEvent.TemperatureRecorded(18m));
 
-        Assert.Equal(1, runtime.State.Count);
+        Assert.Equal(18m, runtime.State.CurrentTemp);
         Assert.Equal(2, runtime.Views.Count);
-        Assert.Equal("Count: 1", runtime.Views[1]);
+        Assert.Equal("18°C (target: 22.0°C, heating: False)", runtime.Views[1]);
     }
 
     [Fact]
     public async Task Dispatch_MultipleEvents_ProducesCorrectSequenceOfViews()
     {
-        var runtime = await MvuRuntime<Counter, CounterState, CounterEvent, CounterEffect, string>
-            .Start(RenderCounter, HandleEffect);
+        var runtime = await MvuRuntime<Thermostat, ThermostatState, ThermostatEvent, ThermostatEffect, string>
+            .Start(RenderThermostat, ThermostatInterpreters.NoOp);
 
-        await runtime.Dispatch(new CounterEvent.Increment());
-        await runtime.Dispatch(new CounterEvent.Increment());
-        await runtime.Dispatch(new CounterEvent.Increment());
-        await runtime.Dispatch(new CounterEvent.Decrement());
+        await runtime.Dispatch(new ThermostatEvent.TemperatureRecorded(18m));
+        await runtime.Dispatch(new ThermostatEvent.HeaterTurnedOn());
+        await runtime.Dispatch(new ThermostatEvent.TemperatureRecorded(23m));
+        await runtime.Dispatch(new ThermostatEvent.HeaterTurnedOff());
 
-        Assert.Equal(2, runtime.State.Count);
+        Assert.Equal(23m, runtime.State.CurrentTemp);
+        Assert.False(runtime.State.Heating);
         Assert.Equal(5, runtime.Views.Count); // init + 4 dispatches
-        Assert.Equal("Count: 0", runtime.Views[0]);
-        Assert.Equal("Count: 1", runtime.Views[1]);
-        Assert.Equal("Count: 2", runtime.Views[2]);
-        Assert.Equal("Count: 3", runtime.Views[3]);
-        Assert.Equal("Count: 2", runtime.Views[4]);
+        Assert.Equal("20.0°C (target: 22.0°C, heating: False)", runtime.Views[0]);
+        Assert.Equal("18°C (target: 22.0°C, heating: False)", runtime.Views[1]);
+        Assert.Equal("18°C (target: 22.0°C, heating: True)", runtime.Views[2]);
+        Assert.Equal("23°C (target: 22.0°C, heating: True)", runtime.Views[3]);
+        Assert.Equal("23°C (target: 22.0°C, heating: False)", runtime.Views[4]);
     }
 
     [Fact]
-    public async Task Dispatch_Reset_ProducesLogEffect()
+    public async Task Dispatch_ShutdownCompleted_ProducesSendNotificationEffect()
     {
-        var logs = new List<string>();
+        var notifications = new List<string>();
 
-        Task<IEnumerable<CounterEvent>> HandleEffectWithCapture(CounterEffect effect)
-        {
-            if (effect is CounterEffect.Log log)
-            {
-                logs.Add(log.Message);
-            }
+        var runtime = await MvuRuntime<Thermostat, ThermostatState, ThermostatEvent, ThermostatEffect, string>
+            .Start(RenderThermostat, ThermostatInterpreters.CaptureNotifications(notifications));
 
-            return Task.FromResult<IEnumerable<CounterEvent>>([]);
-        }
+        await runtime.Dispatch(new ThermostatEvent.ShutdownCompleted());
 
-        var runtime = await MvuRuntime<Counter, CounterState, CounterEvent, CounterEffect, string>
-            .Start(RenderCounter, HandleEffectWithCapture);
-
-        await runtime.Dispatch(new CounterEvent.Increment());
-        await runtime.Dispatch(new CounterEvent.Increment());
-        await runtime.Dispatch(new CounterEvent.Increment());
-        await runtime.Dispatch(new CounterEvent.Reset());
-
-        Assert.Equal(0, runtime.State.Count);
-        Assert.Single(logs);
-        Assert.Equal("Counter reset from 3", logs[0]);
+        Assert.False(runtime.State.Active);
+        Assert.Single(notifications);
+        Assert.Equal("Thermostat shut down", notifications[0]);
     }
 
     [Fact]
     public async Task Events_AreRecorded()
     {
-        var runtime = await MvuRuntime<Counter, CounterState, CounterEvent, CounterEffect, string>
-            .Start(RenderCounter, HandleEffect);
+        var runtime = await MvuRuntime<Thermostat, ThermostatState, ThermostatEvent, ThermostatEffect, string>
+            .Start(RenderThermostat, ThermostatInterpreters.NoOp);
 
-        await runtime.Dispatch(new CounterEvent.Increment());
-        await runtime.Dispatch(new CounterEvent.Decrement());
+        await runtime.Dispatch(new ThermostatEvent.TemperatureRecorded(18m));
+        await runtime.Dispatch(new ThermostatEvent.HeaterTurnedOn());
 
         Assert.Equal(2, runtime.Events.Count);
-        Assert.IsType<CounterEvent.Increment>(runtime.Events[0]);
-        Assert.IsType<CounterEvent.Decrement>(runtime.Events[1]);
+        Assert.IsType<ThermostatEvent.TemperatureRecorded>(runtime.Events[0]);
+        Assert.IsType<ThermostatEvent.HeaterTurnedOn>(runtime.Events[1]);
     }
 }

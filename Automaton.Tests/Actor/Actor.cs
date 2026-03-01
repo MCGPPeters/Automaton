@@ -65,12 +65,12 @@ public sealed class ActorRef<TEvent>
 /// </para>
 /// <example>
 /// <code>
-/// var actor = ActorInstance&lt;Counter, CounterState, CounterEvent, CounterEffect&gt;
-///     .Spawn("counter-1");
+/// var actor = ActorInstance&lt;Thermostat, ThermostatState, ThermostatEvent, ThermostatEffect&gt;
+///     .Spawn("thermostat-1");
 ///
-/// await actor.Ref.Tell(new CounterEvent.Increment());
+/// await actor.Ref.Tell(new ThermostatEvent.TemperatureRecorded(18m));
 /// await actor.DrainMailbox();
-/// // actor.State.Count == 1
+/// // actor.State.CurrentTemp == 18
 /// </code>
 /// </example>
 /// </remarks>
@@ -124,7 +124,7 @@ public sealed class ActorInstance<TAutomaton, TState, TEvent, TEffect>
         var actorRef = new ActorRef<TEvent>(name, mailbox.Writer);
 
         // Observer: no-op — actor state is internal
-        Observer<TState, TEvent, TEffect> observer = (_, _, _) => Task.CompletedTask;
+        Observer<TState, TEvent, TEffect> observer = (_, _, _) => ValueTask.CompletedTask;
 
         // Interpreter: wraps the effect handler with self-reference
         Interpreter<TEffect, TEvent> interpreter = effectHandler is not null
@@ -133,7 +133,7 @@ public sealed class ActorInstance<TAutomaton, TState, TEvent, TEffect>
                 await effectHandler(effect, actorRef);
                 return [];
             }
-        : _ => Task.FromResult<IEnumerable<TEvent>>([]);
+        : _ => new ValueTask<TEvent[]>([]);
 
         var core = new AutomatonRuntime<TAutomaton, TState, TEvent, TEffect>(
             state, observer, interpreter);

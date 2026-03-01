@@ -33,29 +33,37 @@ namespace Automaton;
 /// </para>
 /// <example>
 /// <code>
-/// public record CounterState(int Count);
+/// public record ThermostatState(decimal CurrentTemp, decimal TargetTemp, bool Heating, bool Active);
 ///
-/// public interface CounterEvent
+/// public interface ThermostatEvent
 /// {
-///     record struct Increment : CounterEvent;
-///     record struct Decrement : CounterEvent;
+///     record struct TemperatureRecorded(decimal Temperature) : ThermostatEvent;
+///     record struct HeaterTurnedOn : ThermostatEvent;
+///     record struct HeaterTurnedOff : ThermostatEvent;
 /// }
 ///
-/// public interface CounterEffect
+/// public interface ThermostatEffect
 /// {
-///     record struct None : CounterEffect;
+///     record struct None : ThermostatEffect;
+///     record struct ActivateHeater : ThermostatEffect;
+///     record struct DeactivateHeater : ThermostatEffect;
 /// }
 ///
-/// public class Counter : Automaton&lt;CounterState, CounterEvent, CounterEffect&gt;
+/// public class Thermostat : Automaton&lt;ThermostatState, ThermostatEvent, ThermostatEffect&gt;
 /// {
-///     public static (CounterState, CounterEffect) Init() =&gt;
-///         (new CounterState(0), new CounterEffect.None());
+///     public static (ThermostatState, ThermostatEffect) Init() =&gt;
+///         (new ThermostatState(20.0m, 22.0m, false, true), new ThermostatEffect.None());
 ///
-///     public static (CounterState, CounterEffect) Transition(CounterState state, CounterEvent @event) =&gt;
+///     public static (ThermostatState, ThermostatEffect) Transition(
+///         ThermostatState state, ThermostatEvent @event) =&gt;
 ///         @event switch
 ///         {
-///             CounterEvent.Increment =&gt; (state with { Count = state.Count + 1 }, new CounterEffect.None()),
-///             CounterEvent.Decrement =&gt; (state with { Count = state.Count - 1 }, new CounterEffect.None()),
+///             ThermostatEvent.TemperatureRecorded(var temp) =&gt;
+///                 (state with { CurrentTemp = temp }, new ThermostatEffect.None()),
+///             ThermostatEvent.HeaterTurnedOn =&gt;
+///                 (state with { Heating = true }, new ThermostatEffect.ActivateHeater()),
+///             ThermostatEvent.HeaterTurnedOff =&gt;
+///                 (state with { Heating = false }, new ThermostatEffect.DeactivateHeater()),
 ///             _ =&gt; throw new UnreachableException()
 ///         };
 /// }

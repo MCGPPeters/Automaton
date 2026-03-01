@@ -90,20 +90,20 @@ public sealed class EventStore<TEvent>
 /// </para>
 /// <example>
 /// <code>
-/// var aggregate = AggregateRunner&lt;Counter, CounterState, CounterCommand,
-///     CounterEvent, CounterEffect, CounterError&gt;.Create();
+/// var aggregate = AggregateRunner&lt;Thermostat, ThermostatState, ThermostatCommand,
+///     ThermostatEvent, ThermostatEffect, ThermostatError&gt;.Create();
 ///
-/// var result = aggregate.Handle(new CounterCommand.Add(3));
-/// // result is Ok(CounterState { Count = 3 })
-/// // aggregate.Store.Events.Count == 3  (3 Increment events)
+/// var result = aggregate.Handle(new ThermostatCommand.RecordReading(18m));
+/// // result is Ok(ThermostatState { CurrentTemp = 18, Heating = true })
+/// // aggregate.Store.Events.Count == 2  (TemperatureRecorded + HeaterTurnedOn)
 ///
-/// var overflow = aggregate.Handle(new CounterCommand.Add(200));
-/// // overflow is Err(CounterError.Overflow { ... })
-/// // aggregate.State.Count is still 3 — nothing persisted
+/// var invalid = aggregate.Handle(new ThermostatCommand.SetTarget(50m));
+/// // invalid is Err(ThermostatError.InvalidTarget { ... })
+/// // aggregate.State unchanged — nothing persisted
 ///
 /// // Rebuild from scratch (simulates loading from disk)
 /// var rebuilt = aggregate.Rebuild();
-/// // rebuilt.Count == 3
+/// // rebuilt == aggregate.State
 /// </code>
 /// </example>
 /// </remarks>
@@ -179,41 +179,41 @@ public sealed class AggregateRunner<TDecider, TState, TCommand, TEvent, TEffect,
     /// ensuring the state/store invariant is preserved on partial failure.
     /// </para>
     /// </remarks>
-    public Result<TState, TError> Handle(TCommand command) =>
-        TDecider.Decide(_state, command).Match<Result<TState, TError>>(
-            events =>
+    public Result<TState, TError> Handle(TCommand command)
+    {
+        var decided = TDecider.Decide(_state, command);
+        if (decided.IsOk)
+        {
+            var events = decided.Value;
+
+            // Transition in a single pass over the materialized array.
+            // Transition is pure (pattern-match exhaustive) so cannot throw
+            // for well-formed domains. We compute new state and effects in
+            // locals to preserve the state/store invariant on failure.
+            var newState = _state;
+            var newEffects = new List<TEffect>();
+
+            for (var i = 0; i < events.Length; i++)
             {
-                // Materialize events to avoid issues with lazy enumerables throwing mid-iteration.
-                var materializedEvents = new List<TEvent>();
-                foreach (var @event in events)
-                {
-                    materializedEvents.Add(@event);
-                }
+                var (transitioned, effect) = TDecider.Transition(newState, events[i]);
+                newState = transitioned;
+                newEffects.Add(effect);
+            }
 
-                // Compute new state and effects in locals to preserve invariants on failure.
-                var newState = _state;
-                var newEffects = new List<TEffect>();
+            // Append the already-materialized array to the store.
+            _store.Append(events);
 
-                foreach (var @event in materializedEvents)
-                {
-                    var (transitioned, effect) = TDecider.Transition(newState, @event);
-                    newState = transitioned;
-                    newEffects.Add(effect);
-                }
+            // Commit state and effects only after successful append.
+            _state = newState;
+            _effects.AddRange(newEffects);
 
-                // Append to store only after all transitions succeed.
-                foreach (var @event in materializedEvents)
-                {
-                    _store.Append(@event);
-                }
-
-                // Commit state and effects only after successful append.
-                _state = newState;
-                _effects.AddRange(newEffects);
-
-                return new Result<TState, TError>.Ok(_state);
-            },
-            error => new Result<TState, TError>.Err(error));
+            return Result<TState, TError>.Ok(_state);
+        }
+        else
+        {
+            return Result<TState, TError>.Err(decided.Error);
+        }
+    }
 
     /// <summary>
     /// Rebuilds state from scratch by replaying all stored events.

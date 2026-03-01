@@ -1,8 +1,8 @@
 // =============================================================================
 // Cross-Runtime Tests
 // =============================================================================
-// Proves the SAME automaton (Counter) produces identical results when executed
-// by the MVU, Event Sourcing, and Actor runtimes.
+// Proves the SAME automaton (Thermostat) produces identical results when
+// executed by the MVU, Event Sourcing, and Actor runtimes.
 //
 // The transition function is the invariant. The runtime is the variable.
 //
@@ -21,42 +21,44 @@ public class CrossRuntimeTests
 {
     /// <summary>
     /// The canonical event sequence used by MVU and Actor runtimes.
+    /// Simulates: cold reading → heater on → warm reading → heater off.
     /// </summary>
-    private static readonly CounterEvent[] _eventScenario =
+    private static readonly ThermostatEvent[] _eventScenario =
     [
-        new CounterEvent.Increment(),
-        new CounterEvent.Increment(),
-        new CounterEvent.Increment(),
-        new CounterEvent.Decrement(),
-        new CounterEvent.Increment(),
-        new CounterEvent.Reset(),
-        new CounterEvent.Increment()
+        new ThermostatEvent.TemperatureRecorded(18m),
+        new ThermostatEvent.HeaterTurnedOn(),
+        new ThermostatEvent.TemperatureRecorded(23m),
+        new ThermostatEvent.HeaterTurnedOff()
     ];
 
     /// <summary>
     /// The equivalent command sequence used by the ES runtime.
     /// Commands express intent; Decide validates and produces the same events.
     /// </summary>
-    private static readonly CounterCommand[] _commandScenario =
+    /// <remarks>
+    /// RecordReading(18) when target=22 and not heating → [TemperatureRecorded(18), HeaterTurnedOn]
+    /// RecordReading(23) when target=22 and heating → [TemperatureRecorded(23), HeaterTurnedOff]
+    /// </remarks>
+    private static readonly ThermostatCommand[] _commandScenario =
     [
-        new CounterCommand.Add(3),   // → 3 Increment events
-        new CounterCommand.Add(-1),  // → 1 Decrement event
-        new CounterCommand.Add(1),   // → 1 Increment event
-        new CounterCommand.Reset(),  // → 1 Reset event
-        new CounterCommand.Add(1)    // → 1 Increment event
+        new ThermostatCommand.RecordReading(18m),
+        new ThermostatCommand.RecordReading(23m)
     ];
 
     /// <summary>
-    /// Expected final state: inc(3) - dec(1) + inc(1) = 3, reset → 0, inc(1) = 1
+    /// Expected final state: CurrentTemp=23, TargetTemp=22, Heating=false, Active=true
     /// </summary>
-    private const int _expectedFinalCount = 1;
+    private static readonly ThermostatState _expectedFinalState =
+        new(CurrentTemp: 23m, TargetTemp: 22m, Heating: false, Active: true);
 
     [Fact]
     public async Task AllThreeRuntimes_ProduceIdenticalFinalState()
     {
         // --- MVU (receives events) ---
-        var mvu = await MvuRuntime<Counter, CounterState, CounterEvent, CounterEffect, string>
-            .Start(s => $"Count: {s.Count}", _ => Task.FromResult<IEnumerable<CounterEvent>>([]));
+        var mvu = await MvuRuntime<Thermostat, ThermostatState, ThermostatEvent, ThermostatEffect, string>
+            .Start(
+                s => $"{s.CurrentTemp}°C (target: {s.TargetTemp}°C, heating: {s.Heating})",
+                _ => new ValueTask<ThermostatEvent[]>([]));
 
         foreach (var e in _eventScenario)
         {
@@ -64,8 +66,8 @@ public class CrossRuntimeTests
         }
 
         // --- Event Sourcing (receives commands) ---
-        var aggregate = AggregateRunner<Counter, CounterState, CounterCommand,
-            CounterEvent, CounterEffect, CounterError>.Create();
+        var aggregate = AggregateRunner<Thermostat, ThermostatState, ThermostatCommand,
+            ThermostatEvent, ThermostatEffect, ThermostatError>.Create();
 
         foreach (var cmd in _commandScenario)
         {
@@ -73,7 +75,8 @@ public class CrossRuntimeTests
         }
 
         // --- Actor (receives events) ---
-        var actor = ActorInstance<Counter, CounterState, CounterEvent, CounterEffect>.Spawn("cross-test");
+        var actor = ActorInstance<Thermostat, ThermostatState, ThermostatEvent, ThermostatEffect>
+            .Spawn("cross-test");
 
         foreach (var e in _eventScenario)
         {
@@ -83,9 +86,9 @@ public class CrossRuntimeTests
         await actor.DrainMailbox();
 
         // --- All three produce identical state ---
-        Assert.Equal(_expectedFinalCount, mvu.State.Count);
-        Assert.Equal(_expectedFinalCount, aggregate.State.Count);
-        Assert.Equal(_expectedFinalCount, actor.State.Count);
+        Assert.Equal(_expectedFinalState, mvu.State);
+        Assert.Equal(_expectedFinalState, aggregate.State);
+        Assert.Equal(_expectedFinalState, actor.State);
 
         // --- And they all equal each other ---
         Assert.Equal(mvu.State, aggregate.State);
@@ -98,8 +101,10 @@ public class CrossRuntimeTests
     public async Task EventSourcing_CanRebuild_ToSameStateAsMvu()
     {
         // Run through MVU (events)
-        var mvu = await MvuRuntime<Counter, CounterState, CounterEvent, CounterEffect, string>
-            .Start(s => s.Count.ToString(), _ => Task.FromResult<IEnumerable<CounterEvent>>([]));
+        var mvu = await MvuRuntime<Thermostat, ThermostatState, ThermostatEvent, ThermostatEffect, string>
+            .Start(
+                s => $"{s.CurrentTemp}°C",
+                _ => new ValueTask<ThermostatEvent[]>([]));
 
         foreach (var e in _eventScenario)
         {
@@ -107,8 +112,8 @@ public class CrossRuntimeTests
         }
 
         // Run through ES (commands) and rebuild from scratch
-        var aggregate = AggregateRunner<Counter, CounterState, CounterCommand,
-            CounterEvent, CounterEffect, CounterError>.Create();
+        var aggregate = AggregateRunner<Thermostat, ThermostatState, ThermostatCommand,
+            ThermostatEvent, ThermostatEffect, ThermostatError>.Create();
 
         foreach (var cmd in _commandScenario)
         {
@@ -123,11 +128,11 @@ public class CrossRuntimeTests
     [Fact]
     public void AutomatonTransition_IsPure_SameInputProducesSameOutput()
     {
-        var state = new CounterState(5);
-        var @event = new CounterEvent.Increment();
+        var state = new ThermostatState(20m, 22m, false, true);
+        var @event = new ThermostatEvent.TemperatureRecorded(18m);
 
-        var (state1, effect1) = Counter.Transition(state, @event);
-        var (state2, effect2) = Counter.Transition(state, @event);
+        var (state1, effect1) = Thermostat.Transition(state, @event);
+        var (state2, effect2) = Thermostat.Transition(state, @event);
 
         Assert.Equal(state1, state2);
         Assert.Equal(effect1, effect2);
@@ -138,11 +143,11 @@ public class CrossRuntimeTests
     {
         // state = events.Aggregate(init, transition)
         // This IS event sourcing. This IS MVU. This IS actor state.
-        var (seed, _) = Counter.Init();
+        var (seed, _) = Thermostat.Init();
 
         var finalState = _eventScenario.Aggregate(seed, (state, @event) =>
-            Counter.Transition(state, @event).State);
+            Thermostat.Transition(state, @event).State);
 
-        Assert.Equal(_expectedFinalCount, finalState.Count);
+        Assert.Equal(_expectedFinalState, finalState);
     }
 }

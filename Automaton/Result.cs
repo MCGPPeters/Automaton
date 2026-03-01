@@ -12,9 +12,13 @@
 //     Result<T, E> ≅ T + E    (coproduct / sum type)
 //     Map    : (T → U) → Result<T, E> → Result<U, E>     (functor)
 //     Bind   : (T → Result<U, E>) → Result<T, E> → Result<U, E>  (monad)
+//
+// Implementation note:
+//     Result is a readonly struct to avoid heap allocation. Each Ok/Err
+//     is stack-allocated, eliminating 24 bytes per Result on every Decide
+//     and Handle call. The bool discriminator replaces the virtual dispatch
+//     of the previous abstract record hierarchy.
 // =============================================================================
-
-using System.Diagnostics;
 
 namespace Automaton;
 
@@ -32,9 +36,14 @@ namespace Automaton;
 /// business rule violations). Reserve exceptions for programmer bugs and
 /// unrecoverable infrastructure failures.
 /// </para>
+/// <para>
+/// Result is a <c>readonly struct</c> to avoid heap allocation on every Decide
+/// and Handle call. Use the static factory methods <see cref="Ok"/> and
+/// <see cref="Err"/> to create instances.
+/// </para>
 /// <example>
 /// <code>
-/// Result&lt;int, string&gt; result = new Result&lt;int, string&gt;.Ok(42);
+/// Result&lt;int, string&gt; result = Result&lt;int, string&gt;.Ok(42);
 ///
 /// string message = result.Match(
 ///     value =&gt; $"Got {value}",
@@ -45,27 +54,56 @@ namespace Automaton;
 /// </remarks>
 /// <typeparam name="TSuccess">The type of the success value.</typeparam>
 /// <typeparam name="TError">The type of the error value.</typeparam>
-public abstract record Result<TSuccess, TError>
+public readonly struct Result<TSuccess, TError>
 {
-    /// <summary>
-    /// Represents a successful result containing a value.
-    /// </summary>
-    public sealed record Ok(TSuccess Value) : Result<TSuccess, TError>;
+    private readonly bool _isOk;
+    private readonly TSuccess _value;
+    private readonly TError _error;
+
+    private Result(bool isOk, TSuccess value, TError error)
+    {
+        _isOk = isOk;
+        _value = value;
+        _error = error;
+    }
 
     /// <summary>
-    /// Represents a failed result containing an error.
+    /// Creates a successful result containing a value.
     /// </summary>
-    public sealed record Err(TError Error) : Result<TSuccess, TError>;
+    public static Result<TSuccess, TError> Ok(TSuccess value) =>
+        new(true, value, default!);
+
+    /// <summary>
+    /// Creates a failed result containing an error.
+    /// </summary>
+    public static Result<TSuccess, TError> Err(TError error) =>
+        new(false, default!, error);
 
     /// <summary>
     /// Whether this result is a success.
     /// </summary>
-    public bool IsOk => this is Ok;
+    public bool IsOk => _isOk;
 
     /// <summary>
     /// Whether this result is an error.
     /// </summary>
-    public bool IsErr => this is Err;
+    public bool IsErr => !_isOk;
+
+    /// <summary>
+    /// The success value. Throws if this is an error result.
+    /// </summary>
+    /// <exception cref="InvalidOperationException">Thrown when accessing Value on an Err result.</exception>
+    public TSuccess Value => _isOk
+        ? _value
+        : throw new InvalidOperationException("Cannot access Value on an Err result.");
+
+    /// <summary>
+    /// The error value. Throws if this is a success result.
+    /// </summary>
+    /// <exception cref="InvalidOperationException">Thrown when accessing Error on an Ok result.</exception>
+    public TError Error => !_isOk
+        ? _error
+        : throw new InvalidOperationException("Cannot access Error on an Ok result.");
 
     /// <summary>
     /// Exhaustive pattern match over both cases.
@@ -80,53 +118,49 @@ public abstract record Result<TSuccess, TError>
     public TResult Match<TResult>(
         Func<TSuccess, TResult> onOk,
         Func<TError, TResult> onErr) =>
-        this switch
-        {
-            Ok(var value) => onOk(value),
-            Err(var error) => onErr(error),
-            _ => throw new UnreachableException()
-        };
+        _isOk ? onOk(_value) : onErr(_error);
 
     /// <summary>
     /// Async exhaustive pattern match over both cases.
     /// </summary>
-    public async Task<TResult> Match<TResult>(
+    public Task<TResult> Match<TResult>(
         Func<TSuccess, Task<TResult>> onOk,
         Func<TError, Task<TResult>> onErr) =>
-        this switch
-        {
-            Ok(var value) => await onOk(value),
-            Err(var error) => await onErr(error),
-            _ => throw new UnreachableException()
-        };
+        _isOk ? onOk(_value) : onErr(_error);
 
     /// <summary>
     /// Maps a function over the success value (functor).
     /// </summary>
     /// <remarks>
-    /// If this is <see cref="Ok"/>, applies <paramref name="f"/> to the value.
-    /// If this is <see cref="Err"/>, propagates the error unchanged.
+    /// If this is Ok, applies <paramref name="f"/> to the value.
+    /// If this is Err, propagates the error unchanged.
     /// </remarks>
     public Result<TNew, TError> Map<TNew>(Func<TSuccess, TNew> f) =>
-        Match<Result<TNew, TError>>(
-            value => new Result<TNew, TError>.Ok(f(value)),
-            error => new Result<TNew, TError>.Err(error));
+        _isOk
+            ? Result<TNew, TError>.Ok(f(_value))
+            : Result<TNew, TError>.Err(_error);
 
     /// <summary>
     /// Chains a function that returns a Result over the success value (monad bind).
     /// </summary>
     /// <remarks>
-    /// Enables railway-oriented programming: if this is <see cref="Ok"/>,
-    /// applies <paramref name="f"/>; if <see cref="Err"/>, short-circuits.
+    /// Enables railway-oriented programming: if this is Ok,
+    /// applies <paramref name="f"/>; if Err, short-circuits.
     /// </remarks>
     public Result<TNew, TError> Bind<TNew>(Func<TSuccess, Result<TNew, TError>> f) =>
-        Match(f, error => new Result<TNew, TError>.Err(error));
+        _isOk
+            ? f(_value)
+            : Result<TNew, TError>.Err(_error);
 
     /// <summary>
     /// Maps a function over the error value.
     /// </summary>
     public Result<TSuccess, TNew> MapError<TNew>(Func<TError, TNew> f) =>
-        Match<Result<TSuccess, TNew>>(
-            value => new Result<TSuccess, TNew>.Ok(value),
-            error => new Result<TSuccess, TNew>.Err(f(error)));
+        _isOk
+            ? Result<TSuccess, TNew>.Ok(_value)
+            : Result<TSuccess, TNew>.Err(f(_error));
+
+    /// <inheritdoc/>
+    public override string ToString() =>
+        _isOk ? $"Ok({_value})" : $"Err({_error})";
 }
