@@ -2,13 +2,19 @@
 
 **Write once, run everywhere.**
 
-A unified kernel for MVU, Event Sourcing, and the Actor Model — based on the observation that all three are instances of the same mathematical structure: a **Mealy machine** (finite-state transducer with effects).
+A minimal, production-hardened Mealy machine kernel for building state machines, MVU runtimes, event-sourced aggregates, and actor systems — based on the observation that all three are instances of the same mathematical structure: a **Mealy machine** (finite-state transducer with effects).
 
 ```text
 transition : (State × Event) → (State × Effect)
 ```
 
-Define your pure domain logic once as a transition function. Then execute it in a browser UI loop, an event-sourced aggregate, or a mailbox actor — without changing a single line.
+Define your pure domain logic once as a transition function. Then plug it into any runtime — a browser UI loop, an event-sourced aggregate, or a mailbox actor — without changing a single line.
+
+## Installation
+
+```bash
+dotnet add package Automaton
+```
 
 ## The Kernel
 
@@ -25,7 +31,6 @@ Two methods. Zero dependencies. The rest is runtime.
 ## Example: Counter
 
 ```csharp
-// Pure domain logic — no framework imports, no infrastructure
 public record CounterState(int Count);
 
 public interface CounterEvent
@@ -54,134 +59,61 @@ public class Counter : Automaton<CounterState, CounterEvent, CounterEffect>
 }
 ```
 
-This single definition drives all three runtimes below.
-
 ## The Shared Runtime
 
-All three runtimes are structurally identical: a **monadic left fold** over an event stream, parameterized by two extension points:
+```csharp
+var runtime = await AutomatonRuntime<Counter, CounterState, CounterEvent, CounterEffect>
+    .Start(
+        observer: (state, @event, effect) =>
+        {
+            Console.WriteLine($"{@event} → {state}");
+            return ValueTask.CompletedTask;
+        },
+        interpreter: _ => new ValueTask<CounterEvent[]>([]));
 
-| Extension Point | Signature | Purpose |
-| --------------- | --------- | ------- |
-| **Observer** | `(State, Event, Effect) → Task` | See each transition triple (render, persist, log) |
-| **Interpreter** | `Effect → Task<IEnumerable<Event>>` | Convert effects to feedback events |
+await runtime.Dispatch(new CounterEvent.Increment());
+// Prints: Increment → CounterState { Count = 1 }
+```
 
-The `AutomatonRuntime` executes the loop: **dispatch → transition → observe → interpret**.
+### Production Guarantees
 
-### How Each Runtime Wires the Shared Core
+| Property | Guarantee |
+| -------- | --------- |
+| **Thread safety** | All public mutating methods are serialized via `SemaphoreSlim`. Concurrent callers are queued, never interleaved. |
+| **Cancellation** | All async methods accept `CancellationToken`. |
+| **Feedback depth** | Interpreter feedback loops are bounded (max 64 depth). Runaway cycles throw `InvalidOperationException`. |
+| **Null safety** | Observer and Interpreter are validated at construction. |
 
-| Runtime | Observer | Interpreter |
-| ------- | -------- | ----------- |
+### Observer Composition
+
+Observers compose sequentially with `Then`:
+
+```csharp
+var combined = renderObserver.Then(logObserver).Then(metricsObserver);
+```
+
+### Building Custom Runtimes
+
+| Runtime Pattern | Observer | Interpreter |
+| --------------- | -------- | ----------- |
 | **MVU** | Render the new state | Execute effects, return feedback events |
 | **Event Sourcing** | Append event to store + record effect | No-op (empty) |
 | **Actor** | No-op (state is internal) | Execute effect with self-reference |
 
-## Three Runtimes
-
-### MVU (Model-View-Update)
-
-Run the automaton as a UI application with a render loop.
-
-```csharp
-using Automaton.Mvu;
-
-var runtime = await MvuRuntime<Counter, CounterState, CounterEvent, CounterEffect, string>
-    .Start(
-        render: state => $"Count: {state.Count}",
-        interpreter: _ => Task.FromResult<IEnumerable<CounterEvent>>([]));;
-
-await runtime.Dispatch(new CounterEvent.Increment());
-// runtime.State.Count == 1
-// runtime.Views == ["Count: 0", "Count: 1"]
-```
-
-### Event Sourcing
-
-Run the automaton as a persistent aggregate with replay and projections.
-
-```csharp
-using Automaton.EventSourcing;
-
-var aggregate = AggregateRunner<Counter, CounterState, CounterEvent, CounterEffect>.Create();
-
-await aggregate.Dispatch(new CounterEvent.Increment());
-await aggregate.Dispatch(new CounterEvent.Increment());
-await aggregate.Dispatch(new CounterEvent.Decrement());
-// aggregate.State.Count == 1
-// aggregate.Store.Events.Count == 3
-
-// Rebuild state from scratch (simulates loading from disk)
-var rebuilt = aggregate.Rebuild();
-// rebuilt.Count == 1
-
-// Build a read model from the event stream
-var totalIncrements = new Projection<CounterEvent, int>(
-    initial: 0,
-    apply: (count, e) => e is CounterEvent.Increment ? count + 1 : count);
-
-totalIncrements.Project(aggregate.Store);
-// totalIncrements.ReadModel == 2 (state is 1, but 2 increments occurred)
-```
-
-### Actor Model
-
-Run the automaton as a mailbox-based actor with async message processing.
-
-```csharp
-using Automaton.Actor;
-
-var actor = ActorInstance<Counter, CounterState, CounterEvent, CounterEffect>
-    .Spawn("counter-1");
-
-await actor.Ref.Tell(new CounterEvent.Increment());
-await actor.Ref.Tell(new CounterEvent.Increment());
-await actor.DrainMailbox();
-// actor.State.Count == 2
-```
+See the [test project](https://github.com/MCGPPeters/Automaton/tree/main/Automaton.Tests) for complete reference implementations.
 
 ## The Decider — Command Validation
-
-The **Decider pattern** ([Chassaing, 2021](https://thinkbeforecoding.com/post/2021/12/17/functional-event-sourcing-decider)) adds a command validation layer to the Automaton. It separates *intent* (commands) from *facts* (events):
-
-```text
-Command → Decide(state) → Result<Events, Error> → Transition(state, event) → (State', Effect)
-```
-
-A Decider is an Automaton that also validates commands:
 
 ```csharp
 public interface Decider<TState, TCommand, TEvent, TEffect, TError>
     : Automaton<TState, TEvent, TEffect>
 {
-    static abstract Result<IEnumerable<TEvent>, TError> Decide(TState state, TCommand command);
+    static abstract Result<TEvent[], TError> Decide(TState state, TCommand command);
     static virtual bool IsTerminal(TState state) => false;
 }
 ```
 
-### Example: Bounded Counter
-
 ```csharp
-public class Counter
-    : Decider<CounterState, CounterCommand, CounterEvent, CounterEffect, CounterError>
-{
-    public const int MaxCount = 100;
-
-    public static Result<IEnumerable<CounterEvent>, CounterError> Decide(
-        CounterState state, CounterCommand command) =>
-        command switch
-        {
-            CounterCommand.Add(var n) when state.Count + n > MaxCount =>
-                new Result<IEnumerable<CounterEvent>, CounterError>
-                    .Err(new CounterError.Overflow(state.Count, n, MaxCount)),
-
-            CounterCommand.Add(var n) when n >= 0 =>
-                new Result<IEnumerable<CounterEvent>, CounterError>
-                    .Ok(Enumerable.Repeat<CounterEvent>(new CounterEvent.Increment(), n)),
-
-            // ... Init and Transition remain unchanged
-        };
-}
-
-// Usage with DecidingRuntime
 var runtime = await DecidingRuntime<Counter, CounterState, CounterCommand,
     CounterEvent, CounterEffect, CounterError>.Start(observer, interpreter);
 
@@ -192,40 +124,38 @@ var overflow = await runtime.Handle(new CounterCommand.Add(200));
 // overflow is Err(CounterError.Overflow { ... }) — state unchanged
 ```
 
-Since `Decider<...> : Automaton<...>`, upgrading is **non-breaking** — all existing runtimes continue to work.
+## Observability — OpenTelemetry Tracing
 
-## The Proof: It's All the Same Fold
+Zero-dependency tracing via `System.Diagnostics.ActivitySource`, compatible with any OpenTelemetry collector.
 
 ```csharp
-var events = new CounterEvent[] { new Increment(), new Increment(), new Decrement() };
-var (seed, _) = Counter.Init();
-
-var finalState = events.Aggregate(seed, (state, @event) =>
-    Counter.Transition(state, @event).State);
-
-// finalState.Count == 1
+builder.Services.AddOpenTelemetry()
+    .WithTracing(tracing => tracing.AddSource(AutomatonDiagnostics.SourceName));
 ```
 
-MVU, Event Sourcing, and the Actor Model are all left folds over an event stream. The runtime is the variable. The transition function is the invariant.
+When no listener is registered, instrumentation has near-zero overhead.
 
-## Why This Matters
+| Span Name | Tags |
+| --------- | ---- |
+| `Automaton.Start` | `automaton.type`, `automaton.state.type` |
+| `Automaton.Dispatch` | `automaton.type`, `automaton.event.type` |
+| `Automaton.InterpretEffect` | `automaton.type`, `automaton.effect.type` |
+| `Automaton.Decider.Start` | `automaton.type`, `automaton.state.type` |
+| `Automaton.Decider.Handle` | `automaton.type`, `automaton.command.type`, `automaton.result`, `automaton.error.type` |
 
-| Traditional approach | Automaton approach |
-| -------------------- | ------------------ |
-| Domain logic coupled to UI framework | Domain logic is pure — zero dependencies |
-| Rewrite business rules for each tier | Write once, run in browser + server + actor |
-| Test through infrastructure | Test the transition function directly |
-| Framework dictates architecture | Math dictates architecture, framework is pluggable |
-| Validation scattered across layers | Validation is a pure function on the Decider |
+## What's in the Box
 
-## Namespaces
-
-| Namespace | Contains |
-| --------- | -------- |
-| `Automaton` | The kernel interface, Decider interface, Result type, shared runtime, Observer, Interpreter |
-| `Automaton.Mvu` | Headless MVU runtime |
-| `Automaton.EventSourcing` | Event store, aggregate runner, projections |
-| `Automaton.Actor` | Actor reference, mailbox instance |
+| Type | Purpose |
+| ---- | ------- |
+| `Automaton<TState, TEvent, TEffect>` | Mealy machine interface (Init + Transition) |
+| `AutomatonRuntime<TAutomaton, TState, TEvent, TEffect>` | Thread-safe async runtime |
+| `Observer<TState, TEvent, TEffect>` | Transition observer delegate |
+| `Interpreter<TEffect, TEvent>` | Effect interpreter delegate |
+| `ObserverExtensions.Then` | Sequential observer composition |
+| `Decider<TState, TCommand, TEvent, TEffect, TError>` | Command validation interface |
+| `DecidingRuntime<...>` | Command-validating runtime wrapper |
+| `Result<TSuccess, TError>` | Discriminated union with Match, Map, Bind, MapError |
+| `AutomatonDiagnostics` | OpenTelemetry-compatible tracing (ActivitySource) |
 
 ## License
 

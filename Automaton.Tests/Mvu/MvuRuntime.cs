@@ -34,14 +34,14 @@ public delegate TView Render<in TState, out TView>(TState state);
 /// </para>
 /// <example>
 /// <code>
-/// var runtime = await MvuRuntime&lt;Counter, CounterState, CounterEvent, CounterEffect, string&gt;
+/// var runtime = await MvuRuntime&lt;Thermostat, ThermostatState, ThermostatEvent, ThermostatEffect, string&gt;
 ///     .Start(
-///         render: state =&gt; $"Count: {state.Count}",
-///         interpreter: _ =&gt; Task.FromResult&lt;IEnumerable&lt;CounterEvent&gt;&gt;([]));
+///         render: state =&gt; $"{state.CurrentTemp}°C (target: {state.TargetTemp}°C)",
+///         interpreter: _ =&gt; Task.FromResult&lt;ThermostatEvent[]&gt;([]));
 ///
-/// await runtime.Dispatch(new CounterEvent.Increment());
-/// // runtime.State.Count == 1
-/// // runtime.Views == ["Count: 0", "Count: 1"]
+/// await runtime.Dispatch(new ThermostatEvent.TemperatureRecorded(18m));
+/// // runtime.State.CurrentTemp == 18
+/// // runtime.Views == ["20°C (target: 22°C)", "18°C (target: 22°C)"]
 /// </code>
 /// </example>
 /// </remarks>
@@ -88,7 +88,7 @@ public sealed class MvuRuntime<TAutomaton, TState, TEvent, TEffect, TView>
         Observer<TState, TEvent, TEffect> observer = (s, _, _) =>
         {
             views.Add(render(s));
-            return Task.CompletedTask;
+            return ValueTask.CompletedTask;
         };
 
         var core = new AutomatonRuntime<TAutomaton, TState, TEvent, TEffect>(

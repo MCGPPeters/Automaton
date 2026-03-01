@@ -3,87 +3,86 @@
 // =============================================================================
 // Tests the Decider pattern: command validation, error rejection, state
 // invariants, and Result<TSuccess, TError> algebraic operations.
+// Uses the Thermostat domain for all command/error scenarios.
 // =============================================================================
 
 namespace Automaton.Tests;
 
 public class DeciderTests
 {
-    private static readonly Observer<CounterState, CounterEvent, CounterEffect> _noOpObserver =
-        (_, _, _) => Task.CompletedTask;
-
-    private static readonly Interpreter<CounterEffect, CounterEvent> _noOpInterpreter =
-        _ => Task.FromResult<IEnumerable<CounterEvent>>([]);
 
     // =========================================================================
     // DecidingRuntime — Command Handling
     // =========================================================================
 
     [Fact]
-    public async Task Handle_ValidAdd_ProducesIncrementEventsAndUpdatesState()
+    public async Task Handle_RecordReading_TransitionsState()
     {
         var runtime = await CreateRuntime();
 
-        var result = await runtime.Handle(new CounterCommand.Add(3));
+        var result = await runtime.Handle(new ThermostatCommand.RecordReading(18m));
 
-        var ok = Assert.IsType<Result<CounterState, CounterError>.Ok>(result);
-        Assert.Equal(3, ok.Value.Count);
-        Assert.Equal(3, runtime.Events.Count);
-        Assert.All(runtime.Events, e => Assert.IsType<CounterEvent.Increment>(e));
+        Assert.True(result.IsOk);
+        Assert.Equal(18m, result.Value.CurrentTemp);
+        // RecordReading(18) when target=22, not heating → [TemperatureRecorded(18), HeaterTurnedOn]
+        Assert.True(runtime.State.Heating);
     }
 
     [Fact]
-    public async Task Handle_NegativeAdd_ProducesDecrementEvents()
+    public async Task Handle_SetTarget_UpdatesTargetTemperature()
     {
         var runtime = await CreateRuntime();
 
-        await runtime.Handle(new CounterCommand.Add(5));
-        var result = await runtime.Handle(new CounterCommand.Add(-2));
+        var result = await runtime.Handle(new ThermostatCommand.SetTarget(25m));
 
-        var ok = Assert.IsType<Result<CounterState, CounterError>.Ok>(result);
-        Assert.Equal(3, ok.Value.Count);
+        Assert.True(result.IsOk);
+        Assert.Equal(25m, result.Value.TargetTemp);
     }
 
     [Fact]
-    public async Task Handle_AddZero_ProducesNoEvents()
+    public async Task Handle_RecordReading_SameAsTarget_NoHeaterChange()
     {
         var runtime = await CreateRuntime();
 
-        await runtime.Handle(new CounterCommand.Add(5));
+        // Init: CurrentTemp=20, TargetTemp=22, Heating=false
+        // RecordReading(22) → temp >= target, not heating → just TemperatureRecorded
         var eventsBefore = runtime.Events.Count;
 
-        var result = await runtime.Handle(new CounterCommand.Add(0));
+        var result = await runtime.Handle(new ThermostatCommand.RecordReading(22m));
 
-        var ok = Assert.IsType<Result<CounterState, CounterError>.Ok>(result);
-        Assert.Equal(5, ok.Value.Count);
-        Assert.Equal(eventsBefore, runtime.Events.Count);
+        Assert.True(result.IsOk);
+        Assert.Equal(22m, result.Value.CurrentTemp);
+        Assert.False(result.Value.Heating);
+        // Only 1 event: TemperatureRecorded(22)
+        Assert.Equal(eventsBefore + 1, runtime.Events.Count);
     }
 
     [Fact]
-    public async Task Handle_Overflow_ReturnsError()
+    public async Task Handle_SetTarget_AboveMax_ReturnsInvalidTargetError()
     {
         var runtime = await CreateRuntime();
 
-        var result = await runtime.Handle(new CounterCommand.Add(Counter.MaxCount + 1));
+        var result = await runtime.Handle(new ThermostatCommand.SetTarget(Thermostat.MaxTarget + 1));
 
-        var err = Assert.IsType<Result<CounterState, CounterError>.Err>(result);
-        var overflow = Assert.IsType<CounterError.Overflow>(err.Error);
-        Assert.Equal(0, overflow.Current);
-        Assert.Equal(Counter.MaxCount + 1, overflow.Amount);
-        Assert.Equal(Counter.MaxCount, overflow.Max);
-        Assert.Equal(0, runtime.State.Count);
+        Assert.True(result.IsErr);
+        var invalidTarget = Assert.IsType<ThermostatError.InvalidTarget>(result.Error);
+        Assert.Equal(Thermostat.MaxTarget + 1, invalidTarget.Target);
+        Assert.Equal(Thermostat.MinTarget, invalidTarget.Min);
+        Assert.Equal(Thermostat.MaxTarget, invalidTarget.Max);
+        // State unchanged
+        Assert.Equal(22m, runtime.State.TargetTemp);
     }
 
     [Fact]
-    public async Task Handle_Underflow_ReturnsError()
+    public async Task Handle_SetTarget_BelowMin_ReturnsInvalidTargetError()
     {
         var runtime = await CreateRuntime();
 
-        var result = await runtime.Handle(new CounterCommand.Add(-1));
+        var result = await runtime.Handle(new ThermostatCommand.SetTarget(Thermostat.MinTarget - 1));
 
-        var err = Assert.IsType<Result<CounterState, CounterError>.Err>(result);
-        Assert.IsType<CounterError.Underflow>(err.Error);
-        Assert.Equal(0, runtime.State.Count);
+        Assert.True(result.IsErr);
+        Assert.IsType<ThermostatError.InvalidTarget>(result.Error);
+        Assert.Equal(22m, runtime.State.TargetTemp);
     }
 
     [Fact]
@@ -91,44 +90,68 @@ public class DeciderTests
     {
         var runtime = await CreateRuntime();
 
-        var result = await runtime.Handle(new CounterCommand.Add(Counter.MaxCount));
+        var result = await runtime.Handle(new ThermostatCommand.SetTarget(Thermostat.MaxTarget));
 
-        var ok = Assert.IsType<Result<CounterState, CounterError>.Ok>(result);
-        Assert.Equal(Counter.MaxCount, ok.Value.Count);
+        Assert.True(result.IsOk);
+        Assert.Equal(Thermostat.MaxTarget, result.Value.TargetTemp);
     }
 
     [Fact]
-    public async Task Handle_BoundaryValues_RejectsMaxPlusOne()
+    public async Task Handle_BoundaryValues_AcceptsExactMin()
     {
         var runtime = await CreateRuntime();
 
-        await runtime.Handle(new CounterCommand.Add(Counter.MaxCount));
-        var result = await runtime.Handle(new CounterCommand.Add(1));
+        var result = await runtime.Handle(new ThermostatCommand.SetTarget(Thermostat.MinTarget));
 
-        Assert.IsType<Result<CounterState, CounterError>.Err>(result);
+        Assert.True(result.IsOk);
+        Assert.Equal(Thermostat.MinTarget, result.Value.TargetTemp);
     }
 
     [Fact]
-    public async Task Handle_Reset_ProducesResetEventAndResetsState()
+    public async Task Handle_BoundaryValues_RejectsAboveMax()
     {
         var runtime = await CreateRuntime();
 
-        await runtime.Handle(new CounterCommand.Add(5));
-        var result = await runtime.Handle(new CounterCommand.Reset());
+        await runtime.Handle(new ThermostatCommand.SetTarget(Thermostat.MaxTarget));
+        var result = await runtime.Handle(new ThermostatCommand.SetTarget(Thermostat.MaxTarget + 0.1m));
 
-        var ok = Assert.IsType<Result<CounterState, CounterError>.Ok>(result);
-        Assert.Equal(0, ok.Value.Count);
+        Assert.True(result.IsErr);
     }
 
     [Fact]
-    public async Task Handle_ResetAtZero_ReturnsAlreadyAtZeroError()
+    public async Task Handle_Shutdown_SetsTerminalState()
     {
         var runtime = await CreateRuntime();
 
-        var result = await runtime.Handle(new CounterCommand.Reset());
+        var result = await runtime.Handle(new ThermostatCommand.Shutdown());
 
-        var err = Assert.IsType<Result<CounterState, CounterError>.Err>(result);
-        Assert.IsType<CounterError.AlreadyAtZero>(err.Error);
+        Assert.True(result.IsOk);
+        Assert.False(result.Value.Active);
+        Assert.True(runtime.IsTerminal);
+    }
+
+    [Fact]
+    public async Task Handle_ShutdownWhenAlreadyShutDown_ReturnsAlreadyShutdownError()
+    {
+        var runtime = await CreateRuntime();
+
+        await runtime.Handle(new ThermostatCommand.Shutdown());
+        var result = await runtime.Handle(new ThermostatCommand.Shutdown());
+
+        Assert.True(result.IsErr);
+        Assert.IsType<ThermostatError.AlreadyShutdown>(result.Error);
+    }
+
+    [Fact]
+    public async Task Handle_CommandAfterShutdown_ReturnsSystemInactiveError()
+    {
+        var runtime = await CreateRuntime();
+
+        await runtime.Handle(new ThermostatCommand.Shutdown());
+        var result = await runtime.Handle(new ThermostatCommand.RecordReading(25m));
+
+        Assert.True(result.IsErr);
+        Assert.IsType<ThermostatError.SystemInactive>(result.Error);
     }
 
     [Fact]
@@ -136,11 +159,12 @@ public class DeciderTests
     {
         var runtime = await CreateRuntime();
 
-        await runtime.Handle(new CounterCommand.Add(50));
+        await runtime.Handle(new ThermostatCommand.RecordReading(18m));
         var stateBeforeError = runtime.State;
         var eventCountBeforeError = runtime.Events.Count;
 
-        await runtime.Handle(new CounterCommand.Add(51));
+        // Invalid command — target out of range
+        await runtime.Handle(new ThermostatCommand.SetTarget(50m));
 
         Assert.Equal(stateBeforeError, runtime.State);
         Assert.Equal(eventCountBeforeError, runtime.Events.Count);
@@ -149,51 +173,51 @@ public class DeciderTests
     [Fact]
     public async Task Handle_ObserverSeesAllTransitions()
     {
-        var observed = new List<(CounterState State, CounterEvent Event, CounterEffect Effect)>();
-        Observer<CounterState, CounterEvent, CounterEffect> observer = (state, @event, effect) =>
-        {
-            observed.Add((state, @event, effect));
-            return Task.CompletedTask;
-        };
+        var observed = new List<(ThermostatState State, ThermostatEvent Event, ThermostatEffect Effect)>();
 
-        var runtime = await DecidingRuntime<Counter, CounterState, CounterCommand,
-            CounterEvent, CounterEffect, CounterError>.Start(observer, _noOpInterpreter);
+        var runtime = await DecidingRuntime<Thermostat, ThermostatState, ThermostatCommand,
+            ThermostatEvent, ThermostatEffect, ThermostatError>.Start(ThermostatObservers.Capture(observed), ThermostatInterpreters.NoOp);
 
-        await runtime.Handle(new CounterCommand.Add(2));
+        // RecordReading(18) when target=22, not heating → [TemperatureRecorded(18), HeaterTurnedOn]
+        await runtime.Handle(new ThermostatCommand.RecordReading(18m));
 
         Assert.Equal(2, observed.Count);
-        Assert.Equal(1, observed[0].State.Count);
-        Assert.Equal(2, observed[1].State.Count);
+        Assert.Equal(18m, observed[0].State.CurrentTemp);
+        Assert.False(observed[0].State.Heating); // After TemperatureRecorded, before HeaterTurnedOn
+        Assert.True(observed[1].State.Heating);  // After HeaterTurnedOn
     }
 
     [Fact]
     public async Task Handle_ObserverNotCalledOnError()
     {
         var observerCallCount = 0;
-        Observer<CounterState, CounterEvent, CounterEffect> observer = (_, _, _) =>
+        Observer<ThermostatState, ThermostatEvent, ThermostatEffect> observer = (_, _, _) =>
         {
             observerCallCount++;
-            return Task.CompletedTask;
+            return ValueTask.CompletedTask;
         };
 
-        var runtime = await DecidingRuntime<Counter, CounterState, CounterCommand,
-            CounterEvent, CounterEffect, CounterError>.Start(observer, _noOpInterpreter);
+        var runtime = await DecidingRuntime<Thermostat, ThermostatState, ThermostatCommand,
+            ThermostatEvent, ThermostatEffect, ThermostatError>.Start(observer, ThermostatInterpreters.NoOp);
 
-        await runtime.Handle(new CounterCommand.Add(-1));
+        // Invalid target — should not trigger observer
+        await runtime.Handle(new ThermostatCommand.SetTarget(50m));
 
         Assert.Equal(0, observerCallCount);
     }
 
     [Fact]
-    public async Task IsTerminal_DefaultsFalse()
+    public async Task IsTerminal_InitiallyFalse_TrueAfterShutdown()
     {
         var runtime = await CreateRuntime();
 
         Assert.False(runtime.IsTerminal);
 
-        await runtime.Handle(new CounterCommand.Add(50));
-
+        await runtime.Handle(new ThermostatCommand.RecordReading(18m));
         Assert.False(runtime.IsTerminal);
+
+        await runtime.Handle(new ThermostatCommand.Shutdown());
+        Assert.True(runtime.IsTerminal);
     }
 
     // =========================================================================
@@ -203,41 +227,43 @@ public class DeciderTests
     [Fact]
     public void Decide_IsPure_SameInputProducesSameOutput()
     {
-        var state = new CounterState(5);
-        var command = (CounterCommand)new CounterCommand.Add(3);
+        var state = new ThermostatState(20m, 22m, false, true);
+        var command = (ThermostatCommand)new ThermostatCommand.RecordReading(18m);
 
-        var result1 = Counter.Decide(state, command);
-        var result2 = Counter.Decide(state, command);
+        var result1 = Thermostat.Decide(state, command);
+        var result2 = Thermostat.Decide(state, command);
 
-        // Record equality doesn't work for IEnumerable<T> (reference comparison),
-        // so we unwrap and compare materialized sequences element-wise.
-        var ok1 = Assert.IsType<Result<IEnumerable<CounterEvent>, CounterError>.Ok>(result1);
-        var ok2 = Assert.IsType<Result<IEnumerable<CounterEvent>, CounterError>.Ok>(result2);
-        Assert.Equal(ok1.Value.ToList(), ok2.Value.ToList());
+        Assert.True(result1.IsOk);
+        Assert.True(result2.IsOk);
+        Assert.Equal(result1.Value.ToList(), result2.Value.ToList());
     }
 
     [Fact]
-    public void Decide_ValidAdd_ReturnsOkWithCorrectEventCount()
+    public void Decide_RecordReading_Cold_ReturnsTemperatureRecordedAndHeaterTurnedOn()
     {
-        var state = new CounterState(0);
+        var state = new ThermostatState(20m, 22m, false, true);
 
-        var result = Counter.Decide(state, new CounterCommand.Add(5));
+        var result = Thermostat.Decide(state, new ThermostatCommand.RecordReading(18m));
 
-        var ok = Assert.IsType<Result<IEnumerable<CounterEvent>, CounterError>.Ok>(result);
-        Assert.Equal(5, ok.Value.Count());
-        Assert.All(ok.Value, e => Assert.IsType<CounterEvent.Increment>(e));
+        Assert.True(result.IsOk);
+        var events = result.Value.ToList();
+        Assert.Equal(2, events.Count);
+        Assert.IsType<ThermostatEvent.TemperatureRecorded>(events[0]);
+        Assert.IsType<ThermostatEvent.HeaterTurnedOn>(events[1]);
     }
 
     [Fact]
-    public void Decide_NegativeAdd_ReturnsDecrementEvents()
+    public void Decide_RecordReading_Hot_ReturnsAlertRaised()
     {
-        var state = new CounterState(10);
+        var state = new ThermostatState(20m, 22m, false, true);
 
-        var result = Counter.Decide(state, new CounterCommand.Add(-3));
+        var result = Thermostat.Decide(state, new ThermostatCommand.RecordReading(36m));
 
-        var ok = Assert.IsType<Result<IEnumerable<CounterEvent>, CounterError>.Ok>(result);
-        Assert.Equal(3, ok.Value.Count());
-        Assert.All(ok.Value, e => Assert.IsType<CounterEvent.Decrement>(e));
+        Assert.True(result.IsOk);
+        var events = result.Value.ToList();
+        Assert.Equal(2, events.Count);
+        Assert.IsType<ThermostatEvent.TemperatureRecorded>(events[0]);
+        Assert.IsType<ThermostatEvent.AlertRaised>(events[1]);
     }
 
     // =========================================================================
@@ -247,7 +273,7 @@ public class DeciderTests
     [Fact]
     public void Result_Ok_IsOk()
     {
-        var result = new Result<int, string>.Ok(42);
+        var result = Result<int, string>.Ok(42);
 
         Assert.True(result.IsOk);
         Assert.False(result.IsErr);
@@ -256,7 +282,7 @@ public class DeciderTests
     [Fact]
     public void Result_Err_IsErr()
     {
-        var result = new Result<int, string>.Err("oops");
+        var result = Result<int, string>.Err("oops");
 
         Assert.False(result.IsOk);
         Assert.True(result.IsErr);
@@ -265,8 +291,8 @@ public class DeciderTests
     [Fact]
     public void Result_Match_DispatchesCorrectly()
     {
-        Result<int, string> ok = new Result<int, string>.Ok(42);
-        Result<int, string> err = new Result<int, string>.Err("fail");
+        Result<int, string> ok = Result<int, string>.Ok(42);
+        Result<int, string> err = Result<int, string>.Err("fail");
 
         Assert.Equal("42", ok.Match(v => v.ToString(), e => e));
         Assert.Equal("fail", err.Match(v => v.ToString(), e => e));
@@ -275,75 +301,249 @@ public class DeciderTests
     [Fact]
     public void Result_Map_TransformsSuccess()
     {
-        Result<int, string> ok = new Result<int, string>.Ok(21);
+        Result<int, string> ok = Result<int, string>.Ok(21);
 
         var mapped = ok.Map(v => v * 2);
 
-        var result = Assert.IsType<Result<int, string>.Ok>(mapped);
-        Assert.Equal(42, result.Value);
+        Assert.True(mapped.IsOk);
+        Assert.Equal(42, mapped.Value);
     }
 
     [Fact]
     public void Result_Map_PreservesError()
     {
-        Result<int, string> err = new Result<int, string>.Err("fail");
+        Result<int, string> err = Result<int, string>.Err("fail");
 
         var mapped = err.Map(v => v * 2);
 
-        var result = Assert.IsType<Result<int, string>.Err>(mapped);
-        Assert.Equal("fail", result.Error);
+        Assert.True(mapped.IsErr);
+        Assert.Equal("fail", mapped.Error);
     }
 
     [Fact]
     public void Result_Bind_ChainsSuccess()
     {
-        Result<int, string> ok = new Result<int, string>.Ok(21);
+        Result<int, string> ok = Result<int, string>.Ok(21);
 
-        var bound = ok.Bind(v => new Result<string, string>.Ok($"value: {v * 2}"));
+        var bound = ok.Bind(v => Result<string, string>.Ok($"value: {v * 2}"));
 
-        var result = Assert.IsType<Result<string, string>.Ok>(bound);
-        Assert.Equal("value: 42", result.Value);
+        Assert.True(bound.IsOk);
+        Assert.Equal("value: 42", bound.Value);
     }
 
     [Fact]
     public void Result_Bind_ShortCircuitsOnError()
     {
-        Result<int, string> err = new Result<int, string>.Err("fail");
+        Result<int, string> err = Result<int, string>.Err("fail");
 
-        var bound = err.Bind(v => new Result<string, string>.Ok($"value: {v}"));
+        var bound = err.Bind(v => Result<string, string>.Ok($"value: {v}"));
 
-        var result = Assert.IsType<Result<string, string>.Err>(bound);
-        Assert.Equal("fail", result.Error);
+        Assert.True(bound.IsErr);
+        Assert.Equal("fail", bound.Error);
     }
 
     [Fact]
     public void Result_MapError_TransformsError()
     {
-        Result<int, string> err = new Result<int, string>.Err("fail");
+        Result<int, string> err = Result<int, string>.Err("fail");
 
         var mapped = err.MapError(e => e.Length);
 
-        var result = Assert.IsType<Result<int, int>.Err>(mapped);
-        Assert.Equal(4, result.Error);
+        Assert.True(mapped.IsErr);
+        Assert.Equal(4, mapped.Error);
     }
 
     [Fact]
     public void Result_MapError_PreservesSuccess()
     {
-        Result<int, string> ok = new Result<int, string>.Ok(42);
+        Result<int, string> ok = Result<int, string>.Ok(42);
 
         var mapped = ok.MapError(e => e.Length);
 
-        var result = Assert.IsType<Result<int, int>.Ok>(mapped);
-        Assert.Equal(42, result.Value);
+        Assert.True(mapped.IsOk);
+        Assert.Equal(42, mapped.Value);
     }
 
     // =========================================================================
     // Helpers
     // =========================================================================
 
-    private static Task<DecidingRuntime<Counter, CounterState, CounterCommand,
-        CounterEvent, CounterEffect, CounterError>> CreateRuntime() =>
-        DecidingRuntime<Counter, CounterState, CounterCommand,
-            CounterEvent, CounterEffect, CounterError>.Start(_noOpObserver, _noOpInterpreter);
+    private static async Task<DecidingRuntime<Thermostat, ThermostatState, ThermostatCommand,
+        ThermostatEvent, ThermostatEffect, ThermostatError>> CreateRuntime()
+    {
+        return await DecidingRuntime<Thermostat, ThermostatState, ThermostatCommand,
+            ThermostatEvent, ThermostatEffect, ThermostatError>.Start(ThermostatObservers.NoOp, ThermostatInterpreters.NoOp);
+    }
+
+    // =========================================================================
+    // Concurrent Handle
+    // =========================================================================
+
+    [Fact]
+    public async Task ConcurrentHandles_AreSerializedAndProduceCorrectFinalState()
+    {
+        var runtime = await CreateRuntime();
+
+        // Fire 50 concurrent RecordReading commands
+        var tasks = Enumerable.Range(0, 50)
+            .Select(i => runtime.Handle(new ThermostatCommand.RecordReading(15m)).AsTask())
+            .ToArray();
+
+        await Task.WhenAll(tasks);
+
+        // All should succeed (no state corruption)
+        Assert.All(tasks, t => Assert.True(t.Result.IsOk));
+        Assert.Equal(15m, runtime.State.CurrentTemp);
+    }
+
+    [Fact]
+    public async Task ConcurrentHandles_MixedValidAndInvalid_StateConsistent()
+    {
+        var runtime = await CreateRuntime();
+
+        // Mix valid and invalid commands concurrently
+        var tasks = new List<Task<Result<ThermostatState, ThermostatError>>>();
+        for (var i = 0; i < 20; i++)
+        {
+            // Even: valid command, Odd: invalid command
+            tasks.Add(i % 2 == 0
+                ? runtime.Handle(new ThermostatCommand.RecordReading(18m)).AsTask()
+                : runtime.Handle(new ThermostatCommand.SetTarget(50m)).AsTask());
+        }
+
+        var results = await Task.WhenAll(tasks);
+
+        // All valid commands should succeed, all invalid should fail
+        for (var i = 0; i < 20; i++)
+        {
+            if (i % 2 == 0)
+                Assert.True(results[i].IsOk);
+            else
+                Assert.True(results[i].IsErr);
+        }
+
+        // State should reflect the valid commands
+        Assert.Equal(18m, runtime.State.CurrentTemp);
+        Assert.Equal(22m, runtime.State.TargetTemp); // Unchanged — invalid commands rejected
+    }
+
+    // =========================================================================
+    // Unserialized Handle (threadSafe=false)
+    // =========================================================================
+
+    [Fact]
+    public async Task Handle_Unserialized_AcceptsValidCommand()
+    {
+        var runtime = await DecidingRuntime<Thermostat, ThermostatState, ThermostatCommand,
+            ThermostatEvent, ThermostatEffect, ThermostatError>
+            .Start(ThermostatObservers.NoOp, ThermostatInterpreters.NoOp, threadSafe: false);
+
+        var result = await runtime.Handle(new ThermostatCommand.RecordReading(18m));
+
+        Assert.True(result.IsOk);
+        Assert.Equal(18m, result.Value.CurrentTemp);
+    }
+
+    [Fact]
+    public async Task Handle_Unserialized_RejectsInvalidCommand()
+    {
+        var runtime = await DecidingRuntime<Thermostat, ThermostatState, ThermostatCommand,
+            ThermostatEvent, ThermostatEffect, ThermostatError>
+            .Start(ThermostatObservers.NoOp, ThermostatInterpreters.NoOp, threadSafe: false);
+
+        var result = await runtime.Handle(new ThermostatCommand.SetTarget(50m));
+
+        Assert.True(result.IsErr);
+        Assert.Equal(22m, runtime.State.TargetTemp);
+    }
+
+    // =========================================================================
+    // Lean Mode (threadSafe=false, trackEvents=false)
+    // =========================================================================
+
+    [Fact]
+    public async Task Handle_LeanMode_WorksCorrectly()
+    {
+        var runtime = await DecidingRuntime<Thermostat, ThermostatState, ThermostatCommand,
+            ThermostatEvent, ThermostatEffect, ThermostatError>
+            .Start(ThermostatObservers.NoOp, ThermostatInterpreters.NoOp,
+                threadSafe: false, trackEvents: false);
+
+        var result = await runtime.Handle(new ThermostatCommand.RecordReading(18m));
+
+        Assert.True(result.IsOk);
+        Assert.Equal(18m, result.Value.CurrentTemp);
+        Assert.True(runtime.State.Heating);
+        Assert.Empty(runtime.Events); // No events tracked
+    }
+
+    // =========================================================================
+    // IDisposable
+    // =========================================================================
+
+    [Fact]
+    public async Task DecidingRuntime_Dispose_Works()
+    {
+        var runtime = await CreateRuntime();
+
+        await runtime.Handle(new ThermostatCommand.RecordReading(18m));
+
+        runtime.Dispose();
+        runtime.Dispose(); // Should not throw on double dispose
+    }
+
+    // =========================================================================
+    // Result Edge Cases
+    // =========================================================================
+
+    [Fact]
+    public void Result_Value_ThrowsOnErr()
+    {
+        var result = Result<int, string>.Err("fail");
+
+        var ex = Assert.Throws<InvalidOperationException>(() => result.Value);
+        Assert.Contains("Err", ex.Message);
+    }
+
+    [Fact]
+    public void Result_Error_ThrowsOnOk()
+    {
+        var result = Result<int, string>.Ok(42);
+
+        var ex = Assert.Throws<InvalidOperationException>(() => result.Error);
+        Assert.Contains("Ok", ex.Message);
+    }
+
+    [Fact]
+    public void Result_ToString_Ok()
+    {
+        var result = Result<int, string>.Ok(42);
+
+        Assert.Equal("Ok(42)", result.ToString());
+    }
+
+    [Fact]
+    public void Result_ToString_Err()
+    {
+        var result = Result<int, string>.Err("fail");
+
+        Assert.Equal("Err(fail)", result.ToString());
+    }
+
+    [Fact]
+    public async Task Result_AsyncMatch_DispatchesCorrectly()
+    {
+        var ok = Result<int, string>.Ok(42);
+        var err = Result<int, string>.Err("fail");
+
+        var okResult = await ok.Match(
+            v => Task.FromResult(v.ToString()),
+            e => Task.FromResult(e));
+        Assert.Equal("42", okResult);
+
+        var errResult = await err.Match(
+            v => Task.FromResult(v.ToString()),
+            e => Task.FromResult(e));
+        Assert.Equal("fail", errResult);
+    }
 }

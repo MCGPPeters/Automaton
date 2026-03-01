@@ -109,34 +109,34 @@ public class Counter
     ///   <item>Reset is rejected when count is already zero</item>
     /// </list>
     /// </remarks>
-    public static Result<IEnumerable<CounterEvent>, CounterError> Decide(
+    public static Result<CounterEvent[], CounterError> Decide(
         CounterState state,
         CounterCommand command) =>
         command switch
         {
             CounterCommand.Add(var amount) when state.Count + amount > MaxCount =>
-                new Result<IEnumerable<CounterEvent>, CounterError>
+                Result<CounterEvent[], CounterError>
                     .Err(new CounterError.Overflow(state.Count, amount, MaxCount)),
 
             CounterCommand.Add(var amount) when state.Count + amount < 0 =>
-                new Result<IEnumerable<CounterEvent>, CounterError>
+                Result<CounterEvent[], CounterError>
                     .Err(new CounterError.Underflow(state.Count, amount)),
 
             CounterCommand.Add(var amount) when amount >= 0 =>
-                new Result<IEnumerable<CounterEvent>, CounterError>
-                    .Ok(Enumerable.Repeat<CounterEvent>(new CounterEvent.Increment(), amount)),
+                Result<CounterEvent[], CounterError>
+                    .Ok(Enumerable.Repeat<CounterEvent>(new CounterEvent.Increment(), amount).ToArray()),
 
             CounterCommand.Add(var amount) =>
-                new Result<IEnumerable<CounterEvent>, CounterError>
-                    .Ok(Enumerable.Repeat<CounterEvent>(new CounterEvent.Decrement(), Math.Abs(amount))),
+                Result<CounterEvent[], CounterError>
+                    .Ok(Enumerable.Repeat<CounterEvent>(new CounterEvent.Decrement(), Math.Abs(amount)).ToArray()),
 
             CounterCommand.Reset when state.Count is 0 =>
-                new Result<IEnumerable<CounterEvent>, CounterError>
+                Result<CounterEvent[], CounterError>
                     .Err(new CounterError.AlreadyAtZero()),
 
             CounterCommand.Reset =>
-                new Result<IEnumerable<CounterEvent>, CounterError>
-                    .Ok(new CounterEvent[] { new CounterEvent.Reset() }),
+                Result<CounterEvent[], CounterError>
+                    .Ok([new CounterEvent.Reset()]),
 
             _ => throw new UnreachableException()
         };

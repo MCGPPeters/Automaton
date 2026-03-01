@@ -1,8 +1,11 @@
 # ADR-005: MVU Runtime — Automaton Constraint with Dispatch
 
-**Status:** Accepted  
-**Date:** 2025-06-01  
+**Status:** Accepted
+**Date:** 2025-06-01
+**Updated:** 2025-06-14
 **Deciders:** Maurice Peters
+
+> **Note:** The MVU runtime implementation has been moved from the core library to the test project as a reference implementation (see ADR-010). The design decisions in this ADR remain valid — only the location changed.
 
 ## Context
 
@@ -50,10 +53,10 @@ public static (Model, Effect) Transition(Model state, Msg msg) =>
     {
         Msg.SubmitForm when string.IsNullOrEmpty(state.Email) =>
             (state with { Errors = ["Email is required"] }, new Effect.None()),
-        
+
         Msg.SubmitForm =>
             (state with { IsSubmitting = true }, new Effect.SubmitToApi(state.Email)),
-        
+
         _ => ...
     };
 ```

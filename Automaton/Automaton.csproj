@@ -11,7 +11,7 @@
   <PropertyGroup>
     <PackageId>Automaton</PackageId>
     <Title>Automaton</Title>
-    <Description>Write once, run everywhere. A unified Mealy machine kernel for MVU, Event Sourcing, and the Actor Model. Define pure domain logic as a transition function — then run it in a browser, an event store, or a mailbox without changing a line. Includes the Decider pattern for command validation.</Description>
+    <Description>A minimal, production-hardened Mealy machine kernel for building state machines, MVU runtimes, event-sourced aggregates, and actor systems. Define pure domain logic as a transition function — then run it anywhere. Includes the Decider pattern for command validation, a Result type, and a thread-safe async runtime with observer/interpreter extension points.</Description>
     <Authors>Maurice Peters</Authors>
     <PackageTags>automaton;mealy-machine;mvu;event-sourcing;actor-model;ddd;functional;cqrs;state-machine;decider;command-validation;result-type</PackageTags>
     <PackageLicenseExpression>Apache-2.0</PackageLicenseExpression>

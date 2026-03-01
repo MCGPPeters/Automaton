@@ -1,7 +1,7 @@
 # ADR-002: Shared Runtime as Monadic Left Fold
 
-**Status:** Accepted  
-**Date:** 2025-06-01  
+**Status:** Accepted
+**Date:** 2025-06-01
 **Deciders:** Maurice Peters
 
 ## Context
@@ -20,13 +20,13 @@ The shared runtime is a **monadic left fold** over an event stream, parameterize
 | Extension Point | Signature | Purpose |
 |----------------|-----------|---------|
 | **Observer** | `(State, Event, Effect) → Task` | See each transition triple (render, persist, log) |
-| **Interpreter** | `Effect → Task<IEnumerable<Event>>` | Convert effects to feedback events |
+| **Interpreter** | `Effect → ValueTask<Event[]>` | Convert effects to feedback events |
 
 ```csharp
-public delegate Task Observer<in TState, in TEvent, in TEffect>(
+public delegate ValueTask Observer<in TState, in TEvent, in TEffect>(
     TState state, TEvent @event, TEffect effect);
 
-public delegate Task<IEnumerable<TEvent>> Interpreter<in TEffect, TEvent>(TEffect effect);
+public delegate ValueTask<TEvent[]> Interpreter<in TEffect, TEvent>(TEffect effect);
 ```
 
 The runtime loop:
@@ -108,6 +108,14 @@ MVU and Actor share the `AutomatonRuntime` directly, with different observer and
 
 The structural identity across MVU and Actor is the key insight: swapping the observer/interpreter transforms the behavior while preserving the core loop. ES preserves the *mathematical* identity (left fold) while using a different runtime suited to its command-driven, synchronous nature.
 
+## Subsequent Decisions
+
+The runtime's mathematical structure has remained unchanged since this ADR was accepted. Several subsequent ADRs extend the implementation without altering the fold semantics:
+
+- **ADR-008 (Production Hardening)** — adds thread safety (SemaphoreSlim), CancellationToken support, feedback depth guard (MaxFeedbackDepth = 64), and ArgumentNullException guards. These preserve the sequential fold semantics while adding concurrency safety.
+- **ADR-009 (OpenTelemetry Tracing)** — instruments `Start`, `Dispatch`, and `InterpretEffect` with `System.Diagnostics.Activity` spans. Tracing is a natural transformation that does not alter the fold's behavior.
+- **ADR-010 (Reference Implementations)** — the MVU and Actor runtimes that directly use `AutomatonRuntime` were moved from the core library to the test project as reference implementations.
+
 ## Consequences
 
 ### Positive
@@ -119,8 +127,8 @@ The structural identity across MVU and Actor is the key insight: swapping the ob
 
 ### Negative
 
-- **Sequential processing** — events are processed one at a time. Parallelism requires the Actor runtime's mailbox.
-- **Feedback loop complexity** — interpreter-produced events recurse into the fold, which can create unbounded loops if effects produce infinite event chains.
+- **Sequential processing** — events are processed one at a time. Parallelism requires the Actor runtime's mailbox. Concurrent calls are serialized via `SemaphoreSlim` (ADR-008).
+- **Feedback loop complexity** — interpreter-produced events recurse into the fold. Bounded by `MaxFeedbackDepth = 64` (ADR-008) to prevent infinite chains.
 - **Async overhead** — even synchronous runtimes pay for `Task` allocation. (Acceptable given the use cases are inherently async in production.)
 
 ### Neutral

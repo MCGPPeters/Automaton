@@ -29,8 +29,8 @@ public class EventSourcingTests
 
         var result = aggregate.Handle(new CounterCommand.Add(3));
 
-        var ok = Assert.IsType<Result<CounterState, CounterError>.Ok>(result);
-        Assert.Equal(3, ok.Value.Count);
+        Assert.True(result.IsOk);
+        Assert.Equal(3, result.Value.Count);
         Assert.Equal(3, aggregate.State.Count);
     }
 
@@ -55,8 +55,8 @@ public class EventSourcingTests
 
         var result = aggregate.Handle(new CounterCommand.Add(200));
 
-        var err = Assert.IsType<Result<CounterState, CounterError>.Err>(result);
-        Assert.IsType<CounterError.Overflow>(err.Error);
+        Assert.True(result.IsErr);
+        Assert.IsType<CounterError.Overflow>(result.Error);
         Assert.Equal(0, aggregate.State.Count);
         Assert.Empty(aggregate.Store.Events);
     }
@@ -115,8 +115,8 @@ public class EventSourcingTests
 
         var result = aggregate.Handle(new CounterCommand.Reset());
 
-        var err = Assert.IsType<Result<CounterState, CounterError>.Err>(result);
-        Assert.IsType<CounterError.AlreadyAtZero>(err.Error);
+        Assert.True(result.IsErr);
+        Assert.IsType<CounterError.AlreadyAtZero>(result.Error);
     }
 
     [Fact]
@@ -127,8 +127,8 @@ public class EventSourcingTests
 
         var result = aggregate.Handle(new CounterCommand.Add(-1));
 
-        var err = Assert.IsType<Result<CounterState, CounterError>.Err>(result);
-        Assert.IsType<CounterError.Underflow>(err.Error);
+        Assert.True(result.IsErr);
+        Assert.IsType<CounterError.Underflow>(result.Error);
     }
 
     [Fact]
@@ -273,6 +273,6 @@ public class EventSourcingTests
 
         Result<CounterState, CounterError> result = aggregate.Handle(new CounterCommand.Add(5));
 
-        Assert.IsType<Result<CounterState, CounterError>.Ok>(result);
+        Assert.True(result.IsOk);
     }
 }
