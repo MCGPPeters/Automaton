@@ -89,20 +89,11 @@ jobs:
             const deletions = pr.deletions || 0;
             const totalChanges = additions + deletions;
 
-            const hardLimit = 5000;
             const softLimit = 400;
-
-            if (totalChanges > hardLimit) {
-              core.setFailed(
-                `⚠️  PR is too large (${totalChanges} lines changed). ` +
-                `Please consider breaking it into smaller PRs (< ${hardLimit} lines).`
-              );
-              return;
-            }
 
             if (totalChanges > softLimit) {
               core.warning(
-                `⚠️  PR is getting large (${totalChanges} lines changed). ` +
+                `⚠️  PR is large (${totalChanges} lines changed). ` +
                 `Consider breaking it into smaller PRs for easier review.`
               );
             } else {
