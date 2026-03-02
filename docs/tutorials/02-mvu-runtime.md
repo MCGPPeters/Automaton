@@ -2,12 +2,14 @@
 
 Build a Model-View-Update loop on top of the Automaton kernel.
 
+> **Concept reference:** This tutorial builds a custom runtime. For the underlying theory, see [The Runtime](../concepts/the-runtime.md) and [Building Custom Runtimes](../guides/building-custom-runtimes.md).
+
 ## What You'll Learn
 
-- What MVU (Model-View-Update) is and how it maps to the Automaton kernel
+- What MVU (Model-View-Update) is and how it maps to the [Automaton kernel](../concepts/the-kernel.md)
 - How to write a render function that converts state to views
 - How to handle effects and produce feedback events
-- How to build a complete MVU runtime from the shared `AutomatonRuntime`
+- How to build a complete MVU runtime from the shared [`AutomatonRuntime`](../reference/runtime.md)
 
 ## Prerequisites
 
@@ -252,3 +254,12 @@ Assert.Equal("Count: 1", runtime.Views[3]);
 - **[Event-Sourced Aggregate](03-event-sourced-aggregate.md)** — The same Counter, now with persistent events
 - **[Actor System](04-actor-system.md)** — The same Counter, now with a mailbox
 - **[Command Validation](05-command-validation.md)** — Add the Decider pattern to validate commands before producing events
+
+### Deepen Your Understanding
+
+| Topic | Link |
+| ----- | ---- |
+| How Observer and Interpreter work | [The Runtime](../concepts/the-runtime.md) |
+| Chaining multiple observers | [Observer Composition](../guides/observer-composition.md) |
+| Building other custom runtimes | [Building Custom Runtimes](../guides/building-custom-runtimes.md) |
+| Choosing between MVU, ES, and Actors | [Runtimes Compared](../concepts/runtimes-compared.md) |

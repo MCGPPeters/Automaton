@@ -64,4 +64,8 @@ Each ADR also includes a **Mathematical Grounding** section that describes the f
 
 ## See Also
 
+- [Documentation Home](../index.md) — full documentation overview
+- [Concepts](../concepts/index.md) — theory and mental models
 - [Tutorials](../tutorials/) — step-by-step guides for building systems with the kernel
+- [How-To Guides](../guides/index.md) — task-oriented recipes
+- [API Reference](../reference/index.md) — full public API documentation

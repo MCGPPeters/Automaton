@@ -2,12 +2,14 @@
 
 Validate commands before producing events using the Decider pattern and the Result type.
 
+> **Concept reference:** This tutorial implements the theory from [The Decider](../concepts/the-decider.md). For Result type recipes, see [Error Handling Patterns](../guides/error-handling-patterns.md).
+
 ## What You'll Learn
 
-- What the Decider pattern is and why it matters
+- What the [Decider pattern](../concepts/the-decider.md) is and why it matters
 - How to separate intent (commands) from facts (events)
-- How to use the `Result<TSuccess, TError>` type for error handling
-- How to use `DecidingRuntime` for command validation in async runtimes
+- How to use the [`Result<TSuccess, TError>`](../reference/result.md) type for error handling
+- How to use [`DecidingRuntime`](../reference/decider.md) for command validation in async runtimes
 - How to compose Result values with Map, Bind, and MapError
 
 ## Prerequisites
@@ -358,3 +360,14 @@ public static bool IsTerminal(OrderState state) =>
 ## What's Next
 
 - **[Observability](06-observability.md)** — The DecidingRuntime emits tracing spans for every `Handle` call
+
+### Deepen Your Understanding
+
+| Topic | Link |
+| ----- | ---- |
+| The seven elements explained | [The Decider](../concepts/the-decider.md) |
+| Map, Bind, MapError pipelines | [Error Handling Patterns](../guides/error-handling-patterns.md) |
+| Migrating from Automaton to Decider | [Upgrading to Decider](../guides/upgrading-to-decider.md) |
+| Result API signatures | [Result Reference](../reference/result.md) |
+| DecidingRuntime API | [Decider Reference](../reference/decider.md) |
+| Production ES with concurrency | [Automaton.Patterns](../patterns/index.md) |

@@ -2,9 +2,11 @@
 
 Build a mailbox actor with channels, fire-and-forget messaging, and effect callbacks.
 
+> **Concept reference:** This tutorial builds a custom runtime. For the underlying theory, see [The Runtime](../concepts/the-runtime.md) and [Building Custom Runtimes](../guides/building-custom-runtimes.md).
+
 ## What You'll Learn
 
-- How the Actor Model maps to the Automaton kernel
+- How the Actor Model maps to the [Automaton kernel](../concepts/the-kernel.md)
 - How to build a mailbox with `System.Threading.Channels`
 - How to implement fire-and-forget messaging (the Tell pattern)
 - How to handle effects with self-reference
@@ -315,3 +317,13 @@ The same `Counter` transition function drives the actor, the MVU runtime, and th
 
 - **[Command Validation](05-command-validation.md)** — Validate commands before sending them to actors
 - **[Observability](06-observability.md)** — Add distributed tracing to your actor system
+
+### Deepen Your Understanding
+
+| Topic | Link |
+| ----- | ---- |
+| How Observer and Interpreter work | [The Runtime](../concepts/the-runtime.md) |
+| Thread safety and serialization | [Runtime Reference](../reference/runtime.md) |
+| Building other custom runtimes | [Building Custom Runtimes](../guides/building-custom-runtimes.md) |
+| Choosing between MVU, ES, and Actors | [Runtimes Compared](../concepts/runtimes-compared.md) |
+| Testing actors and runtimes | [Testing Strategies](../guides/testing-strategies.md) |

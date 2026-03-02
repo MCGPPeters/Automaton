@@ -2,9 +2,11 @@
 
 Build a command-driven thermostat aggregate with an event store, replay, projections, and terminal state.
 
+> **Concept reference:** This tutorial uses the [Decider pattern](../concepts/the-decider.md) and the [Result type](../reference/result.md). For production event sourcing with optimistic concurrency, see the [Automaton.Patterns](../patterns/index.md) package (coming soon).
+
 ## What You'll Learn
 
-- How Event Sourcing maps to the Automaton kernel
+- How Event Sourcing maps to the [Automaton kernel](../concepts/the-kernel.md)
 - How to add **commands** and **validation** to the thermostat from Tutorial 01
 - How to build an in-memory event store
 - How to implement the decide-then-append pattern
@@ -504,3 +506,13 @@ The same thermostat `Transition` function from Tutorial 01 drives the event-sour
 - **[Actor System](04-actor-system.md)** — Process sensor readings from a mailbox
 - **[Command Validation](05-command-validation.md)** — Deep dive into the Decider pattern and Result type
 - **[Observability](06-observability.md)** — Add distributed tracing to your aggregate
+
+### Deepen Your Understanding
+
+| Topic | Link |
+| ----- | ---- |
+| How Decide, Transition, and IsTerminal relate | [The Decider](../concepts/the-decider.md) |
+| Map, Bind, and MapError recipes | [Error Handling Patterns](../guides/error-handling-patterns.md) |
+| Upgrading from Automaton to Decider | [Upgrading to Decider](../guides/upgrading-to-decider.md) |
+| Production ES with concurrency resolution | [Automaton.Patterns](../patterns/index.md) |
+| Full Decider API | [Decider Reference](../reference/decider.md) |
