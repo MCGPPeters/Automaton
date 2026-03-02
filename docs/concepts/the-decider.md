@@ -143,12 +143,15 @@ var ok = Result<int, string>.Ok(42);
 var err = Result<int, string>.Err("something went wrong");
 ```
 
-### Pattern Matching
+### Inspecting Results
+
+Use `IsOk` / `IsErr` properties with pattern matching:
 
 ```csharp
-var message = result.Match(
-    value => $"Success: {value}",
-    error => $"Failed: {error}");
+if (result.IsOk)
+    Console.WriteLine($"Success: {result.Value}");
+else
+    Console.WriteLine($"Failed: {result.Error}");
 ```
 
 ### Map (Functor)
@@ -172,6 +175,18 @@ var result = parseInput(raw)       // Result<int, Error>
     .Bind(n => validate(n))        // Result<int, Error>
     .Map(n => $"Result: {n}");     // Result<string, Error>
 // If any step fails, the error short-circuits through the rest
+```
+
+### LINQ Query Syntax
+
+Result implements `Select` and `SelectMany`, enabling LINQ monad comprehension:
+
+```csharp
+var result =
+    from input in parseInput(raw)
+    from validated in validate(input)
+    select $"Result: {validated}";
+// Short-circuits on first Err — same semantics as Bind chains
 ```
 
 ### MapError

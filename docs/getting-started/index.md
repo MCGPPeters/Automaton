@@ -66,9 +66,10 @@ var runtime = await AutomatonRuntime<Counter, CounterState, CounterEvent, Counte
         observer: (state, @event, effect) =>
         {
             Console.WriteLine($"{@event.GetType().Name} → Count: {state.Count}");
-            return ValueTask.CompletedTask;
+            return PipelineResult.Ok;
         },
-        interpreter: _ => new ValueTask<CounterEvent[]>([]));
+        interpreter: _ => new ValueTask<Result<CounterEvent[], PipelineError>>(
+            Result<CounterEvent[], PipelineError>.Ok([])));
 
 await runtime.Dispatch(new CounterEvent.Increment());
 // Prints: Increment → Count: 1

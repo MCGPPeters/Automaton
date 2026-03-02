@@ -38,7 +38,7 @@ The MVU runtime wires the shared `AutomatonRuntime` with:
 Observer<TState, TEvent, TEffect> observer = (state, _, _) =>
 {
     views.Add(render(state));
-    return Task.CompletedTask;
+    return PipelineResult.Ok;
 };
 ```
 

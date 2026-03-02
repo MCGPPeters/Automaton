@@ -86,7 +86,7 @@ public sealed class MvuRuntime<TAutomaton, TState, TEvent, TEffect, TView>
         Observer<TState, TEvent, TEffect> observer = (s, _, _) =>
         {
             views.Add(render(s));
-            return ValueTask.CompletedTask;
+            return PipelineResult.Ok;
         };
 
         var core = new AutomatonRuntime<TAutomaton, TState, TEvent, TEffect>(
@@ -118,7 +118,8 @@ Key design decisions:
 var runtime = await MvuRuntime<Counter, CounterState, CounterEvent, CounterEffect, string>
     .Start(
         render: state => $"Count: {state.Count}",
-        interpreter: _ => new ValueTask<CounterEvent[]>([]));
+        interpreter: _ => new ValueTask<Result<CounterEvent[], PipelineError>>(
+            Result<CounterEvent[], PipelineError>.Ok([])));
 
 // Initial view is rendered immediately
 Console.WriteLine(runtime.Views[0]); // "Count: 0"
@@ -151,7 +152,8 @@ Interpreter<CounterEffect, CounterEvent> interpreter = effect =>
     {
         logs.Add(log.Message);
     }
-    return new ValueTask<CounterEvent[]>([]);
+    return new ValueTask<Result<CounterEvent[], PipelineError>>(
+        Result<CounterEvent[], PipelineError>.Ok([]));
 };
 
 var runtime = await MvuRuntime<Counter, CounterState, CounterEvent, CounterEffect, string>
@@ -177,11 +179,12 @@ Interpreter<CounterEffect, CounterEvent> interpreter = async effect =>
     {
         // Suppose Log effect triggers an auto-increment after logging
         CounterEffect.Log log =>
-        [
-            new CounterEvent.Increment()  // feedback event!
-        ],
+            Result<CounterEvent[], PipelineError>.Ok(
+            [
+                new CounterEvent.Increment()  // feedback event!
+            ]),
 
-        _ => []
+        _ => Result<CounterEvent[], PipelineError>.Ok([])
     };
 };
 ```

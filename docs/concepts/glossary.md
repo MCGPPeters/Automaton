@@ -58,7 +58,7 @@ An event produced by the [Interpreter](#interpreter) and dispatched back into th
 
 ### Interpreter
 
-A function that converts an effect into zero or more feedback events: `Effect → ValueTask<Event[]>`. It's one of the two extension points of the runtime (the other is the [Observer](#observer)). Return an empty array for fire-and-forget effects.
+A function that converts an effect into zero or more feedback events: `Effect → ValueTask<Result<Event[], PipelineError>>`. It's one of the two extension points of the runtime (the other is the [Observer](#observer)). Return `Result.Ok([])` for fire-and-forget effects. Errors propagate as `Result.Err(PipelineError)` values.
 
 ### IsTerminal
 
@@ -86,11 +86,19 @@ The Elm Architecture. A UI pattern where events update a model (state), and the 
 
 ### Observer
 
-A function that sees each transition triple `(state, event, effect)` after the automaton steps: `(State, Event, Effect) → ValueTask`. It's one of the two extension points of the runtime (the other is the [Interpreter](#interpreter)). Used for rendering (MVU), persisting (ES), or logging.
+A function that sees each transition triple `(state, event, effect)` after the automaton steps: `(State, Event, Effect) → ValueTask<Result<Unit, PipelineError>>`. It's one of the two extension points of the runtime (the other is the [Interpreter](#interpreter)). Used for rendering (MVU), persisting (ES), or logging. Returns `PipelineResult.Ok` on the happy path (zero-alloc). Errors propagate as `Result.Err(PipelineError)` values.
 
 ### Observer Composition
 
-Combining multiple observers into one using the `Then` extension method. Observers run sequentially — first runs, then second, both seeing the same triple. See [Observer Composition guide](../guides/observer-composition.md).
+Combining multiple observers into one using monadic combinators. `Then` runs sequentially with short-circuit on error. `Where` guards with a predicate. `Select` contramaps inputs. `Catch` handles errors. `Combine` runs both regardless of individual failures. See [Observer Composition guide](../guides/observer-composition.md).
+
+### PipelineError
+
+`readonly record struct PipelineError(string Message, string? Source, Exception? Exception)` — a structured error from an Observer or Interpreter pipeline stage. Carries a human-readable message, an optional source identifier, and an optional underlying exception. Errors propagate through the dispatch chain via `Result<T, PipelineError>`.
+
+### PipelineResult
+
+A static class with a pre-allocated `Ok` value: `PipelineResult.Ok` returns `ValueTask<Result<Unit, PipelineError>>` wrapping `Result.Ok(Unit.Value)`. Use this in observer implementations instead of constructing a new Result — it's the zero-alloc fast path.
 
 ### Projection
 
@@ -106,7 +114,7 @@ An operation on `AutomatonRuntime` that replaces the current state without trigg
 
 ### Result
 
-`Result<TSuccess, TError>` — a discriminated union that is either `Ok(value)` or `Err(error)`. Used by the Decider to represent command validation outcomes. Supports `Match` (pattern matching), `Map` (functor), `Bind` (monad), and `MapError`. Implemented as a `readonly struct` for zero heap allocation. See [API Reference: Result](../reference/result.md).
+`Result<TSuccess, TError>` — a discriminated union that is either `Ok(value)` or `Err(error)`. Used by the Decider to represent command validation outcomes and by Observer/Interpreter pipelines for error propagation. Supports `Map` / `Select` (functor), `Bind` / `SelectMany` (monad), and `MapError`. Implements LINQ query syntax for monadic composition. Implemented as a `readonly struct` for zero heap allocation. See [API Reference: Result](../reference/result.md).
 
 ### Runtime
 
@@ -127,3 +135,7 @@ A state from which no further commands should be processed. Indicated by `IsTerm
 ### Transition
 
 The pure function at the heart of every automaton: `(State, Event) → (State, Effect)`. Given the current state and an event, it produces the new state and an effect to be executed. Must handle every event type (exhaustive switch).
+
+### Unit
+
+`readonly record struct Unit` — the unit type with exactly one value (`Unit.Value`). Used as the success type in `Result<Unit, PipelineError>` where a success value is required by the type system but no meaningful value exists. Analogous to `void` but expressible as a type parameter.

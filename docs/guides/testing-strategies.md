@@ -116,9 +116,10 @@ public async Task Dispatch_RecordsAllTransitions()
             observer: (state, @event, effect) =>
             {
                 log.Add((state, @event, effect));
-                return ValueTask.CompletedTask;
+                return PipelineResult.Ok;
             },
-            interpreter: _ => new ValueTask<CounterEvent[]>([]));
+            interpreter: _ => new ValueTask<Result<CounterEvent[], PipelineError>>(
+                Result<CounterEvent[], PipelineError>.Ok([])));
 
     await runtime.Dispatch(new CounterEvent.Increment());
     await runtime.Dispatch(new CounterEvent.Increment());
@@ -141,11 +142,12 @@ public async Task Reset_ProducesLogEffect()
 
     var runtime = await AutomatonRuntime<Counter, CounterState, CounterEvent, CounterEffect>
         .Start(
-            observer: (_, _, _) => ValueTask.CompletedTask,
+            observer: (_, _, _) => PipelineResult.Ok,
             interpreter: effect =>
             {
                 effects.Add(effect);
-                return new ValueTask<CounterEvent[]>([]);
+                return new ValueTask<Result<CounterEvent[], PipelineError>>(
+                    Result<CounterEvent[], PipelineError>.Ok([]));
             });
 
     await runtime.Dispatch(new CounterEvent.Increment());
@@ -163,8 +165,9 @@ public async Task Handle_ValidCommand_UpdatesState()
 {
     var runtime = await DecidingRuntime<Counter, CounterState, CounterCommand,
         CounterEvent, CounterEffect, CounterError>.Start(
-            (_, _, _) => ValueTask.CompletedTask,
-            _ => new ValueTask<CounterEvent[]>([]));
+            (_, _, _) => PipelineResult.Ok,
+            _ => new ValueTask<Result<CounterEvent[], PipelineError>>(
+                Result<CounterEvent[], PipelineError>.Ok([])));
 
     var result = await runtime.Handle(new CounterCommand.Add(5));
 
@@ -177,8 +180,9 @@ public async Task Handle_InvalidCommand_LeavesStateUnchanged()
 {
     var runtime = await DecidingRuntime<Counter, CounterState, CounterCommand,
         CounterEvent, CounterEffect, CounterError>.Start(
-            (_, _, _) => ValueTask.CompletedTask,
-            _ => new ValueTask<CounterEvent[]>([]));
+            (_, _, _) => PipelineResult.Ok,
+            _ => new ValueTask<Result<CounterEvent[], PipelineError>>(
+                Result<CounterEvent[], PipelineError>.Ok([])));
 
     await runtime.Handle(new CounterCommand.Add(5));
     var result = await runtime.Handle(new CounterCommand.Add(200));
@@ -200,13 +204,14 @@ public async Task Interpreter_FeedbackLoop_ProducesMultipleTransitions()
 {
     var runtime = await AutomatonRuntime<Thermostat, ThermostatState,
         ThermostatEvent, ThermostatEffect>.Start(
-            observer: (_, _, _) => ValueTask.CompletedTask,
-            interpreter: effect => new ValueTask<ThermostatEvent[]>(effect switch
-            {
-                ThermostatEffect.TurnOnHeater => [new ThermostatEvent.HeaterStarted()],
-                ThermostatEffect.TurnOffHeater => [new ThermostatEvent.HeaterStopped()],
-                _ => []
-            }));
+            observer: (_, _, _) => PipelineResult.Ok,
+            interpreter: effect => new ValueTask<Result<ThermostatEvent[], PipelineError>>(
+                Result<ThermostatEvent[], PipelineError>.Ok(effect switch
+                {
+                    ThermostatEffect.TurnOnHeater => [new ThermostatEvent.HeaterStarted()],
+                    ThermostatEffect.TurnOffHeater => [new ThermostatEvent.HeaterStopped()],
+                    _ => []
+                })));
 
     // One dispatch triggers two transitions (reading + heater feedback)
     await runtime.Dispatch(new ThermostatEvent.TemperatureReading(18.0m));
@@ -242,17 +247,18 @@ Define static observer and interpreter factories alongside your domain types:
 public static class CounterTestHelpers
 {
     public static readonly Observer<CounterState, CounterEvent, CounterEffect> NoOp =
-        (_, _, _) => ValueTask.CompletedTask;
+        (_, _, _) => PipelineResult.Ok;
 
     public static readonly Interpreter<CounterEffect, CounterEvent> NoOpInterpreter =
-        _ => new ValueTask<CounterEvent[]>([]);
+        _ => new ValueTask<Result<CounterEvent[], PipelineError>>(
+            Result<CounterEvent[], PipelineError>.Ok([]));
 
     public static Observer<CounterState, CounterEvent, CounterEffect> Capture(
         List<(CounterState, CounterEvent, CounterEffect)> log) =>
         (state, @event, effect) =>
         {
             log.Add((state, @event, effect));
-            return ValueTask.CompletedTask;
+            return PipelineResult.Ok;
         };
 }
 ```

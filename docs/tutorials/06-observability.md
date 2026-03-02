@@ -134,8 +134,9 @@ public class TracingTests
 
         var runtime = await AutomatonRuntime<Counter, CounterState, CounterEvent, CounterEffect>
             .Start(
-                observer: (_, _, _) => ValueTask.CompletedTask,
-                interpreter: _ => new ValueTask<CounterEvent[]>([]));
+                observer: (_, _, _) => PipelineResult.Ok,
+                interpreter: _ => new ValueTask<Result<CounterEvent[], PipelineError>>(
+                    Result<CounterEvent[], PipelineError>.Ok([])));
 
         await runtime.Dispatch(new CounterEvent.Increment());
 
@@ -170,8 +171,9 @@ public async Task Handle_Rejection_EmitsErrorTypeTag()
 
     var runtime = await DecidingRuntime<Counter, CounterState, CounterCommand,
         CounterEvent, CounterEffect, CounterError>.Start(
-            (_, _, _) => ValueTask.CompletedTask,
-            _ => new ValueTask<CounterEvent[]>([]));
+            (_, _, _) => PipelineResult.Ok,
+            _ => new ValueTask<Result<CounterEvent[], PipelineError>>(
+                Result<CounterEvent[], PipelineError>.Ok([])));
 
     await runtime.Handle(new CounterCommand.Add(200));
 

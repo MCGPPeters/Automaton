@@ -51,13 +51,13 @@ Key design choices:
 
 ```csharp
 // Observer: no-op — actor state is internal
-Observer<TState, TEvent, TEffect> observer = (_, _, _) => Task.CompletedTask;
+Observer<TState, TEvent, TEffect> observer = (_, _, _) => PipelineResult.Ok;
 
 // Interpreter: wraps the effect handler with self-reference
 Interpreter<TEffect, TEvent> interpreter = async effect =>
 {
     await effectHandler(effect, actorRef);
-    return [];
+    return Result<TEvent[], PipelineError>.Ok([]);
 };
 ```
 
@@ -159,7 +159,7 @@ The interpreter receives a reference to the actor itself:
 Interpreter<TEffect, TEvent> interpreter = async effect =>
 {
     await effectHandler(effect, actorRef);
-    return [];
+    return Result<TEvent[], PipelineError>.Ok([]);
 };
 ```
 

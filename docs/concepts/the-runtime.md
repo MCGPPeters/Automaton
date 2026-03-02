@@ -23,7 +23,7 @@ The runtime is parameterized by exactly two callbacks. Every specialized runtime
 ### Observer — "what do you want to see?"
 
 ```csharp
-public delegate ValueTask Observer<in TState, in TEvent, in TEffect>(
+public delegate ValueTask<Result<Unit, PipelineError>> Observer<in TState, in TEvent, in TEffect>(
     TState state,
     TEvent @event,
     TEffect effect);
@@ -36,18 +36,19 @@ The observer sees every transition triple `(state, event, effect)` after it happ
 - **Log an audit trail** (any runtime)
 - **Update metrics** (any runtime)
 
-The observer is called *after* the transition — state has already advanced. If the observer throws, the transition is committed but the exception propagates to the caller.
+The observer is called *after* the transition — state has already advanced. Returns `Result<Unit, PipelineError>` — errors propagate as values, not exceptions. Return `PipelineResult.Ok` on the happy path (zero-alloc).
 
 ### Interpreter — "what should happen next?"
 
 ```csharp
-public delegate ValueTask<TEvent[]> Interpreter<in TEffect, TEvent>(TEffect effect);
+public delegate ValueTask<Result<TEvent[], PipelineError>> Interpreter<in TEffect, TEvent>(TEffect effect);
 ```
 
 The interpreter converts an effect into zero or more **feedback events** that are dispatched back into the automaton:
 
-- Return `[]` (empty array) for fire-and-forget effects
-- Return `[event1, event2]` to feed events back into the loop
+- Return `Result<TEvent[], PipelineError>.Ok([])` for fire-and-forget effects
+- Return `Result<TEvent[], PipelineError>.Ok([event1, event2])` to feed events back into the loop
+- Return `Result<TEvent[], PipelineError>.Err(...)` to signal an error
 
 This creates a **closed feedback loop**: effects can trigger more transitions, which produce more effects, which trigger more transitions...
 
@@ -101,8 +102,10 @@ await runtime.InterpretEffect(effect);
 `Dispatch` is the primary entry point. It runs the full cycle: transition → observe → interpret → recurse:
 
 ```csharp
-await runtime.Dispatch(new CounterEvent.Increment());
+var result = await runtime.Dispatch(new CounterEvent.Increment());
 ```
+
+Returns `Result<Unit, PipelineError>` — `Ok` on success, `Err(PipelineError)` if any pipeline stage fails.
 
 After `Dispatch` returns, `runtime.State` reflects all transitions — including those triggered by feedback events.
 
@@ -157,27 +160,59 @@ var runtime = await AutomatonRuntime<Counter, CounterState, CounterEvent, Counte
 
 ## Observer Composition
 
-Observers compose sequentially with `Then`:
+Observers compose with **monadic combinators** that form a pipeline:
+
+### Then (Kleisli Composition)
+
+Sequential composition with short-circuit on error:
 
 ```csharp
 Observer<ThermostatState, ThermostatEvent, ThermostatEffect> logger =
     (state, @event, effect) =>
     {
         Console.WriteLine($"[LOG] {@event.GetType().Name} → {state}");
-        return ValueTask.CompletedTask;
+        return PipelineResult.Ok;
     };
 
 Observer<ThermostatState, ThermostatEvent, ThermostatEffect> metrics =
     (state, @event, effect) =>
     {
         // record metrics
-        return ValueTask.CompletedTask;
+        return PipelineResult.Ok;
     };
 
-var combined = logger.Then(metrics);
+var pipeline = logger.Then(metrics);
 ```
 
-When `combined` is called, `logger` runs first, then `metrics`. Both see the same `(state, event, effect)` triple.
+When `pipeline` is called, `logger` runs first. If it succeeds (`Ok`), `metrics` runs. If `logger` returns `Err`, `metrics` is skipped and the error propagates.
+
+### Where (Guard)
+
+Filter which transitions an observer processes:
+
+```csharp
+var errorOnly = logger.Where((state, evt, eff) => evt is ErrorOccurred);
+```
+
+### Catch (Error Recovery)
+
+Handle errors from an observer:
+
+```csharp
+var resilient = persister.Catch(err =>
+{
+    log.Warning("Persist failed: {Message}", err.Message);
+    return Result<Unit, PipelineError>.Ok(Unit.Value); // swallow error
+});
+```
+
+### Combine (Applicative)
+
+Run both observers regardless of individual failures:
+
+```csharp
+var both = persister.Combine(notifier); // notifier runs even if persister fails
+```
 
 See the [Observer Composition guide](../guides/observer-composition.md) for advanced recipes.
 

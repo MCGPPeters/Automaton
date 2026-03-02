@@ -51,7 +51,7 @@ public sealed class LoggingRuntime<TAutomaton, TState, TEvent, TEffect>
         Observer<TState, TEvent, TEffect> observer = (state, @event, effect) =>
         {
             log.Add($"[{DateTimeOffset.UtcNow:O}] {@event.GetType().Name} → {state}");
-            return ValueTask.CompletedTask;
+            return PipelineResult.Ok;
         };
 
         var core = await AutomatonRuntime<TAutomaton, TState, TEvent, TEffect>
@@ -60,7 +60,7 @@ public sealed class LoggingRuntime<TAutomaton, TState, TEvent, TEffect>
         return new LoggingRuntime<TAutomaton, TState, TEvent, TEffect>(core, log);
     }
 
-    public ValueTask Dispatch(TEvent @event, CancellationToken ct = default) =>
+    public ValueTask<Result<Unit, PipelineError>> Dispatch(TEvent @event, CancellationToken ct = default) =>
         _core.Dispatch(@event, ct);
 }
 ```
@@ -69,7 +69,8 @@ Usage:
 
 ```csharp
 var runtime = await LoggingRuntime<Counter, CounterState, CounterEvent, CounterEffect>
-    .Start(_ => new ValueTask<CounterEvent[]>([]));
+    .Start(_ => new ValueTask<Result<CounterEvent[], PipelineError>>(
+        Result<CounterEvent[], PipelineError>.Ok([])));
 
 await runtime.Dispatch(new CounterEvent.Increment());
 
@@ -113,7 +114,7 @@ public sealed class SnapshotRuntime<TAutomaton, TState, TEvent, TEffect>
             runtime._version++;
             if (runtime._version % runtime._snapshotInterval == 0)
                 runtime._snapshots.Add((runtime._version, state));
-            return ValueTask.CompletedTask;
+            return PipelineResult.Ok;
         };
 
         var (state, effect) = TAutomaton.Init();
@@ -125,7 +126,7 @@ public sealed class SnapshotRuntime<TAutomaton, TState, TEvent, TEffect>
         return new SnapshotRuntime<TAutomaton, TState, TEvent, TEffect>(core, snapshotInterval);
     }
 
-    public ValueTask Dispatch(TEvent @event, CancellationToken ct = default) =>
+    public ValueTask<Result<Unit, PipelineError>> Dispatch(TEvent @event, CancellationToken ct = default) =>
         _core.Dispatch(@event, ct);
 }
 ```
