@@ -31,9 +31,8 @@ public readonly struct Result<TSuccess, TError>
 ```
 
 With operations:
-- `Match` — exhaustive pattern matching (elimination)
-- `Map` — transform the success value (functor)
-- `Bind` — chain fallible operations (monad)
+- `Map` / `Select` — transform the success value (functor / LINQ)
+- `Bind` / `SelectMany` — chain fallible operations (monad / LINQ query syntax)
 - `MapError` — transform the error value (bifunctor)
 
 ## Mathematical Grounding
@@ -50,18 +49,27 @@ $$T + E = \{\ \text{inl}(t) \mid t \in T\ \} \cup \{\ \text{inr}(e) \mid e \in E
 
 Where `inl` = `Ok` (inject left) and `inr` = `Err` (inject right).
 
-### Elimination (Match)
+### Elimination (Pattern Matching + LINQ)
 
 The **elimination principle** for a coproduct requires providing a handler for each case:
 
 $$\text{match} : (T \to R) \to (E \to R) \to (T + E) \to R$$
 
-This is the universal property of the coproduct: to consume a `Result`, you *must* handle both `Ok` and `Err`. The compiler enforces this through exhaustive pattern matching.
+This is the universal property of the coproduct: to consume a `Result`, you *must* handle both `Ok` and `Err`. In C#, this is achieved via native pattern matching (`IsOk`/`IsErr` + `Value`/`Error`) rather than a `Match` method — the compiler's own exhaustiveness checking is superior to a callback-based approach.
 
 ```csharp
-public TResult Match<TResult>(
-    Func<TSuccess, TResult> onOk,
-    Func<TError, TResult> onErr)
+var message = result.IsOk
+    ? $"Success: {result.Value}"
+    : $"Error: {result.Error}";
+```
+
+For monadic composition, LINQ query syntax provides the ergonomic equivalent of Haskell's `do`-notation:
+
+```csharp
+var final =
+    from x in parseInput(raw)
+    from y in validate(x)
+    select x + y;
 ```
 
 ### Functor (Map)
@@ -102,10 +110,10 @@ Exceptions break the mathematical properties above:
 | Property | Result | Exceptions |
 |----------|--------|------------|
 | **Visible in type signature** | ✅ `Result<T, E>` | ❌ Invisible (except checked exceptions in Java) |
-| **Composable** | ✅ Map, Bind, Match | ❌ try/catch is not composable |
+| **Composable** | ✅ Map, Bind, LINQ | ❌ try/catch is not composable |
 | **Total function** | ✅ Always returns | ❌ Throws bypass return |
 | **Referential transparency** | ✅ Pure | ❌ Side effect (stack unwinding) |
-| **Exhaustive handling** | ✅ Match forces both cases | ❌ Catch is optional |
+| **Exhaustive handling** | ✅ IsOk/IsErr + pattern matching | ❌ Catch is optional |
 
 Exceptions are reserved for *programmer bugs* and *unrecoverable infrastructure failures*. Domain validation errors are expected outcomes and belong in the type system.
 
@@ -118,8 +126,8 @@ Exceptions are reserved for *programmer bugs* and *unrecoverable infrastructure 
 ### Positive
 
 - **Errors are values** — domain errors are first-class data, not exceptional control flow.
-- **Exhaustive matching** — impossible to forget to handle the error case.
-- **Composable** — `Map`, `Bind`, `MapError` enable clean pipelines.
+- **Exhaustive matching** — impossible to forget to handle the error case via `IsOk`/`IsErr` checks.
+- **Composable** — `Map`, `Bind`, `MapError`, and LINQ query syntax enable clean pipelines.
 - **Self-documenting** — `Result<TState, TError>` in the signature tells the reader exactly what can happen.
 
 ### Negative
@@ -133,7 +141,7 @@ Exceptions are reserved for *programmer bugs* and *unrecoverable infrastructure 
 - Implemented as a `readonly struct` for zero-allocation on the heap. The `IsOk`/`IsErr` properties and `Value`/`Error` accessors replace the previous `sealed record` subtype pattern matching.
 - C# does not have built-in discriminated unions (yet). The `readonly struct` with static factory methods is the most allocation-efficient approximation.
 - Future C# versions may add native union types, which would simplify the encoding.
-- The `Map`, `Bind`, and `MapError` operations use `if/else` with `IsOk` rather than `switch` expressions. This is both idiomatic for structs and avoids the allocation overhead of the `Func` delegates that `Match` requires.
+- The `Map`, `Bind`, and `MapError` operations use `if/else` with `IsOk` rather than `switch` expressions. This is both idiomatic for structs and avoids unnecessary allocation overhead. `Select` and `SelectMany` are LINQ-compatible aliases that delegate to `Map` and `Bind`, enabling `from ... in ... select ...` query syntax (monad comprehension).
 
 ## References
 
