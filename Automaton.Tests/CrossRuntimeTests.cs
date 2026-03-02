@@ -58,7 +58,8 @@ public class CrossRuntimeTests
         var mvu = await MvuRuntime<Thermostat, ThermostatState, ThermostatEvent, ThermostatEffect, string>
             .Start(
                 s => $"{s.CurrentTemp}°C (target: {s.TargetTemp}°C, heating: {s.Heating})",
-                _ => new ValueTask<ThermostatEvent[]>([]));
+                _ => new ValueTask<Result<ThermostatEvent[], PipelineError>>(
+                    Result<ThermostatEvent[], PipelineError>.Ok([])));
 
         foreach (var e in _eventScenario)
         {
@@ -104,7 +105,8 @@ public class CrossRuntimeTests
         var mvu = await MvuRuntime<Thermostat, ThermostatState, ThermostatEvent, ThermostatEffect, string>
             .Start(
                 s => $"{s.CurrentTemp}°C",
-                _ => new ValueTask<ThermostatEvent[]>([]));
+                _ => new ValueTask<Result<ThermostatEvent[], PipelineError>>(
+                    Result<ThermostatEvent[], PipelineError>.Ok([])));
 
         foreach (var e in _eventScenario)
         {

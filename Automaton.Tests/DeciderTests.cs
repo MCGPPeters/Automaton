@@ -194,7 +194,7 @@ public class DeciderTests
         Observer<ThermostatState, ThermostatEvent, ThermostatEffect> observer = (_, _, _) =>
         {
             observerCallCount++;
-            return ValueTask.CompletedTask;
+            return PipelineResult.Ok;
         };
 
         var runtime = await DecidingRuntime<Thermostat, ThermostatState, ThermostatCommand,

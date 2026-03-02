@@ -291,6 +291,12 @@ public sealed class DecidingRuntime<TDecider, TState, TCommand, TEvent, TEffect,
                 var dispatchTask = _core.DispatchUnlocked(events[i], cancellationToken);
                 if (!dispatchTask.IsCompletedSuccessfully)
                     return AwaitRemainingEventsAndReturnOkUnserialized(dispatchTask, events, i + 1, cancellationToken, activity);
+
+                var dispatchResult = dispatchTask.Result;
+                if (dispatchResult.IsErr)
+                    throw new InvalidOperationException(
+                        $"Pipeline error during dispatch: {dispatchResult.Error}",
+                        dispatchResult.Error.Exception);
             }
 
             activity?.SetTag("automaton.result", "ok");
@@ -310,17 +316,25 @@ public sealed class DecidingRuntime<TDecider, TState, TCommand, TEvent, TEffect,
 
     [AsyncMethodBuilder(typeof(PoolingAsyncValueTaskMethodBuilder<>))]
     private async ValueTask<Result<TState, TError>> AwaitRemainingEventsAndReturnOkUnserialized(
-        ValueTask pendingTask, TEvent[] events, int startIndex,
+        ValueTask<Result<Unit, PipelineError>> pendingTask, TEvent[] events, int startIndex,
         CancellationToken cancellationToken, Activity? activity)
     {
         using var _ = activity;
         try
         {
-            await pendingTask.ConfigureAwait(false);
+            var pendingResult = await pendingTask.ConfigureAwait(false);
+            if (pendingResult.IsErr)
+                throw new InvalidOperationException(
+                    $"Pipeline error during dispatch: {pendingResult.Error}",
+                    pendingResult.Error.Exception);
 
             for (var i = startIndex; i < events.Length; i++)
             {
-                await _core.DispatchUnlocked(events[i], cancellationToken).ConfigureAwait(false);
+                var result = await _core.DispatchUnlocked(events[i], cancellationToken).ConfigureAwait(false);
+                if (result.IsErr)
+                    throw new InvalidOperationException(
+                        $"Pipeline error during dispatch: {result.Error}",
+                        result.Error.Exception);
             }
 
             activity?.SetTag("automaton.result", "ok");
@@ -381,6 +395,15 @@ public sealed class DecidingRuntime<TDecider, TState, TCommand, TEvent, TEffect,
                 var dispatchTask = _core.DispatchUnlocked(events[i], cancellationToken);
                 if (!dispatchTask.IsCompletedSuccessfully)
                     return AwaitRemainingEventsAndReturnOk(dispatchTask, events, i + 1, cancellationToken, activity);
+
+                var dispatchResult = dispatchTask.Result;
+                if (dispatchResult.IsErr)
+                {
+                    _core.Gate.Release();
+                    throw new InvalidOperationException(
+                        $"Pipeline error during dispatch: {dispatchResult.Error}",
+                        dispatchResult.Error.Exception);
+                }
             }
 
             activity?.SetTag("automaton.result", "ok");
@@ -402,17 +425,25 @@ public sealed class DecidingRuntime<TDecider, TState, TCommand, TEvent, TEffect,
 
     [AsyncMethodBuilder(typeof(PoolingAsyncValueTaskMethodBuilder<>))]
     private async ValueTask<Result<TState, TError>> AwaitRemainingEventsAndReturnOk(
-        ValueTask pendingTask, TEvent[] events, int startIndex,
+        ValueTask<Result<Unit, PipelineError>> pendingTask, TEvent[] events, int startIndex,
         CancellationToken cancellationToken, Activity? activity)
     {
         using var _ = activity;
         try
         {
-            await pendingTask.ConfigureAwait(false);
+            var pendingResult = await pendingTask.ConfigureAwait(false);
+            if (pendingResult.IsErr)
+                throw new InvalidOperationException(
+                    $"Pipeline error during dispatch: {pendingResult.Error}",
+                    pendingResult.Error.Exception);
 
             for (var i = startIndex; i < events.Length; i++)
             {
-                await _core.DispatchUnlocked(events[i], cancellationToken).ConfigureAwait(false);
+                var result = await _core.DispatchUnlocked(events[i], cancellationToken).ConfigureAwait(false);
+                if (result.IsErr)
+                    throw new InvalidOperationException(
+                        $"Pipeline error during dispatch: {result.Error}",
+                        result.Error.Exception);
             }
 
             activity?.SetTag("automaton.result", "ok");
@@ -444,7 +475,11 @@ public sealed class DecidingRuntime<TDecider, TState, TCommand, TEvent, TEffect,
                 var events = decided.Value;
                 for (var i = 0; i < events.Length; i++)
                 {
-                    await _core.DispatchUnlocked(events[i], cancellationToken).ConfigureAwait(false);
+                    var result = await _core.DispatchUnlocked(events[i], cancellationToken).ConfigureAwait(false);
+                    if (result.IsErr)
+                        throw new InvalidOperationException(
+                            $"Pipeline error during dispatch: {result.Error}",
+                            result.Error.Exception);
                 }
 
                 activity?.SetTag("automaton.result", "ok");

@@ -258,7 +258,7 @@ public static class ThermostatObservers
     /// not about observing individual transitions.
     /// </summary>
     public static readonly Observer<ThermostatState, ThermostatEvent, ThermostatEffect> NoOp =
-        (_, _, _) => ValueTask.CompletedTask;
+        (_, _, _) => PipelineResult.Ok;
 
     /// <summary>
     /// An observer that captures every transition triple into a list.
@@ -280,7 +280,7 @@ public static class ThermostatObservers
         (state, @event, effect) =>
         {
             log.Add((state, @event, effect));
-            return ValueTask.CompletedTask;
+            return PipelineResult.Ok;
         };
 }
 
@@ -308,7 +308,8 @@ public static class ThermostatInterpreters
     /// This is the simplest interpreter — useful when you only care about state transitions.
     /// </summary>
     public static readonly Interpreter<ThermostatEffect, ThermostatEvent> NoOp =
-        _ => new ValueTask<ThermostatEvent[]>([]);
+        _ => new ValueTask<Result<ThermostatEvent[], PipelineError>>(
+            Result<ThermostatEvent[], PipelineError>.Ok([]));
 
     /// <summary>
     /// An interpreter that captures all effects into a list while producing no feedback events.
@@ -330,7 +331,8 @@ public static class ThermostatInterpreters
         effect =>
         {
             effects.Add(effect);
-            return new ValueTask<ThermostatEvent[]>([]);
+            return new ValueTask<Result<ThermostatEvent[], PipelineError>>(
+                Result<ThermostatEvent[], PipelineError>.Ok([]));
         };
 
     /// <summary>
@@ -347,6 +349,7 @@ public static class ThermostatInterpreters
                 notifications.Add(notification.Message);
             }
 
-            return new ValueTask<ThermostatEvent[]>([]);
+            return new ValueTask<Result<ThermostatEvent[], PipelineError>>(
+                Result<ThermostatEvent[], PipelineError>.Ok([]));
         };
 }
