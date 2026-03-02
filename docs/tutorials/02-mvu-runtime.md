@@ -84,7 +84,7 @@ public sealed class MvuRuntime<TAutomaton, TState, TEvent, TEffect, TView>
         Observer<TState, TEvent, TEffect> observer = (s, _, _) =>
         {
             views.Add(render(s));
-            return Task.CompletedTask;
+            return ValueTask.CompletedTask;
         };
 
         var core = new AutomatonRuntime<TAutomaton, TState, TEvent, TEffect>(

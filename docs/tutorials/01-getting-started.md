@@ -280,7 +280,7 @@ Observer<ThermostatState, ThermostatEvent, ThermostatEffect> logger =
     (state, @event, effect) =>
     {
         Console.WriteLine($"[LOG] {@event.GetType().Name} → {state}");
-        return Task.CompletedTask;
+        return ValueTask.CompletedTask;
     };
 
 Observer<ThermostatState, ThermostatEvent, ThermostatEffect> alertCapture =
@@ -288,14 +288,14 @@ Observer<ThermostatState, ThermostatEvent, ThermostatEffect> alertCapture =
     {
         if (effect is ThermostatEffect.SendAlert(var message))
             Console.WriteLine($"🚨 ALERT: {message}");
-        return Task.CompletedTask;
+        return ValueTask.CompletedTask;
     };
 
 Observer<ThermostatState, ThermostatEvent, ThermostatEffect> metrics =
     (state, @event, effect) =>
     {
         // Record metrics: track heater on/off cycles, alert frequency, etc.
-        return Task.CompletedTask;
+        return ValueTask.CompletedTask;
     };
 
 var combined = logger.Then(alertCapture).Then(metrics);

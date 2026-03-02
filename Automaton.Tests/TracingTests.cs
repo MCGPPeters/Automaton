@@ -6,6 +6,7 @@
 // Uses the Thermostat domain throughout.
 // =============================================================================
 
+using System.Collections.Concurrent;
 using System.Diagnostics;
 
 namespace Automaton.Tests;
@@ -14,11 +15,13 @@ public class TracingTests
 {
     /// <summary>
     /// Collects activities emitted by the Automaton ActivitySource during a test.
+    /// Uses <see cref="ConcurrentBag{T}"/> because <see cref="ActivityListener.ActivityStopped"/>
+    /// may fire from any thread when xUnit runs tests in parallel.
     /// </summary>
     private sealed class ActivityCollector : IDisposable
     {
         private readonly ActivityListener _listener;
-        public List<Activity> Activities { get; } = [];
+        public ConcurrentBag<Activity> Activities { get; } = [];
 
         public ActivityCollector()
         {
