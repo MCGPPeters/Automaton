@@ -15,7 +15,7 @@
 //
 // Implementation note:
 //     Result is a readonly struct to avoid heap allocation. Each Ok/Err
-//     is stack-allocated, eliminating 24 bytes per Result on every Decide
+//     is stack-allocated, avoiding per-result heap allocations on every Decide
 //     and Handle call. The bool discriminator replaces the virtual dispatch
 //     of the previous abstract record hierarchy.
 // =============================================================================

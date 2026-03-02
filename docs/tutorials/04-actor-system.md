@@ -117,7 +117,7 @@ public sealed class ActorInstance<TAutomaton, TState, TEvent, TEffect>
         var actorRef = new ActorRef<TEvent>(name, mailbox.Writer);
 
         // Observer: no-op — actor state is internal
-        Observer<TState, TEvent, TEffect> observer = (_, _, _) => Task.CompletedTask;
+        Observer<TState, TEvent, TEffect> observer = (_, _, _) => ValueTask.CompletedTask;
 
         // Interpreter: wraps the effect handler with self-reference
         Interpreter<TEffect, TEvent> interpreter = effectHandler is not null

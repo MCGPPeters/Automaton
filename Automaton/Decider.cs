@@ -268,7 +268,12 @@ public sealed class DecidingRuntime<TDecider, TState, TCommand, TEvent, TEffect,
                     Result<TState, TError>.Err(error));
             }
         }
-        catch (Exception ex) when (ex is not OperationCanceledException)
+        catch (OperationCanceledException)
+        {
+            activity?.Dispose();
+            throw;
+        }
+        catch (Exception ex)
         {
             activity?.SetStatus(ActivityStatusCode.Error, ex.Message);
             activity?.Dispose();
@@ -279,18 +284,28 @@ public sealed class DecidingRuntime<TDecider, TState, TCommand, TEvent, TEffect,
     private ValueTask<Result<TState, TError>> DispatchEventsAndReturnOkUnserialized(
         TEvent[] events, CancellationToken cancellationToken, Activity? activity)
     {
-        for (var i = 0; i < events.Length; i++)
+        try
         {
-            var dispatchTask = _core.DispatchUnlocked(events[i], cancellationToken);
-            if (!dispatchTask.IsCompletedSuccessfully)
-                return AwaitRemainingEventsAndReturnOkUnserialized(dispatchTask, events, i + 1, cancellationToken, activity);
-        }
+            for (var i = 0; i < events.Length; i++)
+            {
+                var dispatchTask = _core.DispatchUnlocked(events[i], cancellationToken);
+                if (!dispatchTask.IsCompletedSuccessfully)
+                    return AwaitRemainingEventsAndReturnOkUnserialized(dispatchTask, events, i + 1, cancellationToken, activity);
+            }
 
-        activity?.SetTag("automaton.result", "ok");
-        activity?.SetStatus(ActivityStatusCode.Ok);
-        activity?.Dispose();
-        return new ValueTask<Result<TState, TError>>(
-            Result<TState, TError>.Ok(_core.State));
+            activity?.SetTag("automaton.result", "ok");
+            activity?.SetStatus(ActivityStatusCode.Ok);
+            activity?.Dispose();
+            return new ValueTask<Result<TState, TError>>(
+                Result<TState, TError>.Ok(_core.State));
+        }
+        catch (Exception ex)
+        {
+            if (ex is not OperationCanceledException)
+                activity?.SetStatus(ActivityStatusCode.Error, ex.Message);
+            activity?.Dispose();
+            throw;
+        }
     }
 
     [AsyncMethodBuilder(typeof(PoolingAsyncValueTaskMethodBuilder<>))]
@@ -341,7 +356,13 @@ public sealed class DecidingRuntime<TDecider, TState, TCommand, TEvent, TEffect,
                     Result<TState, TError>.Err(error));
             }
         }
-        catch (Exception ex) when (ex is not OperationCanceledException)
+        catch (OperationCanceledException)
+        {
+            activity?.Dispose();
+            _core.Gate.Release();
+            throw;
+        }
+        catch (Exception ex)
         {
             activity?.SetStatus(ActivityStatusCode.Error, ex.Message);
             activity?.Dispose();
@@ -353,19 +374,30 @@ public sealed class DecidingRuntime<TDecider, TState, TCommand, TEvent, TEffect,
     private ValueTask<Result<TState, TError>> DispatchEventsAndReturnOk(
         TEvent[] events, CancellationToken cancellationToken, Activity? activity)
     {
-        for (var i = 0; i < events.Length; i++)
+        try
         {
-            var dispatchTask = _core.DispatchUnlocked(events[i], cancellationToken);
-            if (!dispatchTask.IsCompletedSuccessfully)
-                return AwaitRemainingEventsAndReturnOk(dispatchTask, events, i + 1, cancellationToken, activity);
-        }
+            for (var i = 0; i < events.Length; i++)
+            {
+                var dispatchTask = _core.DispatchUnlocked(events[i], cancellationToken);
+                if (!dispatchTask.IsCompletedSuccessfully)
+                    return AwaitRemainingEventsAndReturnOk(dispatchTask, events, i + 1, cancellationToken, activity);
+            }
 
-        activity?.SetTag("automaton.result", "ok");
-        activity?.SetStatus(ActivityStatusCode.Ok);
-        activity?.Dispose();
-        _core.Gate.Release();
-        return new ValueTask<Result<TState, TError>>(
-            Result<TState, TError>.Ok(_core.State));
+            activity?.SetTag("automaton.result", "ok");
+            activity?.SetStatus(ActivityStatusCode.Ok);
+            activity?.Dispose();
+            _core.Gate.Release();
+            return new ValueTask<Result<TState, TError>>(
+                Result<TState, TError>.Ok(_core.State));
+        }
+        catch (Exception ex)
+        {
+            if (ex is not OperationCanceledException)
+                activity?.SetStatus(ActivityStatusCode.Error, ex.Message);
+            activity?.Dispose();
+            _core.Gate.Release();
+            throw;
+        }
     }
 
     [AsyncMethodBuilder(typeof(PoolingAsyncValueTaskMethodBuilder<>))]
