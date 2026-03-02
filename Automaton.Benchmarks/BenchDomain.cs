@@ -98,7 +98,7 @@ public class BenchDecider
 public static class BenchObservers
 {
     public static readonly Observer<BenchState, BenchEvent, BenchEffect> NoOp =
-        (_, _, _) => ValueTask.CompletedTask;
+        (_, _, _) => PipelineResult.Ok;
 
     public static readonly Observer<BenchState, BenchEvent, BenchEffect> Touch =
         (state, @event, effect) =>
@@ -106,14 +106,15 @@ public static class BenchObservers
             _ = state.Value;
             _ = @event;
             _ = effect;
-            return ValueTask.CompletedTask;
+            return PipelineResult.Ok;
         };
 }
 
 public static class BenchInterpreters
 {
     public static readonly Interpreter<BenchEffect, BenchEvent> NoOp =
-        _ => new ValueTask<BenchEvent[]>([]);
+        _ => new ValueTask<Result<BenchEvent[], PipelineError>>(
+            Result<BenchEvent[], PipelineError>.Ok([]));
 
     /// <summary>
     /// Interpreter that produces one feedback event per <see cref="BenchEffect.Trigger"/>.
@@ -123,8 +124,10 @@ public static class BenchInterpreters
         effect => effect switch
         {
             BenchEffect.Trigger(var n) =>
-                new ValueTask<BenchEvent[]>([new BenchEvent.Increment(n)]),
+                new ValueTask<Result<BenchEvent[], PipelineError>>(
+                    Result<BenchEvent[], PipelineError>.Ok([new BenchEvent.Increment(n)])),
             _ =>
-                new ValueTask<BenchEvent[]>([])
+                new ValueTask<Result<BenchEvent[], PipelineError>>(
+                    Result<BenchEvent[], PipelineError>.Ok([]))
         };
 }

@@ -8,6 +8,9 @@
 //
 //     Decide : Command → State → Result<Events, Error>
 //
+// Also used by Observer and Interpreter pipelines to propagate errors as
+// values instead of exceptions (railway-oriented programming).
+//
 // Algebraic structure:
 //     Result<T, E> ≅ T + E    (coproduct / sum type)
 //     Map    : (T → U) → Result<T, E> → Result<U, E>     (functor)
@@ -163,4 +166,37 @@ public readonly struct Result<TSuccess, TError>
     /// <inheritdoc/>
     public override string ToString() =>
         _isOk ? $"Ok({_value})" : $"Err({_error})";
+}
+
+/// <summary>
+/// The unit type — a type with exactly one value, used where a success type
+/// is required but no meaningful value exists.
+/// </summary>
+/// <remarks>
+/// <para>
+/// In functional programming, <c>Unit</c> replaces <c>void</c> in generic contexts.
+/// Since <c>void</c> is not a first-class type in C#, <c>Result&lt;void, E&gt;</c>
+/// is not expressible. <c>Result&lt;Unit, E&gt;</c> fills this gap.
+/// </para>
+/// <para>
+/// <c>Unit</c> is a readonly struct with zero size — the JIT optimizes it away
+/// entirely. There is no runtime cost compared to <c>void</c>.
+/// </para>
+/// <example>
+/// <code>
+/// // Observer returns Result&lt;Unit, ObserverError&gt; — "I succeeded" or "I failed"
+/// Result&lt;Unit, string&gt;.Ok(Unit.Value)   // success with no payload
+/// Result&lt;Unit, string&gt;.Err("failed")     // failure with error
+/// </code>
+/// </example>
+/// </remarks>
+public readonly record struct Unit
+{
+    /// <summary>
+    /// The singleton value of the unit type.
+    /// </summary>
+    public static readonly Unit Value = default;
+
+    /// <inheritdoc/>
+    public override string ToString() => "()";
 }

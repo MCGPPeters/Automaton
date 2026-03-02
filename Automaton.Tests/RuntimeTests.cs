@@ -50,11 +50,13 @@ public class RuntimeTests
             if (effect is ThermostatEffect.ActivateHeater && feedbackCount == 0)
             {
                 feedbackCount++;
-                return new ValueTask<ThermostatEvent[]>(
-                    [new ThermostatEvent.TemperatureRecorded(19m)]);
+                return new ValueTask<Result<ThermostatEvent[], PipelineError>>(
+                    Result<ThermostatEvent[], PipelineError>.Ok(
+                    [new ThermostatEvent.TemperatureRecorded(19m)]));
             }
 
-            return new ValueTask<ThermostatEvent[]>([]);
+            return new ValueTask<Result<ThermostatEvent[], PipelineError>>(
+                Result<ThermostatEvent[], PipelineError>.Ok([]));
         };
 
         var runtime = new AutomatonRuntime<Thermostat, ThermostatState, ThermostatEvent, ThermostatEffect>(
@@ -77,13 +79,13 @@ public class RuntimeTests
         Observer<ThermostatState, ThermostatEvent, ThermostatEffect> first = (_, _, _) =>
         {
             firstCalls++;
-            return ValueTask.CompletedTask;
+            return PipelineResult.Ok;
         };
 
         Observer<ThermostatState, ThermostatEvent, ThermostatEffect> second = (_, _, _) =>
         {
             secondCalls++;
-            return ValueTask.CompletedTask;
+            return PipelineResult.Ok;
         };
 
         var combined = first.Then(second);
@@ -122,11 +124,13 @@ public class RuntimeTests
             if (effect is ThermostatEffect.ActivateHeater && feedbackCount == 0)
             {
                 feedbackCount++;
-                return new ValueTask<ThermostatEvent[]>(
-                    [new ThermostatEvent.TemperatureRecorded(19m)]);
+                return new ValueTask<Result<ThermostatEvent[], PipelineError>>(
+                    Result<ThermostatEvent[], PipelineError>.Ok(
+                    [new ThermostatEvent.TemperatureRecorded(19m)]));
             }
 
-            return new ValueTask<ThermostatEvent[]>([]);
+            return new ValueTask<Result<ThermostatEvent[], PipelineError>>(
+                Result<ThermostatEvent[], PipelineError>.Ok([]));
         };
 
         var runtime = new AutomatonRuntime<Thermostat, ThermostatState, ThermostatEvent, ThermostatEffect>(
@@ -261,10 +265,12 @@ public class RuntimeTests
             }
             if (effect is ThermostatEffect.SendNotification)
             {
-                return new ValueTask<ThermostatEvent[]>(
-                    [new ThermostatEvent.AlertRaised("loop")]);
+                return new ValueTask<Result<ThermostatEvent[], PipelineError>>(
+                    Result<ThermostatEvent[], PipelineError>.Ok(
+                    [new ThermostatEvent.AlertRaised("loop")]));
             }
-            return new ValueTask<ThermostatEvent[]>([]);
+            return new ValueTask<Result<ThermostatEvent[], PipelineError>>(
+                Result<ThermostatEvent[], PipelineError>.Ok([]));
         };
 
         var runtime = new AutomatonRuntime<Thermostat, ThermostatState, ThermostatEvent, ThermostatEffect>(
@@ -292,10 +298,12 @@ public class RuntimeTests
         {
             if (effect is ThermostatEffect.SendNotification)
             {
-                return new ValueTask<ThermostatEvent[]>(
-                    [new ThermostatEvent.AlertRaised("loop")]);
+                return new ValueTask<Result<ThermostatEvent[], PipelineError>>(
+                    Result<ThermostatEvent[], PipelineError>.Ok(
+                    [new ThermostatEvent.AlertRaised("loop")]));
             }
-            return new ValueTask<ThermostatEvent[]>([]);
+            return new ValueTask<Result<ThermostatEvent[], PipelineError>>(
+                Result<ThermostatEvent[], PipelineError>.Ok([]));
         };
 
         var runtime = new AutomatonRuntime<Thermostat, ThermostatState, ThermostatEvent, ThermostatEffect>(
@@ -436,10 +444,12 @@ public class RuntimeTests
             if (effect is ThermostatEffect.ActivateHeater && feedbackCount == 0)
             {
                 feedbackCount++;
-                return new ValueTask<ThermostatEvent[]>(
-                    [new ThermostatEvent.TemperatureRecorded(19m)]);
+                return new ValueTask<Result<ThermostatEvent[], PipelineError>>(
+                    Result<ThermostatEvent[], PipelineError>.Ok(
+                    [new ThermostatEvent.TemperatureRecorded(19m)]));
             }
-            return new ValueTask<ThermostatEvent[]>([]);
+            return new ValueTask<Result<ThermostatEvent[], PipelineError>>(
+                Result<ThermostatEvent[], PipelineError>.Ok([]));
         };
 
         var runtime = new AutomatonRuntime<Thermostat, ThermostatState, ThermostatEvent, ThermostatEffect>(
@@ -506,6 +516,7 @@ public class RuntimeTests
             {
                 dispatchStarted.SetResult();
                 await allowDispatchToFinish.Task;
+                return Result<Unit, PipelineError>.Ok(Unit.Value);
             };
 
         var runtime = new AutomatonRuntime<Thermostat, ThermostatState, ThermostatEvent, ThermostatEffect>(
