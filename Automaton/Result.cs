@@ -232,8 +232,8 @@ public readonly struct Result<TSuccess, TError>
 /// is not expressible. <c>Result&lt;Unit, E&gt;</c> fills this gap.
 /// </para>
 /// <para>
-/// <c>Unit</c> is a readonly struct with zero size — the JIT optimizes it away
-/// entirely. There is no runtime cost compared to <c>void</c>.
+/// <c>Unit</c> is a readonly struct with no fields — the JIT can optimize away
+/// copies and storage. There is effectively no runtime cost compared to <c>void</c>.
 /// </para>
 /// <example>
 /// <code>

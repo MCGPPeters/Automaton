@@ -769,23 +769,40 @@ public sealed class AutomatonRuntime<TAutomaton, TState, TEvent, TEffect> : IDis
 
     /// <summary>
     /// Interprets an effect for the public InterpretEffect method (returns void-ValueTask).
-    /// Delegates to the Result-returning version and unwraps.
+    /// Delegates to the Result-returning version and throws on pipeline errors.
     /// </summary>
+    /// <remarks>
+    /// This is called from <see cref="Start"/> for init effects and from the public
+    /// <see cref="InterpretEffect"/>. Pipeline errors surface as exceptions because
+    /// these callers have no Result return channel.
+    /// </remarks>
     private ValueTask InterpretEffectCore(TEffect effect, CancellationToken cancellationToken, int depth = 0)
     {
         var resultTask = InterpretEffectCoreWithResult(effect, cancellationToken, depth);
         if (resultTask.IsCompletedSuccessfully)
+        {
+            var result = resultTask.Result;
+            if (result.IsErr)
+                ThrowInterpreterPipelineError(result.Error);
             return ValueTask.CompletedTask;
+        }
 
         return AwaitInterpretEffectCoreUnwrap(resultTask);
     }
+
+    /// <summary>
+    /// Surfaces interpreter pipeline errors as exceptions for callers without a Result channel.
+    /// </summary>
+    private static void ThrowInterpreterPipelineError(PipelineError error) =>
+        throw new InvalidOperationException($"Interpreter pipeline failed: {error}", error.Exception);
 
     [AsyncMethodBuilder(typeof(PoolingAsyncValueTaskMethodBuilder))]
     private static async ValueTask AwaitInterpretEffectCoreUnwrap(
         ValueTask<Result<Unit, PipelineError>> resultTask)
     {
-        // InterpretEffect (public) ignores errors — they propagate via Dispatch
-        await resultTask.ConfigureAwait(false);
+        var result = await resultTask.ConfigureAwait(false);
+        if (result.IsErr)
+            ThrowInterpreterPipelineError(result.Error);
     }
 }
 
@@ -953,6 +970,8 @@ public static class ObserverExtensions
     /// Analogous to applicative (<c>&lt;*&gt;</c>) — "run both, combine results."
     /// Useful when both observers must run (e.g., persist AND log) even if one fails.
     /// If both fail, the first error is returned.
+    /// Observers execute sequentially to preserve ordering guarantees and avoid
+    /// races when observers touch shared resources.
     /// </remarks>
     public static Observer<TState, TEvent, TEffect> Combine<TState, TEvent, TEffect>(
         this Observer<TState, TEvent, TEffect> first,
@@ -960,28 +979,43 @@ public static class ObserverExtensions
         (state, @event, effect) =>
         {
             var t1 = first(state, @event, effect);
-            var t2 = second(state, @event, effect);
-
-            if (t1.IsCompletedSuccessfully && t2.IsCompletedSuccessfully)
+            if (t1.IsCompletedSuccessfully)
             {
                 var r1 = t1.Result;
-                var r2 = t2.Result;
-                // First error wins
-                return r1.IsErr
-                    ? new ValueTask<Result<Unit, PipelineError>>(r1)
-                    : new ValueTask<Result<Unit, PipelineError>>(r2);
+                var t2 = second(state, @event, effect);
+                if (t2.IsCompletedSuccessfully)
+                {
+                    var r2 = t2.Result;
+                    return r1.IsErr
+                        ? new ValueTask<Result<Unit, PipelineError>>(r1)
+                        : new ValueTask<Result<Unit, PipelineError>>(r2);
+                }
+
+                return AwaitSecondThenCombine(r1, t2);
             }
 
-            return AwaitBothThenCombine(t1, t2);
+            return AwaitFirstThenRunSecondThenCombine(t1, second, state, @event, effect);
         };
 
     [AsyncMethodBuilder(typeof(PoolingAsyncValueTaskMethodBuilder<>))]
-    private static async ValueTask<Result<Unit, PipelineError>> AwaitBothThenCombine(
-        ValueTask<Result<Unit, PipelineError>> t1,
+    private static async ValueTask<Result<Unit, PipelineError>> AwaitSecondThenCombine(
+        Result<Unit, PipelineError> r1,
         ValueTask<Result<Unit, PipelineError>> t2)
     {
-        var r1 = await t1.ConfigureAwait(false);
         var r2 = await t2.ConfigureAwait(false);
+        return r1.IsErr ? r1 : r2;
+    }
+
+    [AsyncMethodBuilder(typeof(PoolingAsyncValueTaskMethodBuilder<>))]
+    private static async ValueTask<Result<Unit, PipelineError>> AwaitFirstThenRunSecondThenCombine<TState, TEvent, TEffect>(
+        ValueTask<Result<Unit, PipelineError>> t1,
+        Observer<TState, TEvent, TEffect> second,
+        TState state,
+        TEvent @event,
+        TEffect effect)
+    {
+        var r1 = await t1.ConfigureAwait(false);
+        var r2 = await second(state, @event, effect).ConfigureAwait(false);
         return r1.IsErr ? r1 : r2;
     }
 }
@@ -1014,6 +1048,10 @@ public static class InterpreterExtensions
     /// Composes two interpreters sequentially: <paramref name="first"/> runs, then <paramref name="second"/>.
     /// Feedback events from both are concatenated. Short-circuits on error.
     /// </summary>
+    /// <remarks>
+    /// Optimizes for the common case where one interpreter returns an empty array —
+    /// avoids allocating a concatenated array when one side has nothing to contribute.
+    /// </remarks>
     public static Interpreter<TEffect, TEvent> Then<TEffect, TEvent>(
         this Interpreter<TEffect, TEvent> first,
         Interpreter<TEffect, TEvent> second) =>
@@ -1026,21 +1064,33 @@ public static class InterpreterExtensions
                 if (r1.IsErr)
                     return new ValueTask<Result<TEvent[], PipelineError>>(r1);
 
+                var firstEvents = r1.Value;
                 var t2 = second(effect);
                 if (t2.IsCompletedSuccessfully)
                 {
                     var r2 = t2.Result;
                     if (r2.IsErr)
                         return new ValueTask<Result<TEvent[], PipelineError>>(r2);
+
+                    var secondEvents = r2.Value;
+                    var combined = ConcatEvents(firstEvents, secondEvents);
                     return new ValueTask<Result<TEvent[], PipelineError>>(
-                        Result<TEvent[], PipelineError>.Ok([.. r1.Value, .. r2.Value]));
+                        Result<TEvent[], PipelineError>.Ok(combined));
                 }
 
-                return AwaitSecondInterpreter(r1.Value, t2);
+                return AwaitSecondInterpreter(firstEvents, t2);
             }
 
             return AwaitFirstThenSecondInterpreter(t1, second, effect);
         };
+
+    /// <summary>
+    /// Concatenates two event arrays, optimizing for the common case where one is empty.
+    /// </summary>
+    private static TEvent[] ConcatEvents<TEvent>(TEvent[] first, TEvent[] second) =>
+        first.Length == 0 ? second
+        : second.Length == 0 ? first
+        : [.. first, .. second];
 
     [AsyncMethodBuilder(typeof(PoolingAsyncValueTaskMethodBuilder<>))]
     private static async ValueTask<Result<TEvent[], PipelineError>> AwaitSecondInterpreter<TEvent>(
@@ -1050,7 +1100,7 @@ public static class InterpreterExtensions
         var r2 = await secondTask.ConfigureAwait(false);
         return r2.IsErr
             ? r2
-            : Result<TEvent[], PipelineError>.Ok([.. firstEvents, .. r2.Value]);
+            : Result<TEvent[], PipelineError>.Ok(ConcatEvents(firstEvents, r2.Value));
     }
 
     [AsyncMethodBuilder(typeof(PoolingAsyncValueTaskMethodBuilder<>))]
@@ -1066,7 +1116,7 @@ public static class InterpreterExtensions
         var r2 = await second(effect).ConfigureAwait(false);
         return r2.IsErr
             ? r2
-            : Result<TEvent[], PipelineError>.Ok([.. r1.Value, .. r2.Value]);
+            : Result<TEvent[], PipelineError>.Ok(ConcatEvents(r1.Value, r2.Value));
     }
 
     /// <summary>
