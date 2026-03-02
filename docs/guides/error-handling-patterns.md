@@ -1,6 +1,6 @@
 # Error Handling Patterns
 
-How to work with `Result<TSuccess, TError>` — matching, mapping, chaining, and building pipelines.
+How to work with `Result<TSuccess, TError>` — inspecting, mapping, chaining, and building pipelines.
 
 ## The Basics
 
@@ -11,43 +11,9 @@ var ok = Result<int, string>.Ok(42);
 var err = Result<int, string>.Err("something went wrong");
 ```
 
-## Pattern Matching with Match
+## Inspecting Results
 
-`Match` forces you to handle both cases:
-
-```csharp
-var message = result.Match(
-    value => $"Success: {value}",
-    error => $"Failed: {error}");
-```
-
-### Async Match
-
-```csharp
-var response = await result.Match(
-    async events => await persistEventsAsync(events),
-    async error => await logErrorAsync(error));
-```
-
-### With DecidingRuntime
-
-```csharp
-var result = await runtime.Handle(new CounterCommand.Add(5));
-
-var response = result.Match(
-    state => Ok($"Count is now {state.Count}"),
-    error => error switch
-    {
-        CounterError.Overflow o => BadRequest($"Would exceed max: {o.Current} + {o.Amount} > {o.Max}"),
-        CounterError.Underflow u => BadRequest($"Would go below zero: {u.Current} + {u.Amount}"),
-        CounterError.AlreadyAtZero => BadRequest("Counter is already at zero"),
-        _ => InternalError("Unexpected error")
-    });
-```
-
-## Checking Without Matching
-
-For simple checks, use `IsOk` / `IsErr` and `Value` / `Error`:
+Use `IsOk` / `IsErr` and `Value` / `Error`:
 
 ```csharp
 if (result.IsOk)
@@ -63,7 +29,27 @@ if (result.IsErr)
 }
 ```
 
-> ⚠️ Accessing `Value` on an `Err` or `Error` on an `Ok` throws `InvalidOperationException`. Always check first, or use `Match`.
+> ⚠️ Accessing `Value` on an `Err` or `Error` on an `Ok` throws `InvalidOperationException`. Always check first.
+
+### With DecidingRuntime
+
+```csharp
+var result = await runtime.Handle(new CounterCommand.Add(5));
+
+if (result.IsOk)
+{
+    var state = result.Value;
+    return Ok($"Count is now {state.Count}");
+}
+
+return result.Error switch
+{
+    CounterError.Overflow o => BadRequest($"Would exceed max: {o.Current} + {o.Amount} > {o.Max}"),
+    CounterError.Underflow u => BadRequest($"Would go below zero: {u.Current} + {u.Amount}"),
+    CounterError.AlreadyAtZero => BadRequest("Counter is already at zero"),
+    _ => InternalError("Unexpected error")
+};
+```
 
 ## Transforming with Map
 
@@ -126,6 +112,30 @@ var result = parseInput(raw)          // Result<RawData, Error>
 
 Each step only runs if the previous one succeeded. Errors propagate automatically.
 
+## LINQ Query Syntax
+
+Result implements `Select` (functor) and `SelectMany` (monad), enabling LINQ query syntax:
+
+```csharp
+var result =
+    from raw in parseInput(input)        // Result<RawData, Error>
+    from valid in validate(raw)          // Result<ValidData, Error>
+    select toCommand(valid);             // Result<Command, Error>
+// Short-circuits on first Err
+```
+
+This is equivalent to the `Bind` chain above but can be more readable for multi-step pipelines.
+
+### Combining Multiple Results
+
+```csharp
+var result =
+    from user in FindUser(id)
+    from account in GetAccount(user.AccountId)
+    from balance in CheckBalance(account, amount)
+    select new Transfer(user, account, balance);
+```
+
 ## Transforming Errors with MapError
 
 `MapError` transforms the error value, leaving success untouched:
@@ -160,15 +170,16 @@ public async Task<IActionResult> HandleCommand(CounterCommand command)
 {
     var result = await runtime.Handle(command);
 
-    return result.Match<IActionResult>(
-        state => Ok(new { state.Count }),
-        error => error switch
-        {
-            CounterError.Overflow => BadRequest("Counter would overflow"),
-            CounterError.Underflow => BadRequest("Counter would underflow"),
-            CounterError.AlreadyAtZero => Conflict("Counter is already at zero"),
-            _ => StatusCode(500)
-        });
+    if (result.IsOk)
+        return Ok(new { result.Value.Count });
+
+    return result.Error switch
+    {
+        CounterError.Overflow => BadRequest("Counter would overflow"),
+        CounterError.Underflow => BadRequest("Counter would underflow"),
+        CounterError.AlreadyAtZero => Conflict("Counter is already at zero"),
+        _ => StatusCode(500)
+    };
 }
 ```
 
@@ -177,18 +188,49 @@ public async Task<IActionResult> HandleCommand(CounterCommand command)
 ```csharp
 public async Task<IActionResult> AddToCounter(AddRequest request)
 {
-    return ValidateRequest(request)                    // Result<CounterCommand, ValidationError>
-        .MapError(e => (IActionResult)BadRequest(e))   // Result<CounterCommand, IActionResult>
-        .Match(
-            async cmd =>
-            {
-                var result = await runtime.Handle(cmd);
-                return result.Match<IActionResult>(
-                    state => Ok(new { state.Count }),
-                    error => UnprocessableEntity(error));
-            },
-            error => Task.FromResult(error));
+    var validation = ValidateRequest(request); // Result<CounterCommand, ValidationError>
+
+    if (validation.IsErr)
+        return BadRequest(validation.Error);
+
+    var result = await runtime.Handle(validation.Value);
+
+    if (result.IsOk)
+        return Ok(new { result.Value.Count });
+
+    return UnprocessableEntity(result.Error);
 }
+```
+
+## Pipeline Error Handling
+
+Observer and Interpreter pipelines return `Result<T, PipelineError>`. Handle dispatch errors:
+
+```csharp
+var dispatchResult = await runtime.Dispatch(new CounterEvent.Increment());
+
+if (dispatchResult.IsErr)
+{
+    var error = dispatchResult.Error;
+    logger.Error("Pipeline failed at {Source}: {Message}",
+        error.Source, error.Message);
+
+    if (error.Exception is not null)
+        logger.Error(error.Exception, "Underlying exception");
+}
+```
+
+### Recovering from Pipeline Errors
+
+Use `Catch` on observers/interpreters to handle errors at the pipeline level:
+
+```csharp
+var resilientPipeline = persister
+    .Catch(err => err.Source switch
+    {
+        "database" => Result<Unit, PipelineError>.Ok(Unit.Value), // retry later
+        _ => Result<Unit, PipelineError>.Err(err) // propagate other errors
+    });
 ```
 
 ## See Also

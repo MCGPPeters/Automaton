@@ -163,11 +163,12 @@ Observer<CounterState, CounterEvent, CounterEffect> observer =
     (state, @event, effect) =>
     {
         Console.WriteLine($"{@event.GetType().Name} → {state}");
-        return ValueTask.CompletedTask;
+        return PipelineResult.Ok;
     };
 
 Interpreter<CounterEffect, CounterEvent> interpreter =
-    _ => new ValueTask<CounterEvent[]>([]);
+    _ => new ValueTask<Result<CounterEvent[], PipelineError>>(
+        Result<CounterEvent[], PipelineError>.Ok([]));
 
 var runtime = await DecidingRuntime<Counter, CounterState, CounterCommand,
     CounterEvent, CounterEffect, CounterError>.Start(observer, interpreter);

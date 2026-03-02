@@ -161,8 +161,8 @@ The `AutomatonRuntime` executes the automaton loop. You give it two callbacks:
 
 | Callback | Signature | Purpose |
 | -------- | --------- | ------- |
-| **Observer** | `(State, Event, Effect) → Task` | Called after each transition — render, persist, log |
-| **Interpreter** | `Effect → ValueTask<Event[]>` | Converts effects to feedback events |
+| **Observer** | `(State, Event, Effect) → ValueTask<Result<Unit, PipelineError>>` | Called after each transition — render, persist, log |
+| **Interpreter** | `Effect → ValueTask<Result<Event[], PipelineError>>` | Converts effects to feedback events |
 
 ```csharp
 using Automaton;
@@ -172,24 +172,25 @@ var runtime = await AutomatonRuntime<Thermostat, ThermostatState, ThermostatEven
         observer: (state, @event, effect) =>
         {
             Console.WriteLine($"[{@event.GetType().Name}] → {state} | Effect: {effect}");
-            return ValueTask.CompletedTask;
+            return PipelineResult.Ok;
         },
-        interpreter: effect => new ValueTask<ThermostatEvent[]>(effect switch
-        {
-            // Simulate hardware: turning heater on → confirm it started
-            ThermostatEffect.TurnOnHeater =>
-                [new ThermostatEvent.HeaterStarted()],
+        interpreter: effect => new ValueTask<Result<ThermostatEvent[], PipelineError>>(
+            Result<ThermostatEvent[], PipelineError>.Ok(effect switch
+            {
+                // Simulate hardware: turning heater on → confirm it started
+                ThermostatEffect.TurnOnHeater =>
+                    [new ThermostatEvent.HeaterStarted()],
 
-            // Simulate hardware: turning heater off → confirm it stopped
-            ThermostatEffect.TurnOffHeater =>
-                [new ThermostatEvent.HeaterStopped()],
+                // Simulate hardware: turning heater off → confirm it stopped
+                ThermostatEffect.TurnOffHeater =>
+                    [new ThermostatEvent.HeaterStopped()],
 
-            // Alert: fire-and-forget, no feedback
-            ThermostatEffect.SendAlert(var message) => [],
+                // Alert: fire-and-forget, no feedback
+                ThermostatEffect.SendAlert(var message) => [],
 
-            // No-op
-            _ => []
-        }));
+                // No-op
+                _ => []
+            })));
 ```
 
 **This is the key insight.** The interpreter closes the loop:
@@ -282,7 +283,7 @@ Observer<ThermostatState, ThermostatEvent, ThermostatEffect> logger =
     (state, @event, effect) =>
     {
         Console.WriteLine($"[LOG] {@event.GetType().Name} → {state}");
-        return ValueTask.CompletedTask;
+        return PipelineResult.Ok;
     };
 
 Observer<ThermostatState, ThermostatEvent, ThermostatEffect> alertCapture =
@@ -290,14 +291,14 @@ Observer<ThermostatState, ThermostatEvent, ThermostatEffect> alertCapture =
     {
         if (effect is ThermostatEffect.SendAlert(var message))
             Console.WriteLine($"🚨 ALERT: {message}");
-        return ValueTask.CompletedTask;
+        return PipelineResult.Ok;
     };
 
 Observer<ThermostatState, ThermostatEvent, ThermostatEffect> metrics =
     (state, @event, effect) =>
     {
         // Record metrics: track heater on/off cycles, alert frequency, etc.
-        return ValueTask.CompletedTask;
+        return PipelineResult.Ok;
     };
 
 var combined = logger.Then(alertCapture).Then(metrics);
@@ -306,7 +307,7 @@ var runtime = await AutomatonRuntime<Thermostat, ThermostatState, ThermostatEven
     .Start(combined, interpreter);
 ```
 
-All three observers run sequentially for each transition.
+All three observers run sequentially for each transition. If any returns `Err`, subsequent observers are skipped (short-circuit via `Then`). See [Observer Composition](../guides/observer-composition.md) for `Where`, `Catch`, `Combine`, and other combinators.
 
 ## Why Effects as Data?
 

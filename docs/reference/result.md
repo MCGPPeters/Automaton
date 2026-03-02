@@ -39,32 +39,6 @@ Creates a failed result containing an error.
 
 ## Methods
 
-### Match
-
-```csharp
-public TResult Match<TResult>(
-    Func<TSuccess, TResult> onOk,
-    Func<TError, TResult> onErr)
-```
-
-Exhaustive pattern match over both cases. Forces the caller to handle success and error explicitly.
-
-```csharp
-var text = result.Match(
-    value => $"Success: {value}",
-    error => $"Failed: {error}");
-```
-
-### Match (Async)
-
-```csharp
-public Task<TResult> Match<TResult>(
-    Func<TSuccess, Task<TResult>> onOk,
-    Func<TError, Task<TResult>> onErr)
-```
-
-Async variant for when handlers need to perform I/O.
-
 ### Map
 
 ```csharp
@@ -74,8 +48,22 @@ public Result<TNew, TError> Map<TNew>(Func<TSuccess, TNew> f)
 Maps a function over the success value (functor). If this is Ok, applies `f` to the value. If this is Err, propagates the error unchanged.
 
 ```csharp
-Result<int, string>.Ok(21).Map(v => v * 2)   // Ok(42)
-Result<int, string>.Err("fail").Map(v => v * 2) // Err("fail")
+Result<int, string>.Ok(21).Map(v => v * 2)      // Ok(42)
+Result<int, string>.Err("fail").Map(v => v * 2)  // Err("fail")
+```
+
+### Select (LINQ)
+
+```csharp
+public Result<TNew, TError> Select<TNew>(Func<TSuccess, TNew> f)
+```
+
+LINQ-compatible alias for `Map`. Enables `select` clauses in LINQ query syntax.
+
+```csharp
+var doubled = from v in Result<int, string>.Ok(21)
+              select v * 2;
+// Ok(42)
 ```
 
 ### Bind
@@ -92,6 +80,25 @@ Result<int, string>.Ok(21)
         ? Result<string, string>.Err("too large")
         : Result<string, string>.Ok($"value: {v * 2}"))
 // Ok("value: 42")
+```
+
+### SelectMany (LINQ)
+
+```csharp
+public Result<TResult, TError> SelectMany<TNew, TResult>(
+    Func<TSuccess, Result<TNew, TError>> bind,
+    Func<TSuccess, TNew, TResult> project)
+```
+
+LINQ monadic bind with projection. Enables multi-`from` LINQ query syntax for composing multiple Result-returning operations:
+
+```csharp
+var result =
+    from a in Parse("21")
+    from b in Parse("21")
+    select a + b;
+// Ok(42) — if both succeed
+// Err(error) — short-circuits on first failure
 ```
 
 ### MapError
@@ -126,16 +133,27 @@ It supports:
 
 | Operation | Algebraic name | Signature |
 | --------- | -------------- | --------- |
-| `Map` | Functor | `(T → U) → Result<T, E> → Result<U, E>` |
-| `Bind` | Monad | `(T → Result<U, E>) → Result<T, E> → Result<U, E>` |
+| `Map` / `Select` | Functor | `(T → U) → Result<T, E> → Result<U, E>` |
+| `Bind` / `SelectMany` | Monad | `(T → Result<U, E>) → Result<T, E> → Result<U, E>` |
 | `MapError` | Bifunctor (right) | `(E → F) → Result<T, E> → Result<T, F>` |
-| `Match` | Eliminator | `(T → R, E → R) → Result<T, E> → R` |
+
+## LINQ Query Syntax
+
+Result implements `Select` and `SelectMany`, making it a LINQ monad. This allows composing multiple Result-returning operations using familiar C# query syntax:
+
+```csharp
+var result =
+    from user in FindUser(id)           // Result<User, Error>
+    from order in GetOrder(user.OrderId) // Result<Order, Error>
+    select new Summary(user.Name, order.Total);
+// Result<Summary, Error> — short-circuits on first Err
+```
 
 ## Implementation Notes
 
 - `Result` is a `readonly struct` — each instance is stack-allocated, eliminating 24 bytes of heap allocation per Decide and Handle call.
 - A `bool` discriminator replaces virtual dispatch — no interface overhead.
-- The `Value` and `Error` properties throw on invalid access. Prefer `Match` for safe exhaustive handling.
+- The `Value` and `Error` properties throw on invalid access. Prefer `IsOk`/`IsErr` checks, `Map`/`Bind` chains, or LINQ query syntax for safe handling.
 
 ## See Also
 

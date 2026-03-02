@@ -32,7 +32,7 @@ The Automaton kernel provides one interface. This page helps you choose the righ
 
 ```csharp
 // MVU: Observer renders, Interpreter handles effects
-Observer = (state, _, _) => { views.Add(render(state)); return ValueTask.CompletedTask; };
+Observer = (state, _, _) => { views.Add(render(state)); return PipelineResult.Ok; };
 Interpreter = effect => executeAndReturnFeedbackEvents(effect);
 ```
 
@@ -51,8 +51,9 @@ Interpreter = effect => executeAndReturnFeedbackEvents(effect);
 
 ```csharp
 // ES: Observer persists events, Interpreter is no-op
-Observer = (_, event, _) => { store.Append(event); return ValueTask.CompletedTask; };
-Interpreter = _ => new ValueTask<TEvent[]>([]);
+Observer = (_, event, _) => { store.Append(event); return PipelineResult.Ok; };
+Interpreter = _ => new ValueTask<Result<TEvent[], PipelineError>>(
+    Result<TEvent[], PipelineError>.Ok([]));
 ```
 
 ### Actor — Concurrent Isolated Processes
@@ -70,8 +71,8 @@ Interpreter = _ => new ValueTask<TEvent[]>([]);
 
 ```csharp
 // Actor: Observer is no-op, Interpreter executes effects with self-reference
-Observer = (_, _, _) => ValueTask.CompletedTask;
-Interpreter = async effect => { await handler(effect, selfRef); return []; };
+Observer = (_, _, _) => PipelineResult.Ok;
+Interpreter = async effect => { await handler(effect, selfRef); return Result<TEvent[], PipelineError>.Ok([]); };
 ```
 
 ## Decision Flowchart
