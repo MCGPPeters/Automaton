@@ -2,6 +2,8 @@
 
 Add distributed tracing to your automaton with zero external dependencies.
 
+> **API reference:** For the complete span and tag inventory, see [Diagnostics Reference](../reference/diagnostics.md).
+
 ## What You'll Learn
 
 - How the Automaton emits tracing spans via `System.Diagnostics.ActivitySource`
@@ -242,3 +244,13 @@ You now have full observability into your automaton runtimes:
 - **Zero dependencies** in the library itself
 
 This works identically across all runtimes — MVU, Event Sourcing, and Actors all inherit tracing from the shared `AutomatonRuntime`.
+
+### Deepen Your Understanding
+
+| Topic | Link |
+| ----- | ---- |
+| Full span and tag inventory | [Diagnostics Reference](../reference/diagnostics.md) |
+| Runtime internals that emit spans | [Runtime Reference](../reference/runtime.md) |
+| DecidingRuntime Handle spans | [Decider Reference](../reference/decider.md) |
+| Testing strategies including tracing | [Testing Strategies](../guides/testing-strategies.md) |
+| Choosing a runtime | [Runtimes Compared](../concepts/runtimes-compared.md) |

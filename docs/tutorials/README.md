@@ -1,40 +1,57 @@
 # Tutorials
 
-Step-by-step guides for building systems with the Automaton kernel.
+End-to-end walkthroughs that build complete working systems on the Automaton kernel. Each tutorial starts from scratch and ends with running, tested code.
+
+> **New to Automaton?** Start with the [Quick Start](../getting-started/index.md) for a 5-minute introduction, then come back here for deeper dives.
 
 ## Prerequisites
 
-- .NET 10.0 SDK
+- .NET 10.0 SDK ([installation guide](../getting-started/installation.md))
 - `dotnet add package Automaton`
 
 ## Tutorials
 
-| # | Tutorial | What You'll Build |
-|---|----------|-------------------|
-| 01 | [Getting Started](01-getting-started.md) | Your first automaton — a counter with state, events, and effects |
-| 02 | [Building an MVU Runtime](02-mvu-runtime.md) | A Model-View-Update loop that renders views and handles effects |
-| 03 | [Building an Event-Sourced Aggregate](03-event-sourced-aggregate.md) | A command-driven aggregate with event store, replay, and projections |
-| 04 | [Building an Actor System](04-actor-system.md) | A mailbox actor with channels, fire-and-forget messaging, and effect callbacks |
-| 05 | [Command Validation with the Decider](05-command-validation.md) | Domain validation using the Decider pattern and the Result type |
-| 06 | [Observability with OpenTelemetry](06-observability.md) | Distributed tracing with zero external dependencies |
+| # | Tutorial | What You'll Build | Concepts Used |
+|---|----------|-------------------|---------------|
+| 01 | [Getting Started](01-getting-started.md) | A smart thermostat with feedback loop | [Kernel](../concepts/the-kernel.md), [Runtime](../concepts/the-runtime.md) |
+| 02 | [MVU Runtime](02-mvu-runtime.md) | A Model-View-Update loop with view history | [Kernel](../concepts/the-kernel.md), [Observer composition](../guides/observer-composition.md) |
+| 03 | [Event-Sourced Aggregate](03-event-sourced-aggregate.md) | Command-driven aggregate with replay and projections | [Decider](../concepts/the-decider.md), [Error handling](../guides/error-handling-patterns.md) |
+| 04 | [Actor System](04-actor-system.md) | Mailbox actor with channels and fire-and-forget | [Kernel](../concepts/the-kernel.md), [Custom runtimes](../guides/building-custom-runtimes.md) |
+| 05 | [Command Validation](05-command-validation.md) | Domain validation with the Decider and Result | [Decider](../concepts/the-decider.md), [Result](../reference/result.md) |
+| 06 | [Observability](06-observability.md) | Distributed tracing with zero dependencies | [Diagnostics](../reference/diagnostics.md) |
 
 ## The Big Idea
 
-Every tutorial builds on the **same kernel**:
+Every tutorial builds on the **same kernel** — a [Mealy machine](../concepts/the-kernel.md):
 
 ```text
 transition : (State × Event) → (State × Effect)
 ```
 
-You write your domain logic once as a pure transition function. Each tutorial shows a different runtime that executes that function — MVU, Event Sourcing, or Actors — without changing a single line of domain code.
+You write your domain logic once as a pure transition function. Each tutorial shows a different runtime that executes that function — MVU, Event Sourcing, or Actors — without changing a single line of domain code. See [Runtimes Compared](../concepts/runtimes-compared.md) for help choosing.
 
 ## Recommended Reading Order
 
-1. Start with **[Getting Started](01-getting-started.md)** — this introduces the kernel and the shared runtime.
-2. Pick any of tutorials 02–04 based on your runtime pattern.
-3. Read **[Command Validation](05-command-validation.md)** when you need to validate commands before producing events.
-4. Add **[Observability](06-observability.md)** when you're ready for production tracing.
+```text
+Getting Started (01)
+        │
+        ├──► MVU Runtime (02)
+        ├──► Event-Sourced Aggregate (03) ──► Command Validation (05)
+        └──► Actor System (04)
+                                                      │
+                                              Observability (06) ◄──┘
+```
 
-## See Also
+1. **[Getting Started](01-getting-started.md)** — the kernel and the shared runtime.
+2. **Pick your runtime** — 02, 03, or 04 based on your pattern.
+3. **[Command Validation](05-command-validation.md)** — when you need to validate before producing events.
+4. **[Observability](06-observability.md)** — production tracing across all runtimes.
 
-- [Architecture Decision Records](../adr/) — design rationale with mathematical grounding
+## What to Read Next
+
+| If you want to… | Read |
+| ---------------- | ---- |
+| Understand the theory | [Concepts](../concepts/index.md) |
+| Solve a specific problem | [How-To Guides](../guides/index.md) |
+| Look up an API | [Reference](../reference/index.md) |
+| See design rationale | [Architecture Decision Records](../adr/) |

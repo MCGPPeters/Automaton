@@ -2,14 +2,16 @@
 
 Build your first automaton — a smart thermostat with state, events, effects, and a feedback loop.
 
+> **Theory reference:** This tutorial walks through the concepts explained in [The Kernel](../concepts/the-kernel.md) and [The Runtime](../concepts/the-runtime.md). Read those first for the theory, or follow this tutorial for a hands-on introduction.
+
 ## What You'll Learn
 
-- How the Automaton kernel works
+- How the [Automaton kernel](../concepts/the-kernel.md) works
 - How to define state, events, and effects
 - How to write a pure transition function
-- How to start a runtime and dispatch events
-- How the interpreter closes the loop by turning effects into feedback events
-- How observer composition works
+- How to start a [runtime](../concepts/the-runtime.md) and dispatch events
+- How the [interpreter](../reference/runtime.md#interpreter) closes the loop by turning effects into feedback events
+- How [observer composition](../guides/observer-composition.md) works
 
 ## The Kernel
 
@@ -338,4 +340,13 @@ You now have a running automaton with real effects and a feedback loop. The same
 - **[Event-Sourced Aggregate](03-event-sourced-aggregate.md)** — Persist temperature events and rebuild state
 - **[Actor System](04-actor-system.md)** — Process sensor readings from a mailbox
 
-That's the power of the kernel: write your domain logic once, run it everywhere.
+That's the power of the kernel: write your domain logic once, run it everywhere. See [Runtimes Compared](../concepts/runtimes-compared.md) for help choosing.
+
+### Deepen Your Understanding
+
+| Topic | Link |
+| ----- | ---- |
+| How the kernel works formally | [The Kernel](../concepts/the-kernel.md) |
+| Observer + Interpreter architecture | [The Runtime](../concepts/the-runtime.md) |
+| Testing pure functions and runtimes | [Testing Strategies](../guides/testing-strategies.md) |
+| Full API signatures | [Automaton Reference](../reference/automaton.md), [Runtime Reference](../reference/runtime.md) |
