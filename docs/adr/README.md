@@ -14,7 +14,7 @@ Each ADR also includes a **Mathematical Grounding** section that describes the f
 |-----|-------|--------|---------|
 | [001](001-automaton-kernel-mealy-machine.md) | Automaton Kernel as Mealy Machine | Accepted | The kernel is a Mealy machine: `transition : (State × Event) → (State × Effect)` |
 | [002](002-shared-runtime-monadic-left-fold.md) | Shared Runtime as Monadic Left Fold | Accepted | All runtimes are a monadic left fold parameterized by Observer + Interpreter |
-| [003](003-result-type-algebraic-sum.md) | Result Type as Algebraic Sum Type | Accepted | `Result<T, E> ≅ T + E` with functor (Map), monad (Bind), exhaustive matching |
+| [003](003-result-type-algebraic-sum.md) | Result Type as Algebraic Sum Type | Accepted | `Result<T, E> ≅ T + E` with functor (Map/Select), monad (Bind/SelectMany), LINQ query syntax |
 | [004](004-decider-pattern-command-validation.md) | Decider Pattern for Command Validation | Accepted | Decide is a Kleisli arrow: `Command → State → Result<Events, Error>` |
 
 ### Runtimes
@@ -33,6 +33,7 @@ Each ADR also includes a **Mathematical Grounding** section that describes the f
 | [009](009-opentelemetry-tracing-diagnostics.md) | OpenTelemetry Tracing | Accepted | Zero-dependency tracing via `System.Diagnostics.ActivitySource` with five span types |
 | [010](010-example-runtimes-reference-implementations.md) | Example Runtimes as Reference Implementations | Accepted | MVU, ES, Actor moved from core library to test project |
 | [011](011-performance-optimizations-allocation-reduction.md) | Performance Optimizations | Accepted | Async elision, struct Result, TEvent[] narrowing — Handle accept −28%, reject −50% |
+| [012](012-linq-query-syntax-remove-match.md) | LINQ Query Syntax, Remove Match | Accepted | Add Select/SelectMany for LINQ monad comprehension, remove Match methods |
 
 ## Mathematical Concepts by ADR
 
@@ -46,7 +47,7 @@ Each ADR also includes a **Mathematical Grounding** section that describes the f
 | Kleisli arrow | 002, 004 | Interpreter, Decide function |
 | Sum type / coproduct | 003 | `Result<T, E> ≅ T + E` |
 | Functor | 003 | `Result.Map` |
-| Monad | 003 | `Result.Bind` |
+| Monad | 003, 012 | `Result.Bind`, `Result.SelectMany`, LINQ query syntax |
 | Bifunctor | 003 | `Result.MapError` |
 | Free monoid | 006 | Event store as `[Event]` |
 | Linearizability | 007, 008 | Sequential actor message processing, SemaphoreSlim serialization |

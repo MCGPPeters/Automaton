@@ -289,13 +289,16 @@ public class DeciderTests
     }
 
     [Fact]
-    public void Result_Match_DispatchesCorrectly()
+    public void Result_PatternMatch_DispatchesCorrectly()
     {
         var ok = Result<int, string>.Ok(42);
         var err = Result<int, string>.Err("fail");
 
-        Assert.Equal("42", ok.Match(v => v.ToString(), e => e));
-        Assert.Equal("fail", err.Match(v => v.ToString(), e => e));
+        var okMessage = ok.IsOk ? ok.Value.ToString() : ok.Error;
+        var errMessage = err.IsOk ? err.Value.ToString() : err.Error;
+
+        Assert.Equal("42", okMessage);
+        Assert.Equal("fail", errMessage);
     }
 
     [Fact]
@@ -530,20 +533,91 @@ public class DeciderTests
         Assert.Equal("Err(fail)", result.ToString());
     }
 
+    // =========================================================================
+    // LINQ Query Syntax (Monad Comprehension)
+    // =========================================================================
+
     [Fact]
-    public async Task Result_AsyncMatch_DispatchesCorrectly()
+    public void Result_Select_TransformsSuccess()
     {
-        var ok = Result<int, string>.Ok(42);
+        var ok = Result<int, string>.Ok(21);
+
+        var result = from v in ok select v * 2;
+
+        Assert.True(result.IsOk);
+        Assert.Equal(42, result.Value);
+    }
+
+    [Fact]
+    public void Result_Select_PreservesError()
+    {
         var err = Result<int, string>.Err("fail");
 
-        var okResult = await ok.Match(
-            v => Task.FromResult(v.ToString()),
-            e => Task.FromResult(e));
-        Assert.Equal("42", okResult);
+        var result = from v in err select v * 2;
 
-        var errResult = await err.Match(
-            v => Task.FromResult(v.ToString()),
-            e => Task.FromResult(e));
-        Assert.Equal("fail", errResult);
+        Assert.True(result.IsErr);
+        Assert.Equal("fail", result.Error);
     }
+
+    [Fact]
+    public void Result_SelectMany_ChainsSuccess()
+    {
+        var a = Result<int, string>.Ok(20);
+
+        var result =
+            from x in a
+            from y in Result<int, string>.Ok(x + 1)
+            select x + y;
+
+        Assert.True(result.IsOk);
+        Assert.Equal(41, result.Value);
+    }
+
+    [Fact]
+    public void Result_SelectMany_ShortCircuitsOnFirstError()
+    {
+        var err = Result<int, string>.Err("first failed");
+
+        var secondCalled = false;
+        var result =
+            from x in err
+            from y in Invoke(() => { secondCalled = true; return Result<int, string>.Ok(99); })
+            select x + y;
+
+        Assert.True(result.IsErr);
+        Assert.Equal("first failed", result.Error);
+        Assert.False(secondCalled);
+    }
+
+    [Fact]
+    public void Result_SelectMany_ShortCircuitsOnSecondError()
+    {
+        var ok = Result<int, string>.Ok(42);
+
+        var result =
+            from x in ok
+            from y in Result<int, string>.Err("second failed")
+            select x + y;
+
+        Assert.True(result.IsErr);
+        Assert.Equal("second failed", result.Error);
+    }
+
+    [Fact]
+    public void Result_SelectMany_ThreeFromClauses()
+    {
+        var result =
+            from a in Result<int, string>.Ok(1)
+            from b in Result<int, string>.Ok(2)
+            from c in Result<int, string>.Ok(3)
+            select a + b + c;
+
+        Assert.True(result.IsOk);
+        Assert.Equal(6, result.Value);
+    }
+
+    /// <summary>
+    /// Helper to track whether a function is called during LINQ short-circuiting.
+    /// </summary>
+    private static T Invoke<T>(Func<T> f) => f();
 }

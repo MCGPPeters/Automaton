@@ -196,9 +196,9 @@ Console.WriteLine(runtime.Events.Count); // still 5 (no new events dispatched)
 ```csharp
 var result = await runtime.Handle(new CounterCommand.Add(10));
 
-var message = result.Match(
-    state => $"Success! Count is now {state.Count}",
-    error => error switch
+var message = result.IsOk
+    ? $"Success! Count is now {result.Value.Count}"
+    : result.Error switch
     {
         CounterError.Overflow o =>
             $"Overflow: {o.Current} + {o.Amount} exceeds max {o.Max}",
@@ -206,8 +206,8 @@ var message = result.Match(
             $"Underflow: {u.Current} + {u.Amount} would go below zero",
         CounterError.AlreadyAtZero =>
             "Counter is already at zero",
-        _ => $"Unknown error: {error}"
-    });
+        _ => $"Unknown error: {result.Error}"
+    };
 
 Console.WriteLine(message);
 ```
@@ -229,31 +229,37 @@ public readonly struct Result<TSuccess, TError>
 }
 ```
 
-### Exhaustive Matching
+### Pattern Matching
+
+Use `IsOk`/`IsErr` with C# conditional expressions or `switch`:
 
 ```csharp
-var text = result.Match(
-    value => $"Got {value}",
-    error => $"Failed: {error}");
+var text = result.IsOk
+    ? $"Got {result.Value}"
+    : $"Failed: {result.Error}";
 ```
 
-### Map (Functor)
+### Map / Select (Functor)
 
-Transform the success value, leaving errors untouched:
+Transform the success value, leaving errors untouched. `Select` is the LINQ alias for `Map`:
 
 ```csharp
 Result<int, string> ok = Result<int, string>.Ok(21);
 Result<int, string> mapped = ok.Map(v => v * 2);
 // mapped is Ok(42)
 
+// Or using LINQ query syntax:
+var doubled = from v in ok select v * 2;
+// doubled is Ok(42)
+
 Result<int, string> err = Result<int, string>.Err("fail");
 Result<int, string> mappedErr = err.Map(v => v * 2);
 // mappedErr is still Err("fail")
 ```
 
-### Bind (Monad)
+### Bind / SelectMany (Monad)
 
-Chain operations that can themselves fail:
+Chain operations that can themselves fail. `SelectMany` is the LINQ alias for `Bind`:
 
 ```csharp
 Result<int, string> ok = Result<int, string>.Ok(21);
@@ -268,10 +274,18 @@ var result = ok.Bind(v =>
 This enables **railway-oriented programming** — errors short-circuit the entire chain:
 
 ```csharp
+// Fluent API
 var final = parseInput(raw)         // Result<int, ParseError>
     .Map(n => n * 2)                // Result<int, ParseError>
     .Bind(n => validate(n))         // Result<int, ValidationError> — ⚠️ error types must match
     .Map(n => $"Result: {n}");      // Result<string, ValidationError>
+
+// LINQ query syntax (equivalent to the above)
+var final =
+    from n in parseInput(raw)
+    let doubled = n * 2
+    from valid in validate(doubled)
+    select $"Result: {valid}";
 ```
 
 ### MapError
