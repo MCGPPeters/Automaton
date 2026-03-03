@@ -40,7 +40,7 @@ namespace Automaton;
 /// The Decider pattern separates intent (commands) from facts (events).
 /// Commands represent what the user wants to do; the <see cref="Decide"/> function
 /// validates them against the current state and produces events (or rejects them).
-/// Events then flow into <see cref="Automaton{TState,TEvent,TEffect}.Transition"/>
+/// Events then flow into <see cref="Automaton{TState,TEvent,TEffect,TParameters}.Transition"/>
 /// for pure state evolution.
 /// </para>
 /// <para>
@@ -50,9 +50,9 @@ namespace Automaton;
 /// <example>
 /// <code>
 /// public class Thermostat
-///     : Decider&lt;ThermostatState, ThermostatCommand, ThermostatEvent, ThermostatEffect, ThermostatError&gt;
+///     : Decider&lt;ThermostatState, ThermostatCommand, ThermostatEvent, ThermostatEffect, ThermostatError, Unit&gt;
 /// {
-///     public static (ThermostatState, ThermostatEffect) Init() =&gt;
+///     public static (ThermostatState, ThermostatEffect) Init(Unit _) =&gt;
 ///         (new ThermostatState(20.0m, 22.0m, false, true), new ThermostatEffect.None());
 ///
 ///     public static Result&lt;ThermostatEvent[], ThermostatError&gt; Decide(
@@ -79,8 +79,9 @@ namespace Automaton;
 /// <typeparam name="TEvent">Events representing validated facts.</typeparam>
 /// <typeparam name="TEffect">Effects produced by transitions.</typeparam>
 /// <typeparam name="TError">Errors produced by invalid commands.</typeparam>
-public interface Decider<TState, TCommand, TEvent, TEffect, TError>
-    : Automaton<TState, TEvent, TEffect>
+/// <typeparam name="TParameters">The parameters required to initialize the automaton. Use <see cref="Unit"/> for parameterless automata.</typeparam>
+public interface Decider<TState, TCommand, TEvent, TEffect, TError, TParameters>
+    : Automaton<TState, TEvent, TEffect, TParameters>
 {
     /// <summary>
     /// Validates a command against the current state, producing events or an error.
@@ -116,8 +117,8 @@ public interface Decider<TState, TCommand, TEvent, TEffect, TError>
 }
 
 /// <summary>
-/// Runtime that validates commands via <see cref="Decider{TState,TCommand,TEvent,TEffect,TError}.Decide"/>
-/// before dispatching events through the <see cref="AutomatonRuntime{TAutomaton,TState,TEvent,TEffect}"/>.
+/// Runtime that validates commands via <see cref="Decider{TState,TCommand,TEvent,TEffect,TError,TParameters}.Decide"/>
+/// before dispatching events through the <see cref="AutomatonRuntime{TAutomaton,TState,TEvent,TEffect,TParameters}"/>.
 /// </summary>
 /// <remarks>
 /// <para>
@@ -135,7 +136,7 @@ public interface Decider<TState, TCommand, TEvent, TEffect, TError>
 /// <example>
 /// <code>
 /// var runtime = await DecidingRuntime&lt;Thermostat, ThermostatState, ThermostatCommand,
-///     ThermostatEvent, ThermostatEffect, ThermostatError&gt;.Start(observer, interpreter);
+///     ThermostatEvent, ThermostatEffect, ThermostatError, Unit&gt;.Start(default, observer, interpreter);
 ///
 /// var result = await runtime.Handle(new ThermostatCommand.SetTarget(25m));
 /// // result is Ok(ThermostatState { TargetTemp = 25 })
@@ -146,14 +147,14 @@ public interface Decider<TState, TCommand, TEvent, TEffect, TError>
 /// </code>
 /// </example>
 /// </remarks>
-public sealed class DecidingRuntime<TDecider, TState, TCommand, TEvent, TEffect, TError> : IDisposable
-    where TDecider : Decider<TState, TCommand, TEvent, TEffect, TError>
+public sealed class DecidingRuntime<TDecider, TState, TCommand, TEvent, TEffect, TError, TParameters> : IDisposable
+    where TDecider : Decider<TState, TCommand, TEvent, TEffect, TError, TParameters>
 {
     // ── Cached type names for tracing (avoid per-Handle reflection) ──
     private static readonly string _deciderTypeName = typeof(TDecider).Name;
     private static readonly string _stateTypeName = typeof(TState).Name;
 
-    private readonly AutomatonRuntime<TDecider, TState, TEvent, TEffect> _core;
+    private readonly AutomatonRuntime<TDecider, TState, TEvent, TEffect, TParameters> _core;
 
     /// <summary>
     /// The current state of the automaton.
@@ -170,7 +171,7 @@ public sealed class DecidingRuntime<TDecider, TState, TCommand, TEvent, TEffect,
     /// </summary>
     public bool IsTerminal => TDecider.IsTerminal(_core.State);
 
-    private DecidingRuntime(AutomatonRuntime<TDecider, TState, TEvent, TEffect> core)
+    private DecidingRuntime(AutomatonRuntime<TDecider, TState, TEvent, TEffect, TParameters> core)
     {
         _core = core;
     }
@@ -178,6 +179,7 @@ public sealed class DecidingRuntime<TDecider, TState, TCommand, TEvent, TEffect,
     /// <summary>
     /// Creates and starts a deciding runtime, interpreting init effects immediately.
     /// </summary>
+    /// <param name="parameters">Initialization parameters passed to the automaton's Init method.</param>
     /// <param name="observer">Observer called after each transition.</param>
     /// <param name="interpreter">Interpreter that converts effects to feedback events.</param>
     /// <param name="threadSafe">
@@ -190,7 +192,8 @@ public sealed class DecidingRuntime<TDecider, TState, TCommand, TEvent, TEffect,
     /// </param>
     /// <param name="cancellationToken">Token to cancel the operation.</param>
     [AsyncMethodBuilder(typeof(PoolingAsyncValueTaskMethodBuilder<>))]
-    public static async ValueTask<DecidingRuntime<TDecider, TState, TCommand, TEvent, TEffect, TError>> Start(
+    public static async ValueTask<DecidingRuntime<TDecider, TState, TCommand, TEvent, TEffect, TError, TParameters>> Start(
+        TParameters parameters,
         Observer<TState, TEvent, TEffect> observer,
         Interpreter<TEffect, TEvent> interpreter,
         bool threadSafe = true,
@@ -201,11 +204,11 @@ public sealed class DecidingRuntime<TDecider, TState, TCommand, TEvent, TEffect,
         activity?.SetTag("automaton.type", _deciderTypeName);
         activity?.SetTag("automaton.state.type", _stateTypeName);
 
-        var core = await AutomatonRuntime<TDecider, TState, TEvent, TEffect>
-            .Start(observer, interpreter, threadSafe, trackEvents, cancellationToken).ConfigureAwait(false);
+        var core = await AutomatonRuntime<TDecider, TState, TEvent, TEffect, TParameters>
+            .Start(parameters, observer, interpreter, threadSafe, trackEvents, cancellationToken).ConfigureAwait(false);
 
         activity?.SetStatus(ActivityStatusCode.Ok);
-        return new DecidingRuntime<TDecider, TState, TCommand, TEvent, TEffect, TError>(core);
+        return new DecidingRuntime<TDecider, TState, TCommand, TEvent, TEffect, TError, TParameters>(core);
     }
 
     /// <summary>
@@ -213,7 +216,7 @@ public sealed class DecidingRuntime<TDecider, TState, TCommand, TEvent, TEffect,
     /// </summary>
     /// <remarks>
     /// <para>
-    /// If <see cref="Decider{TState,TCommand,TEvent,TEffect,TError}.Decide"/> returns
+    /// If <see cref="Decider{TState,TCommand,TEvent,TEffect,TError,TParameters}.Decide"/> returns
     /// <c>Ok(events)</c>, each event is dispatched through the underlying runtime
     /// (triggering transitions, observer, and interpreter). The final state is returned.
     /// If it returns <c>Err(error)</c>, no events are dispatched and state is unchanged.
@@ -268,7 +271,12 @@ public sealed class DecidingRuntime<TDecider, TState, TCommand, TEvent, TEffect,
                     Result<TState, TError>.Err(error));
             }
         }
-        catch (Exception ex) when (ex is not OperationCanceledException)
+        catch (OperationCanceledException)
+        {
+            activity?.Dispose();
+            throw;
+        }
+        catch (Exception ex)
         {
             activity?.SetStatus(ActivityStatusCode.Error, ex.Message);
             activity?.Dispose();
@@ -279,33 +287,57 @@ public sealed class DecidingRuntime<TDecider, TState, TCommand, TEvent, TEffect,
     private ValueTask<Result<TState, TError>> DispatchEventsAndReturnOkUnserialized(
         TEvent[] events, CancellationToken cancellationToken, Activity? activity)
     {
-        for (var i = 0; i < events.Length; i++)
+        try
         {
-            var dispatchTask = _core.DispatchUnlocked(events[i], cancellationToken);
-            if (!dispatchTask.IsCompletedSuccessfully)
-                return AwaitRemainingEventsAndReturnOkUnserialized(dispatchTask, events, i + 1, cancellationToken, activity);
-        }
+            for (var i = 0; i < events.Length; i++)
+            {
+                var dispatchTask = _core.DispatchUnlocked(events[i], cancellationToken);
+                if (!dispatchTask.IsCompletedSuccessfully)
+                    return AwaitRemainingEventsAndReturnOkUnserialized(dispatchTask, events, i + 1, cancellationToken, activity);
 
-        activity?.SetTag("automaton.result", "ok");
-        activity?.SetStatus(ActivityStatusCode.Ok);
-        activity?.Dispose();
-        return new ValueTask<Result<TState, TError>>(
-            Result<TState, TError>.Ok(_core.State));
+                var dispatchResult = dispatchTask.Result;
+                if (dispatchResult.IsErr)
+                    throw new InvalidOperationException(
+                        $"Pipeline error during dispatch: {dispatchResult.Error}",
+                        dispatchResult.Error.Exception);
+            }
+
+            activity?.SetTag("automaton.result", "ok");
+            activity?.SetStatus(ActivityStatusCode.Ok);
+            activity?.Dispose();
+            return new ValueTask<Result<TState, TError>>(
+                Result<TState, TError>.Ok(_core.State));
+        }
+        catch (Exception ex)
+        {
+            if (ex is not OperationCanceledException)
+                activity?.SetStatus(ActivityStatusCode.Error, ex.Message);
+            activity?.Dispose();
+            throw;
+        }
     }
 
     [AsyncMethodBuilder(typeof(PoolingAsyncValueTaskMethodBuilder<>))]
     private async ValueTask<Result<TState, TError>> AwaitRemainingEventsAndReturnOkUnserialized(
-        ValueTask pendingTask, TEvent[] events, int startIndex,
+        ValueTask<Result<Unit, PipelineError>> pendingTask, TEvent[] events, int startIndex,
         CancellationToken cancellationToken, Activity? activity)
     {
         using var _ = activity;
         try
         {
-            await pendingTask.ConfigureAwait(false);
+            var pendingResult = await pendingTask.ConfigureAwait(false);
+            if (pendingResult.IsErr)
+                throw new InvalidOperationException(
+                    $"Pipeline error during dispatch: {pendingResult.Error}",
+                    pendingResult.Error.Exception);
 
             for (var i = startIndex; i < events.Length; i++)
             {
-                await _core.DispatchUnlocked(events[i], cancellationToken).ConfigureAwait(false);
+                var result = await _core.DispatchUnlocked(events[i], cancellationToken).ConfigureAwait(false);
+                if (result.IsErr)
+                    throw new InvalidOperationException(
+                        $"Pipeline error during dispatch: {result.Error}",
+                        result.Error.Exception);
             }
 
             activity?.SetTag("automaton.result", "ok");
@@ -341,7 +373,13 @@ public sealed class DecidingRuntime<TDecider, TState, TCommand, TEvent, TEffect,
                     Result<TState, TError>.Err(error));
             }
         }
-        catch (Exception ex) when (ex is not OperationCanceledException)
+        catch (OperationCanceledException)
+        {
+            activity?.Dispose();
+            _core.Gate.Release();
+            throw;
+        }
+        catch (Exception ex)
         {
             activity?.SetStatus(ActivityStatusCode.Error, ex.Message);
             activity?.Dispose();
@@ -353,34 +391,62 @@ public sealed class DecidingRuntime<TDecider, TState, TCommand, TEvent, TEffect,
     private ValueTask<Result<TState, TError>> DispatchEventsAndReturnOk(
         TEvent[] events, CancellationToken cancellationToken, Activity? activity)
     {
-        for (var i = 0; i < events.Length; i++)
+        try
         {
-            var dispatchTask = _core.DispatchUnlocked(events[i], cancellationToken);
-            if (!dispatchTask.IsCompletedSuccessfully)
-                return AwaitRemainingEventsAndReturnOk(dispatchTask, events, i + 1, cancellationToken, activity);
-        }
+            for (var i = 0; i < events.Length; i++)
+            {
+                var dispatchTask = _core.DispatchUnlocked(events[i], cancellationToken);
+                if (!dispatchTask.IsCompletedSuccessfully)
+                    return AwaitRemainingEventsAndReturnOk(dispatchTask, events, i + 1, cancellationToken, activity);
 
-        activity?.SetTag("automaton.result", "ok");
-        activity?.SetStatus(ActivityStatusCode.Ok);
-        activity?.Dispose();
-        _core.Gate.Release();
-        return new ValueTask<Result<TState, TError>>(
-            Result<TState, TError>.Ok(_core.State));
+                var dispatchResult = dispatchTask.Result;
+                if (dispatchResult.IsErr)
+                {
+                    _core.Gate.Release();
+                    throw new InvalidOperationException(
+                        $"Pipeline error during dispatch: {dispatchResult.Error}",
+                        dispatchResult.Error.Exception);
+                }
+            }
+
+            activity?.SetTag("automaton.result", "ok");
+            activity?.SetStatus(ActivityStatusCode.Ok);
+            activity?.Dispose();
+            _core.Gate.Release();
+            return new ValueTask<Result<TState, TError>>(
+                Result<TState, TError>.Ok(_core.State));
+        }
+        catch (Exception ex)
+        {
+            if (ex is not OperationCanceledException)
+                activity?.SetStatus(ActivityStatusCode.Error, ex.Message);
+            activity?.Dispose();
+            _core.Gate.Release();
+            throw;
+        }
     }
 
     [AsyncMethodBuilder(typeof(PoolingAsyncValueTaskMethodBuilder<>))]
     private async ValueTask<Result<TState, TError>> AwaitRemainingEventsAndReturnOk(
-        ValueTask pendingTask, TEvent[] events, int startIndex,
+        ValueTask<Result<Unit, PipelineError>> pendingTask, TEvent[] events, int startIndex,
         CancellationToken cancellationToken, Activity? activity)
     {
         using var _ = activity;
         try
         {
-            await pendingTask.ConfigureAwait(false);
+            var pendingResult = await pendingTask.ConfigureAwait(false);
+            if (pendingResult.IsErr)
+                throw new InvalidOperationException(
+                    $"Pipeline error during dispatch: {pendingResult.Error}",
+                    pendingResult.Error.Exception);
 
             for (var i = startIndex; i < events.Length; i++)
             {
-                await _core.DispatchUnlocked(events[i], cancellationToken).ConfigureAwait(false);
+                var result = await _core.DispatchUnlocked(events[i], cancellationToken).ConfigureAwait(false);
+                if (result.IsErr)
+                    throw new InvalidOperationException(
+                        $"Pipeline error during dispatch: {result.Error}",
+                        result.Error.Exception);
             }
 
             activity?.SetTag("automaton.result", "ok");
@@ -412,7 +478,11 @@ public sealed class DecidingRuntime<TDecider, TState, TCommand, TEvent, TEffect,
                 var events = decided.Value;
                 for (var i = 0; i < events.Length; i++)
                 {
-                    await _core.DispatchUnlocked(events[i], cancellationToken).ConfigureAwait(false);
+                    var result = await _core.DispatchUnlocked(events[i], cancellationToken).ConfigureAwait(false);
+                    if (result.IsErr)
+                        throw new InvalidOperationException(
+                            $"Pipeline error during dispatch: {result.Error}",
+                            result.Error.Exception);
                 }
 
                 activity?.SetTag("automaton.result", "ok");

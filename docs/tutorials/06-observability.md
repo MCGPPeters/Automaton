@@ -2,6 +2,8 @@
 
 Add distributed tracing to your automaton with zero external dependencies.
 
+> **API reference:** For the complete span and tag inventory, see [Diagnostics Reference](../reference/diagnostics.md).
+
 ## What You'll Learn
 
 - How the Automaton emits tracing spans via `System.Diagnostics.ActivitySource`
@@ -130,10 +132,12 @@ public class TracingTests
         };
         ActivitySource.AddActivityListener(listener);
 
-        var runtime = await AutomatonRuntime<Counter, CounterState, CounterEvent, CounterEffect>
+        var runtime = await AutomatonRuntime<Counter, CounterState, CounterEvent, CounterEffect, Unit>
             .Start(
-                observer: (_, _, _) => ValueTask.CompletedTask,
-                interpreter: _ => new ValueTask<CounterEvent[]>([]));
+                default,
+                observer: (_, _, _) => PipelineResult.Ok,
+                interpreter: _ => new ValueTask<Result<CounterEvent[], PipelineError>>(
+                    Result<CounterEvent[], PipelineError>.Ok([])));
 
         await runtime.Dispatch(new CounterEvent.Increment());
 
@@ -167,9 +171,11 @@ public async Task Handle_Rejection_EmitsErrorTypeTag()
     ActivitySource.AddActivityListener(listener);
 
     var runtime = await DecidingRuntime<Counter, CounterState, CounterCommand,
-        CounterEvent, CounterEffect, CounterError>.Start(
-            (_, _, _) => ValueTask.CompletedTask,
-            _ => new ValueTask<CounterEvent[]>([]));
+        CounterEvent, CounterEffect, CounterError, Unit>.Start(
+            default,
+            (_, _, _) => PipelineResult.Ok,
+            _ => new ValueTask<Result<CounterEvent[], PipelineError>>(
+                Result<CounterEvent[], PipelineError>.Ok([])));
 
     await runtime.Handle(new CounterCommand.Add(200));
 
@@ -242,3 +248,13 @@ You now have full observability into your automaton runtimes:
 - **Zero dependencies** in the library itself
 
 This works identically across all runtimes — MVU, Event Sourcing, and Actors all inherit tracing from the shared `AutomatonRuntime`.
+
+### Deepen Your Understanding
+
+| Topic | Link |
+| ----- | ---- |
+| Full span and tag inventory | [Diagnostics Reference](../reference/diagnostics.md) |
+| Runtime internals that emit spans | [Runtime Reference](../reference/runtime.md) |
+| DecidingRuntime Handle spans | [Decider Reference](../reference/decider.md) |
+| Testing strategies including tracing | [Testing Strategies](../guides/testing-strategies.md) |
+| Choosing a runtime | [Runtimes Compared](../concepts/runtimes-compared.md) |

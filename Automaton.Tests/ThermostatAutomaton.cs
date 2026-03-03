@@ -111,13 +111,13 @@ public interface ThermostatEffect
 /// </para>
 /// </remarks>
 public class Thermostat
-    : Decider<ThermostatState, ThermostatCommand, ThermostatEvent, ThermostatEffect, ThermostatError>
+    : Decider<ThermostatState, ThermostatCommand, ThermostatEvent, ThermostatEffect, ThermostatError, Unit>
 {
     public const decimal MinTarget = 5.0m;
     public const decimal MaxTarget = 40.0m;
     public const decimal AlertThreshold = 35.0m;
 
-    public static (ThermostatState State, ThermostatEffect Effect) Init() =>
+    public static (ThermostatState State, ThermostatEffect Effect) Init(Unit _) =>
         (new ThermostatState(
             CurrentTemp: 20.0m,
             TargetTemp: 22.0m,
@@ -247,8 +247,8 @@ public class Thermostat
 /// </para>
 /// <para>
 /// These factory methods return concrete thermostat observers ready to plug into
-/// <see cref="AutomatonRuntime{TAutomaton,TState,TEvent,TEffect}"/> or
-/// <see cref="DecidingRuntime{TDecider,TState,TCommand,TEvent,TEffect,TError}"/>.
+/// <see cref="AutomatonRuntime{TAutomaton,TState,TEvent,TEffect,TParameters}"/> or
+/// <see cref="DecidingRuntime{TDecider,TState,TCommand,TEvent,TEffect,TError,TParameters}"/>.
 /// </para>
 /// </remarks>
 public static class ThermostatObservers
@@ -258,7 +258,7 @@ public static class ThermostatObservers
     /// not about observing individual transitions.
     /// </summary>
     public static readonly Observer<ThermostatState, ThermostatEvent, ThermostatEffect> NoOp =
-        (_, _, _) => ValueTask.CompletedTask;
+        (_, _, _) => PipelineResult.Ok;
 
     /// <summary>
     /// An observer that captures every transition triple into a list.
@@ -268,7 +268,7 @@ public static class ThermostatObservers
     /// <example>
     /// <code>
     /// var log = new List&lt;(ThermostatState, ThermostatEvent, ThermostatEffect)&gt;();
-    /// var runtime = new AutomatonRuntime&lt;Thermostat, ThermostatState, ThermostatEvent, ThermostatEffect&gt;(
+    /// var runtime = new AutomatonRuntime&lt;Thermostat, ThermostatState, ThermostatEvent, ThermostatEffect, Unit&gt;(
     ///     Thermostat.Init().State, ThermostatObservers.Capture(log), ThermostatInterpreters.NoOp);
     ///
     /// await runtime.Dispatch(new ThermostatEvent.TemperatureRecorded(18m));
@@ -280,7 +280,7 @@ public static class ThermostatObservers
         (state, @event, effect) =>
         {
             log.Add((state, @event, effect));
-            return ValueTask.CompletedTask;
+            return PipelineResult.Ok;
         };
 }
 
@@ -297,8 +297,8 @@ public static class ThermostatObservers
 /// </para>
 /// <para>
 /// These factory methods return concrete thermostat interpreters ready to plug into
-/// <see cref="AutomatonRuntime{TAutomaton,TState,TEvent,TEffect}"/> or
-/// <see cref="DecidingRuntime{TDecider,TState,TCommand,TEvent,TEffect,TError}"/>.
+/// <see cref="AutomatonRuntime{TAutomaton,TState,TEvent,TEffect,TParameters}"/> or
+/// <see cref="DecidingRuntime{TDecider,TState,TCommand,TEvent,TEffect,TError,TParameters}"/>.
 /// </para>
 /// </remarks>
 public static class ThermostatInterpreters
@@ -308,7 +308,8 @@ public static class ThermostatInterpreters
     /// This is the simplest interpreter — useful when you only care about state transitions.
     /// </summary>
     public static readonly Interpreter<ThermostatEffect, ThermostatEvent> NoOp =
-        _ => new ValueTask<ThermostatEvent[]>([]);
+        _ => new ValueTask<Result<ThermostatEvent[], PipelineError>>(
+            Result<ThermostatEvent[], PipelineError>.Ok([]));
 
     /// <summary>
     /// An interpreter that captures all effects into a list while producing no feedback events.
@@ -318,7 +319,7 @@ public static class ThermostatInterpreters
     /// <example>
     /// <code>
     /// var effects = new List&lt;ThermostatEffect&gt;();
-    /// var runtime = new AutomatonRuntime&lt;Thermostat, ThermostatState, ThermostatEvent, ThermostatEffect&gt;(
+    /// var runtime = new AutomatonRuntime&lt;Thermostat, ThermostatState, ThermostatEvent, ThermostatEffect, Unit&gt;(
     ///     Thermostat.Init().State, ThermostatObservers.NoOp, ThermostatInterpreters.Capture(effects));
     ///
     /// await runtime.Dispatch(new ThermostatEvent.HeaterTurnedOn());
@@ -330,7 +331,8 @@ public static class ThermostatInterpreters
         effect =>
         {
             effects.Add(effect);
-            return new ValueTask<ThermostatEvent[]>([]);
+            return new ValueTask<Result<ThermostatEvent[], PipelineError>>(
+                Result<ThermostatEvent[], PipelineError>.Ok([]));
         };
 
     /// <summary>
@@ -347,6 +349,7 @@ public static class ThermostatInterpreters
                 notifications.Add(notification.Message);
             }
 
-            return new ValueTask<ThermostatEvent[]>([]);
+            return new ValueTask<Result<ThermostatEvent[], PipelineError>>(
+                Result<ThermostatEvent[], PipelineError>.Ok([]));
         };
 }

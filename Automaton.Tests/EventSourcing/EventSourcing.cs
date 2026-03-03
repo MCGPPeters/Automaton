@@ -107,8 +107,8 @@ public sealed class EventStore<TEvent>
 /// </code>
 /// </example>
 /// </remarks>
-public sealed class AggregateRunner<TDecider, TState, TCommand, TEvent, TEffect, TError>
-    where TDecider : Decider<TState, TCommand, TEvent, TEffect, TError>
+public sealed class AggregateRunner<TDecider, TState, TCommand, TEvent, TEffect, TError, TParameters>
+    where TDecider : Decider<TState, TCommand, TEvent, TEffect, TError, TParameters>
 {
     private readonly EventStore<TEvent> _store;
     private readonly List<TEffect> _effects = [];
@@ -143,10 +143,10 @@ public sealed class AggregateRunner<TDecider, TState, TCommand, TEvent, TEffect,
     /// <summary>
     /// Creates a new aggregate from its initial state.
     /// </summary>
-    public static AggregateRunner<TDecider, TState, TCommand, TEvent, TEffect, TError> Create()
+    public static AggregateRunner<TDecider, TState, TCommand, TEvent, TEffect, TError, TParameters> Create()
     {
-        var (state, _) = TDecider.Init();
-        return new AggregateRunner<TDecider, TState, TCommand, TEvent, TEffect, TError>(
+        var (state, _) = TDecider.Init(default!);
+        return new AggregateRunner<TDecider, TState, TCommand, TEvent, TEffect, TError, TParameters>(
             state, new EventStore<TEvent>());
     }
 
@@ -157,12 +157,12 @@ public sealed class AggregateRunner<TDecider, TState, TCommand, TEvent, TEffect,
     /// Stored events are already validated facts — they are replayed through
     /// <c>Transition</c> without re-validation via <c>Decide</c>.
     /// </remarks>
-    public static AggregateRunner<TDecider, TState, TCommand, TEvent, TEffect, TError> FromStore(
+    public static AggregateRunner<TDecider, TState, TCommand, TEvent, TEffect, TError, TParameters> FromStore(
         EventStore<TEvent> store)
     {
-        var (seed, _) = TDecider.Init();
+        var (seed, _) = TDecider.Init(default!);
         var state = store.Replay(seed, (s, e) => TDecider.Transition(s, e).State);
-        return new AggregateRunner<TDecider, TState, TCommand, TEvent, TEffect, TError>(state, store);
+        return new AggregateRunner<TDecider, TState, TCommand, TEvent, TEffect, TError, TParameters>(state, store);
     }
 
     /// <summary>
@@ -220,7 +220,7 @@ public sealed class AggregateRunner<TDecider, TState, TCommand, TEvent, TEffect,
     /// </summary>
     public TState Rebuild()
     {
-        var (seed, _) = TDecider.Init();
+        var (seed, _) = TDecider.Init(default!);
         _state = _store.Replay(seed, (s, e) => TDecider.Transition(s, e).State);
         return _state;
     }

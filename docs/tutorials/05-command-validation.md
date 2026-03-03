@@ -2,12 +2,14 @@
 
 Validate commands before producing events using the Decider pattern and the Result type.
 
+> **Concept reference:** This tutorial implements the theory from [The Decider](../concepts/the-decider.md). For Result type recipes, see [Error Handling Patterns](../guides/error-handling-patterns.md).
+
 ## What You'll Learn
 
-- What the Decider pattern is and why it matters
+- What the [Decider pattern](../concepts/the-decider.md) is and why it matters
 - How to separate intent (commands) from facts (events)
-- How to use the `Result<TSuccess, TError>` type for error handling
-- How to use `DecidingRuntime` for command validation in async runtimes
+- How to use the [`Result<TSuccess, TError>`](../reference/result.md) type for error handling
+- How to use [`DecidingRuntime`](../reference/decider.md) for command validation in async runtimes
 - How to compose Result values with Map, Bind, and MapError
 
 ## Prerequisites
@@ -72,8 +74,8 @@ Notice how errors carry *context* — not just "invalid" but *why* it's invalid.
 A Decider extends the Automaton interface:
 
 ```csharp
-public interface Decider<TState, TCommand, TEvent, TEffect, TError>
-    : Automaton<TState, TEvent, TEffect>
+public interface Decider<TState, TCommand, TEvent, TEffect, TError, TParameters>
+    : Automaton<TState, TEvent, TEffect, TParameters>
 {
     static abstract Result<TEvent[], TError> Decide(
         TState state, TCommand command);
@@ -86,11 +88,11 @@ The `Decide` function is pure: given state and command, it returns either events
 
 ```csharp
 public class Counter
-    : Decider<CounterState, CounterCommand, CounterEvent, CounterEffect, CounterError>
+    : Decider<CounterState, CounterCommand, CounterEvent, CounterEffect, CounterError, Unit>
 {
     public const int MaxCount = 100;
 
-    public static (CounterState, CounterEffect) Init() =>
+    public static (CounterState, CounterEffect) Init(Unit _) =>
         (new CounterState(0), new CounterEffect.None());
 
     public static Result<CounterEvent[], CounterError> Decide(
@@ -161,14 +163,15 @@ Observer<CounterState, CounterEvent, CounterEffect> observer =
     (state, @event, effect) =>
     {
         Console.WriteLine($"{@event.GetType().Name} → {state}");
-        return ValueTask.CompletedTask;
+        return PipelineResult.Ok;
     };
 
 Interpreter<CounterEffect, CounterEvent> interpreter =
-    _ => new ValueTask<CounterEvent[]>([]);
+    _ => new ValueTask<Result<CounterEvent[], PipelineError>>(
+        Result<CounterEvent[], PipelineError>.Ok([]));
 
 var runtime = await DecidingRuntime<Counter, CounterState, CounterCommand,
-    CounterEvent, CounterEffect, CounterError>.Start(observer, interpreter);
+    CounterEvent, CounterEffect, CounterError, Unit>.Start(default, observer, interpreter);
 ```
 
 ### Successful Commands
@@ -196,9 +199,9 @@ Console.WriteLine(runtime.Events.Count); // still 5 (no new events dispatched)
 ```csharp
 var result = await runtime.Handle(new CounterCommand.Add(10));
 
-var message = result.Match(
-    state => $"Success! Count is now {state.Count}",
-    error => error switch
+var message = result.IsOk
+    ? $"Success! Count is now {result.Value.Count}"
+    : result.Error switch
     {
         CounterError.Overflow o =>
             $"Overflow: {o.Current} + {o.Amount} exceeds max {o.Max}",
@@ -206,8 +209,8 @@ var message = result.Match(
             $"Underflow: {u.Current} + {u.Amount} would go below zero",
         CounterError.AlreadyAtZero =>
             "Counter is already at zero",
-        _ => $"Unknown error: {error}"
-    });
+        _ => $"Unknown error: {result.Error}"
+    };
 
 Console.WriteLine(message);
 ```
@@ -229,31 +232,37 @@ public readonly struct Result<TSuccess, TError>
 }
 ```
 
-### Exhaustive Matching
+### Pattern Matching
+
+Use `IsOk`/`IsErr` with C# conditional expressions or `switch`:
 
 ```csharp
-var text = result.Match(
-    value => $"Got {value}",
-    error => $"Failed: {error}");
+var text = result.IsOk
+    ? $"Got {result.Value}"
+    : $"Failed: {result.Error}";
 ```
 
-### Map (Functor)
+### Map / Select (Functor)
 
-Transform the success value, leaving errors untouched:
+Transform the success value, leaving errors untouched. `Select` is the LINQ alias for `Map`:
 
 ```csharp
 Result<int, string> ok = Result<int, string>.Ok(21);
 Result<int, string> mapped = ok.Map(v => v * 2);
 // mapped is Ok(42)
 
+// Or using LINQ query syntax:
+var doubled = from v in ok select v * 2;
+// doubled is Ok(42)
+
 Result<int, string> err = Result<int, string>.Err("fail");
 Result<int, string> mappedErr = err.Map(v => v * 2);
 // mappedErr is still Err("fail")
 ```
 
-### Bind (Monad)
+### Bind / SelectMany (Monad)
 
-Chain operations that can themselves fail:
+Chain operations that can themselves fail. `SelectMany` is the LINQ alias for `Bind`:
 
 ```csharp
 Result<int, string> ok = Result<int, string>.Ok(21);
@@ -268,10 +277,18 @@ var result = ok.Bind(v =>
 This enables **railway-oriented programming** — errors short-circuit the entire chain:
 
 ```csharp
+// Fluent API
 var final = parseInput(raw)         // Result<int, ParseError>
     .Map(n => n * 2)                // Result<int, ParseError>
     .Bind(n => validate(n))         // Result<int, ValidationError> — ⚠️ error types must match
     .Map(n => $"Result: {n}");      // Result<string, ValidationError>
+
+// LINQ query syntax (equivalent to the above)
+var final =
+    from n in parseInput(raw)
+    let doubled = n * 2
+    from valid in validate(doubled)
+    select $"Result: {valid}";
 ```
 
 ### MapError
@@ -329,7 +346,7 @@ The Decider pattern has seven elements. The Automaton kernel provides four, the 
 | 1 | Command type | Type parameter | `TCommand` |
 | 2 | Event type | Type parameter | `TEvent` |
 | 3 | State type | Type parameter | `TState` |
-| 4 | Initial state | Automaton | `Init()` |
+| 4 | Initial state | Automaton | `Init(parameters)` |
 | 5 | Decide | **Decider** | `Decide(state, command)` |
 | 6 | Evolve | Automaton | `Transition(state, event)` |
 | 7 | Is terminal | **Decider** | `IsTerminal(state)` |
@@ -344,3 +361,14 @@ public static bool IsTerminal(OrderState state) =>
 ## What's Next
 
 - **[Observability](06-observability.md)** — The DecidingRuntime emits tracing spans for every `Handle` call
+
+### Deepen Your Understanding
+
+| Topic | Link |
+| ----- | ---- |
+| The seven elements explained | [The Decider](../concepts/the-decider.md) |
+| Map, Bind, MapError pipelines | [Error Handling Patterns](../guides/error-handling-patterns.md) |
+| Migrating from Automaton to Decider | [Upgrading to Decider](../guides/upgrading-to-decider.md) |
+| Result API signatures | [Result Reference](../reference/result.md) |
+| DecidingRuntime API | [Decider Reference](../reference/decider.md) |
+| Production ES with concurrency | [Automaton.Patterns](../patterns/index.md) |

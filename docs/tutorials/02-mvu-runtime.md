@@ -2,12 +2,14 @@
 
 Build a Model-View-Update loop on top of the Automaton kernel.
 
+> **Concept reference:** This tutorial builds a custom runtime. For the underlying theory, see [The Runtime](../concepts/the-runtime.md) and [Building Custom Runtimes](../guides/building-custom-runtimes.md).
+
 ## What You'll Learn
 
-- What MVU (Model-View-Update) is and how it maps to the Automaton kernel
+- What MVU (Model-View-Update) is and how it maps to the [Automaton kernel](../concepts/the-kernel.md)
 - How to write a render function that converts state to views
 - How to handle effects and produce feedback events
-- How to build a complete MVU runtime from the shared `AutomatonRuntime`
+- How to build a complete MVU runtime from the shared [`AutomatonRuntime`](../reference/runtime.md)
 
 ## Prerequisites
 
@@ -55,10 +57,10 @@ The MVU runtime wraps `AutomatonRuntime` with render-on-transition semantics:
 ```csharp
 using Automaton;
 
-public sealed class MvuRuntime<TAutomaton, TState, TEvent, TEffect, TView>
-    where TAutomaton : Automaton<TState, TEvent, TEffect>
+public sealed class MvuRuntime<TAutomaton, TState, TEvent, TEffect, TView, TParameters>
+    where TAutomaton : Automaton<TState, TEvent, TEffect, TParameters>
 {
-    private readonly AutomatonRuntime<TAutomaton, TState, TEvent, TEffect> _core;
+    private readonly AutomatonRuntime<TAutomaton, TState, TEvent, TEffect, TParameters> _core;
     private readonly List<TView> _views;
 
     public TState State => _core.State;
@@ -66,28 +68,29 @@ public sealed class MvuRuntime<TAutomaton, TState, TEvent, TEffect, TView>
     public IReadOnlyList<TEvent> Events => _core.Events;
 
     private MvuRuntime(
-        AutomatonRuntime<TAutomaton, TState, TEvent, TEffect> core,
+        AutomatonRuntime<TAutomaton, TState, TEvent, TEffect, TParameters> core,
         List<TView> views)
     {
         _core = core;
         _views = views;
     }
 
-    public static async Task<MvuRuntime<TAutomaton, TState, TEvent, TEffect, TView>> Start(
+    public static async Task<MvuRuntime<TAutomaton, TState, TEvent, TEffect, TView, TParameters>> Start(
+        TParameters parameters,
         Render<TState, TView> render,
         Interpreter<TEffect, TEvent> interpreter)
     {
-        var (state, effect) = TAutomaton.Init();
+        var (state, effect) = TAutomaton.Init(parameters);
         var views = new List<TView>();
 
         // Observer: render the new state after each transition
         Observer<TState, TEvent, TEffect> observer = (s, _, _) =>
         {
             views.Add(render(s));
-            return Task.CompletedTask;
+            return PipelineResult.Ok;
         };
 
-        var core = new AutomatonRuntime<TAutomaton, TState, TEvent, TEffect>(
+        var core = new AutomatonRuntime<TAutomaton, TState, TEvent, TEffect, TParameters>(
             state, observer, interpreter);
 
         // Render initial view before effects
@@ -96,7 +99,7 @@ public sealed class MvuRuntime<TAutomaton, TState, TEvent, TEffect, TView>
         // Interpret init effects (may produce feedback → more renders)
         await core.InterpretEffect(effect);
 
-        return new MvuRuntime<TAutomaton, TState, TEvent, TEffect, TView>(core, views);
+        return new MvuRuntime<TAutomaton, TState, TEvent, TEffect, TView, TParameters>(core, views);
     }
 
     public async Task Dispatch(TEvent @event) =>
@@ -113,10 +116,12 @@ Key design decisions:
 ## Step 3: Use the Runtime
 
 ```csharp
-var runtime = await MvuRuntime<Counter, CounterState, CounterEvent, CounterEffect, string>
+var runtime = await MvuRuntime<Counter, CounterState, CounterEvent, CounterEffect, string, Unit>
     .Start(
+        default,
         render: state => $"Count: {state.Count}",
-        interpreter: _ => new ValueTask<CounterEvent[]>([]));
+        interpreter: _ => new ValueTask<Result<CounterEvent[], PipelineError>>(
+            Result<CounterEvent[], PipelineError>.Ok([])));
 
 // Initial view is rendered immediately
 Console.WriteLine(runtime.Views[0]); // "Count: 0"
@@ -149,11 +154,12 @@ Interpreter<CounterEffect, CounterEvent> interpreter = effect =>
     {
         logs.Add(log.Message);
     }
-    return new ValueTask<CounterEvent[]>([]);
+    return new ValueTask<Result<CounterEvent[], PipelineError>>(
+        Result<CounterEvent[], PipelineError>.Ok([]));
 };
 
-var runtime = await MvuRuntime<Counter, CounterState, CounterEvent, CounterEffect, string>
-    .Start(state => $"Count: {state.Count}", interpreter);
+var runtime = await MvuRuntime<Counter, CounterState, CounterEvent, CounterEffect, string, Unit>
+    .Start(default, state => $"Count: {state.Count}", interpreter);
 
 await runtime.Dispatch(new CounterEvent.Increment());
 await runtime.Dispatch(new CounterEvent.Increment());
@@ -175,11 +181,12 @@ Interpreter<CounterEffect, CounterEvent> interpreter = async effect =>
     {
         // Suppose Log effect triggers an auto-increment after logging
         CounterEffect.Log log =>
-        [
-            new CounterEvent.Increment()  // feedback event!
-        ],
+            Result<CounterEvent[], PipelineError>.Ok(
+            [
+                new CounterEvent.Increment()  // feedback event!
+            ]),
 
-        _ => []
+        _ => Result<CounterEvent[], PipelineError>.Ok([])
     };
 };
 ```
@@ -232,8 +239,8 @@ Assert.IsType<CounterEffect.None>(effect);
 And test the full MVU loop for integration:
 
 ```csharp
-var runtime = await MvuRuntime<Counter, CounterState, CounterEvent, CounterEffect, string>
-    .Start(state => $"Count: {state.Count}", handleEffect);
+var runtime = await MvuRuntime<Counter, CounterState, CounterEvent, CounterEffect, string, Unit>
+    .Start(default, state => $"Count: {state.Count}", handleEffect);
 
 await runtime.Dispatch(new CounterEvent.Increment());
 await runtime.Dispatch(new CounterEvent.Increment());
@@ -252,3 +259,12 @@ Assert.Equal("Count: 1", runtime.Views[3]);
 - **[Event-Sourced Aggregate](03-event-sourced-aggregate.md)** — The same Counter, now with persistent events
 - **[Actor System](04-actor-system.md)** — The same Counter, now with a mailbox
 - **[Command Validation](05-command-validation.md)** — Add the Decider pattern to validate commands before producing events
+
+### Deepen Your Understanding
+
+| Topic | Link |
+| ----- | ---- |
+| How Observer and Interpreter work | [The Runtime](../concepts/the-runtime.md) |
+| Chaining multiple observers | [Observer Composition](../guides/observer-composition.md) |
+| Building other custom runtimes | [Building Custom Runtimes](../guides/building-custom-runtimes.md) |
+| Choosing between MVU, ES, and Actors | [Runtimes Compared](../concepts/runtimes-compared.md) |

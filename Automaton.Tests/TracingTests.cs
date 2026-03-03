@@ -6,6 +6,7 @@
 // Uses the Thermostat domain throughout.
 // =============================================================================
 
+using System.Collections.Concurrent;
 using System.Diagnostics;
 
 namespace Automaton.Tests;
@@ -14,11 +15,13 @@ public class TracingTests
 {
     /// <summary>
     /// Collects activities emitted by the Automaton ActivitySource during a test.
+    /// Uses <see cref="ConcurrentBag{T}"/> because <see cref="ActivityListener.ActivityStopped"/>
+    /// may fire from any thread when xUnit runs tests in parallel.
     /// </summary>
     private sealed class ActivityCollector : IDisposable
     {
         private readonly ActivityListener _listener;
-        public List<Activity> Activities { get; } = [];
+        public ConcurrentBag<Activity> Activities { get; } = [];
 
         public ActivityCollector()
         {
@@ -43,7 +46,7 @@ public class TracingTests
     {
         using var collector = new ActivityCollector();
 
-        var runtime = new AutomatonRuntime<Thermostat, ThermostatState, ThermostatEvent, ThermostatEffect>(
+        var runtime = new AutomatonRuntime<Thermostat, ThermostatState, ThermostatEvent, ThermostatEffect, Unit>(
             new ThermostatState(20m, 22m, false, true), ThermostatObservers.NoOp, ThermostatInterpreters.NoOp);
 
         await runtime.Dispatch(new ThermostatEvent.TemperatureRecorded(18m));
@@ -60,8 +63,8 @@ public class TracingTests
     {
         using var collector = new ActivityCollector();
 
-        _ = await AutomatonRuntime<Thermostat, ThermostatState, ThermostatEvent, ThermostatEffect>
-            .Start(ThermostatObservers.NoOp, ThermostatInterpreters.NoOp);
+        _ = await AutomatonRuntime<Thermostat, ThermostatState, ThermostatEvent, ThermostatEffect, Unit>
+            .Start(default, ThermostatObservers.NoOp, ThermostatInterpreters.NoOp);
 
         var start = collector.Activities.FirstOrDefault(a => a.DisplayName == "Automaton.Start");
         Assert.NotNull(start);
@@ -75,7 +78,7 @@ public class TracingTests
     {
         using var collector = new ActivityCollector();
 
-        var runtime = new AutomatonRuntime<Thermostat, ThermostatState, ThermostatEvent, ThermostatEffect>(
+        var runtime = new AutomatonRuntime<Thermostat, ThermostatState, ThermostatEvent, ThermostatEffect, Unit>(
             new ThermostatState(20m, 22m, false, true), ThermostatObservers.NoOp, ThermostatInterpreters.NoOp);
 
         await runtime.InterpretEffect(new ThermostatEffect.None());
@@ -95,7 +98,7 @@ public class TracingTests
         Interpreter<ThermostatEffect, ThermostatEvent> throwingInterpreter =
             _ => throw new InvalidOperationException("test fault");
 
-        var runtime = new AutomatonRuntime<Thermostat, ThermostatState, ThermostatEvent, ThermostatEffect>(
+        var runtime = new AutomatonRuntime<Thermostat, ThermostatState, ThermostatEvent, ThermostatEffect, Unit>(
             new ThermostatState(20m, 22m, false, true), ThermostatObservers.NoOp, throwingInterpreter);
 
         // HeaterTurnedOn produces ActivateHeater effect -> interpreter throws
@@ -114,7 +117,7 @@ public class TracingTests
     {
         using var collector = new ActivityCollector();
 
-        var runtime = new AutomatonRuntime<Thermostat, ThermostatState, ThermostatEvent, ThermostatEffect>(
+        var runtime = new AutomatonRuntime<Thermostat, ThermostatState, ThermostatEvent, ThermostatEffect, Unit>(
             new ThermostatState(20m, 22m, false, true), ThermostatObservers.NoOp, ThermostatInterpreters.NoOp);
 
         await runtime.Dispatch(new ThermostatEvent.TemperatureRecorded(18m));
@@ -145,7 +148,7 @@ public class TracingTests
         using var collector = new ActivityCollector();
 
         var runtime = await DecidingRuntime<Thermostat, ThermostatState, ThermostatCommand,
-            ThermostatEvent, ThermostatEffect, ThermostatError>.Start(ThermostatObservers.NoOp, ThermostatInterpreters.NoOp);
+            ThermostatEvent, ThermostatEffect, ThermostatError, Unit>.Start(default, ThermostatObservers.NoOp, ThermostatInterpreters.NoOp);
 
         await runtime.Handle(new ThermostatCommand.RecordReading(18m));
 
@@ -163,7 +166,7 @@ public class TracingTests
         using var collector = new ActivityCollector();
 
         var runtime = await DecidingRuntime<Thermostat, ThermostatState, ThermostatCommand,
-            ThermostatEvent, ThermostatEffect, ThermostatError>.Start(ThermostatObservers.NoOp, ThermostatInterpreters.NoOp);
+            ThermostatEvent, ThermostatEffect, ThermostatError, Unit>.Start(default, ThermostatObservers.NoOp, ThermostatInterpreters.NoOp);
 
         await runtime.Handle(new ThermostatCommand.SetTarget(50m)); // exceeds MaxTarget
 
@@ -183,7 +186,7 @@ public class TracingTests
         using var collector = new ActivityCollector();
 
         _ = await DecidingRuntime<Thermostat, ThermostatState, ThermostatCommand,
-            ThermostatEvent, ThermostatEffect, ThermostatError>.Start(ThermostatObservers.NoOp, ThermostatInterpreters.NoOp);
+            ThermostatEvent, ThermostatEffect, ThermostatError, Unit>.Start(default, ThermostatObservers.NoOp, ThermostatInterpreters.NoOp);
 
         var start = collector.Activities.FirstOrDefault(a => a.DisplayName == "Automaton.Decider.Start");
         Assert.NotNull(start);
@@ -200,7 +203,7 @@ public class TracingTests
     {
         // No ActivityCollector — no listener registered.
         // Verify that the runtime still works correctly (StartActivity returns null).
-        var runtime = new AutomatonRuntime<Thermostat, ThermostatState, ThermostatEvent, ThermostatEffect>(
+        var runtime = new AutomatonRuntime<Thermostat, ThermostatState, ThermostatEvent, ThermostatEffect, Unit>(
             new ThermostatState(20m, 22m, false, true), ThermostatObservers.NoOp, ThermostatInterpreters.NoOp);
 
         await runtime.Dispatch(new ThermostatEvent.TemperatureRecorded(25m));

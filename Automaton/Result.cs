@@ -1,21 +1,32 @@
 // =============================================================================
 // Result — Success or Error
 // =============================================================================
-// A discriminated union for computations that can fail. Provides exhaustive
-// pattern matching, functor (Map), and monad (Bind) operations.
+// A discriminated union for computations that can fail. Provides functor (Map/Select),
+// monad (Bind/SelectMany), and LINQ query syntax support.
 //
 // Used by the Decider to represent the outcome of command validation:
 //
 //     Decide : Command → State → Result<Events, Error>
 //
+// Also used by Observer and Interpreter pipelines to propagate errors as
+// values instead of exceptions (railway-oriented programming).
+//
 // Algebraic structure:
 //     Result<T, E> ≅ T + E    (coproduct / sum type)
-//     Map    : (T → U) → Result<T, E> → Result<U, E>     (functor)
-//     Bind   : (T → Result<U, E>) → Result<T, E> → Result<U, E>  (monad)
+//     Map/Select       : (T → U) → Result<T, E> → Result<U, E>        (functor)
+//     Bind/SelectMany  : (T → Result<U, E>) → Result<T, E> → Result<U, E>  (monad)
+//
+// LINQ query syntax (monad comprehension):
+//     from x in result
+//     from y in f(x)
+//     select g(x, y)
+//
+//   desugars to:
+//     result.SelectMany(x => f(x), (x, y) => g(x, y))
 //
 // Implementation note:
 //     Result is a readonly struct to avoid heap allocation. Each Ok/Err
-//     is stack-allocated, eliminating 24 bytes per Result on every Decide
+//     is stack-allocated, avoiding per-result heap allocations on every Decide
 //     and Handle call. The bool discriminator replaces the virtual dispatch
 //     of the previous abstract record hierarchy.
 // =============================================================================
@@ -28,8 +39,8 @@ namespace Automaton;
 /// <remarks>
 /// <para>
 /// Result is the standard functional approach to error handling without exceptions.
-/// It forces callers to handle both cases explicitly via
-/// <see cref="Match{TResult}(Func{TSuccess, TResult}, Func{TError, TResult})"/>.
+/// Callers handle both cases via <see cref="IsOk"/>/<see cref="IsErr"/> properties,
+/// C# pattern matching, or LINQ query syntax.
 /// </para>
 /// <para>
 /// Prefer <c>Result</c> over exceptions for expected failures (validation errors,
@@ -41,14 +52,26 @@ namespace Automaton;
 /// and Handle call. Use the static factory methods <see cref="Ok"/> and
 /// <see cref="Err"/> to create instances.
 /// </para>
+/// <para>
+/// Supports LINQ query syntax (monad comprehension) via <see cref="Select{TNew}"/>
+/// and <see cref="SelectMany{TIntermediate,TNew}"/>. Errors short-circuit the chain.
+/// </para>
 /// <example>
 /// <code>
-/// Result&lt;int, string&gt; result = Result&lt;int, string&gt;.Ok(42);
+/// // Pattern matching
+/// var message = result.IsOk
+///     ? $"Got {result.Value}"
+///     : $"Failed: {result.Error}";
 ///
-/// string message = result.Match(
-///     value =&gt; $"Got {value}",
-///     error =&gt; $"Failed: {error}");
-/// // message == "Got 42"
+/// // LINQ query syntax (railway-oriented programming)
+/// var final =
+///     from x in parseInput(raw)
+///     from y in validate(x)
+///     select x + y;
+///
+/// // Fluent API
+/// result.Map(v =&gt; v * 2)
+///       .Bind(v =&gt; validate(v));
 /// </code>
 /// </example>
 /// </remarks>
@@ -106,29 +129,6 @@ public readonly struct Result<TSuccess, TError>
         : throw new InvalidOperationException("Cannot access Error on an Ok result.");
 
     /// <summary>
-    /// Exhaustive pattern match over both cases.
-    /// </summary>
-    /// <example>
-    /// <code>
-    /// var text = result.Match(
-    ///     value =&gt; $"Success: {value}",
-    ///     error =&gt; $"Error: {error}");
-    /// </code>
-    /// </example>
-    public TResult Match<TResult>(
-        Func<TSuccess, TResult> onOk,
-        Func<TError, TResult> onErr) =>
-        _isOk ? onOk(_value) : onErr(_error);
-
-    /// <summary>
-    /// Async exhaustive pattern match over both cases.
-    /// </summary>
-    public Task<TResult> Match<TResult>(
-        Func<TSuccess, Task<TResult>> onOk,
-        Func<TError, Task<TResult>> onErr) =>
-        _isOk ? onOk(_value) : onErr(_error);
-
-    /// <summary>
     /// Maps a function over the success value (functor).
     /// </summary>
     /// <remarks>
@@ -139,6 +139,20 @@ public readonly struct Result<TSuccess, TError>
         _isOk
             ? Result<TNew, TError>.Ok(f(_value))
             : Result<TNew, TError>.Err(_error);
+
+    /// <summary>
+    /// Maps a function over the success value. LINQ-compatible alias for <see cref="Map{TNew}"/>.
+    /// Enables <c>from x in result select f(x)</c> query syntax.
+    /// </summary>
+    /// <example>
+    /// <code>
+    /// var doubled = from v in Result&lt;int, string&gt;.Ok(21)
+    ///               select v * 2;
+    /// // doubled is Ok(42)
+    /// </code>
+    /// </example>
+    public Result<TNew, TError> Select<TNew>(Func<TSuccess, TNew> selector) =>
+        Map(selector);
 
     /// <summary>
     /// Chains a function that returns a Result over the success value (monad bind).
@@ -153,6 +167,48 @@ public readonly struct Result<TSuccess, TError>
             : Result<TNew, TError>.Err(_error);
 
     /// <summary>
+    /// Chains a function that returns a Result, then projects the pair.
+    /// LINQ-compatible overload that enables multi-<c>from</c> query syntax.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// This is the method the C# compiler requires for:
+    /// <code>
+    /// from x in result1
+    /// from y in f(x)
+    /// select g(x, y)
+    /// </code>
+    /// which desugars to <c>result1.SelectMany(x =&gt; f(x), (x, y) =&gt; g(x, y))</c>.
+    /// </para>
+    /// <para>
+    /// Errors short-circuit: if either <c>this</c> or the intermediate result is Err,
+    /// the entire chain returns Err without invoking subsequent functions.
+    /// </para>
+    /// </remarks>
+    /// <example>
+    /// <code>
+    /// var result =
+    ///     from order in Order.Create(cmd)
+    ///     from payment in ProcessPayment(order)
+    ///     select new OrderConfirmed(order.Id, payment.Id);
+    /// </code>
+    /// </example>
+    /// <typeparam name="TIntermediate">The success type of the intermediate result.</typeparam>
+    /// <typeparam name="TNew">The success type of the final projected result.</typeparam>
+    /// <param name="bind">A function from the current success value to an intermediate Result.</param>
+    /// <param name="project">A projection combining the original and intermediate success values.</param>
+    public Result<TNew, TError> SelectMany<TIntermediate, TNew>(
+        Func<TSuccess, Result<TIntermediate, TError>> bind,
+        Func<TSuccess, TIntermediate, TNew> project) =>
+        _isOk
+            ? bind(_value) switch
+            {
+                { IsOk: true } intermediate => Result<TNew, TError>.Ok(project(_value, intermediate.Value)),
+                var err => Result<TNew, TError>.Err(err.Error)
+            }
+            : Result<TNew, TError>.Err(_error);
+
+    /// <summary>
     /// Maps a function over the error value.
     /// </summary>
     public Result<TSuccess, TNew> MapError<TNew>(Func<TError, TNew> f) =>
@@ -163,4 +219,37 @@ public readonly struct Result<TSuccess, TError>
     /// <inheritdoc/>
     public override string ToString() =>
         _isOk ? $"Ok({_value})" : $"Err({_error})";
+}
+
+/// <summary>
+/// The unit type — a type with exactly one value, used where a success type
+/// is required but no meaningful value exists.
+/// </summary>
+/// <remarks>
+/// <para>
+/// In functional programming, <c>Unit</c> replaces <c>void</c> in generic contexts.
+/// Since <c>void</c> is not a first-class type in C#, <c>Result&lt;void, E&gt;</c>
+/// is not expressible. <c>Result&lt;Unit, E&gt;</c> fills this gap.
+/// </para>
+/// <para>
+/// <c>Unit</c> is a readonly struct with no fields — the JIT can optimize away
+/// copies and storage. There is effectively no runtime cost compared to <c>void</c>.
+/// </para>
+/// <example>
+/// <code>
+/// // Observer returns Result&lt;Unit, ObserverError&gt; — "I succeeded" or "I failed"
+/// Result&lt;Unit, string&gt;.Ok(Unit.Value)   // success with no payload
+/// Result&lt;Unit, string&gt;.Err("failed")     // failure with error
+/// </code>
+/// </example>
+/// </remarks>
+public readonly record struct Unit
+{
+    /// <summary>
+    /// The singleton value of the unit type.
+    /// </summary>
+    public static readonly Unit Value = default;
+
+    /// <inheritdoc/>
+    public override string ToString() => "()";
 }

@@ -26,8 +26,8 @@ We must decide:
 The Actor runtime uses the **Automaton constraint** with fire-and-forget `Tell`:
 
 ```csharp
-public sealed class ActorInstance<TAutomaton, TState, TEvent, TEffect>
-    where TAutomaton : Automaton<TState, TEvent, TEffect>
+public sealed class ActorInstance<TAutomaton, TState, TEvent, TEffect, TParameters>
+    where TAutomaton : Automaton<TState, TEvent, TEffect, TParameters>
 ```
 
 The actor is accessed exclusively through a typed reference:
@@ -51,13 +51,13 @@ Key design choices:
 
 ```csharp
 // Observer: no-op — actor state is internal
-Observer<TState, TEvent, TEffect> observer = (_, _, _) => Task.CompletedTask;
+Observer<TState, TEvent, TEffect> observer = (_, _, _) => PipelineResult.Ok;
 
 // Interpreter: wraps the effect handler with self-reference
 Interpreter<TEffect, TEvent> interpreter = async effect =>
 {
     await effectHandler(effect, actorRef);
-    return [];
+    return Result<TEvent[], PipelineError>.Ok([]);
 };
 ```
 
@@ -159,7 +159,7 @@ The interpreter receives a reference to the actor itself:
 Interpreter<TEffect, TEvent> interpreter = async effect =>
 {
     await effectHandler(effect, actorRef);
-    return [];
+    return Result<TEvent[], PipelineError>.Ok([]);
 };
 ```
 
@@ -179,7 +179,7 @@ The self-reference is the actor model's equivalent of the **Y combinator** — i
 | `handle_cast/2` | `Transition` (fire-and-forget) |
 | `!` (send) | `Tell` |
 | Mailbox | `Channel<TEvent>` |
-| `init/1` | `Automaton.Init()` |
+| `init/1` | `Automaton.Init(parameters)` |
 | Supervision tree | Not yet implemented (future work) |
 
 The key difference: Erlang actors are dynamically typed (any message), while Automaton actors are statically typed (`TEvent`). This provides compile-time safety at the cost of flexibility.

@@ -2,9 +2,11 @@
 
 Build a mailbox actor with channels, fire-and-forget messaging, and effect callbacks.
 
+> **Concept reference:** This tutorial builds a custom runtime. For the underlying theory, see [The Runtime](../concepts/the-runtime.md) and [Building Custom Runtimes](../guides/building-custom-runtimes.md).
+
 ## What You'll Learn
 
-- How the Actor Model maps to the Automaton kernel
+- How the Actor Model maps to the [Automaton kernel](../concepts/the-kernel.md)
 - How to build a mailbox with `System.Threading.Channels`
 - How to implement fire-and-forget messaging (the Tell pattern)
 - How to handle effects with self-reference
@@ -81,10 +83,10 @@ Key design decisions:
 ```csharp
 using Automaton;
 
-public sealed class ActorInstance<TAutomaton, TState, TEvent, TEffect>
-    where TAutomaton : Automaton<TState, TEvent, TEffect>
+public sealed class ActorInstance<TAutomaton, TState, TEvent, TEffect, TParameters>
+    where TAutomaton : Automaton<TState, TEvent, TEffect, TParameters>
 {
-    private readonly AutomatonRuntime<TAutomaton, TState, TEvent, TEffect> _core;
+    private readonly AutomatonRuntime<TAutomaton, TState, TEvent, TEffect, TParameters> _core;
     private readonly Channel<TEvent> _mailbox;
     private readonly CancellationTokenSource _cts = new();
     private int _processedCount;
@@ -94,7 +96,7 @@ public sealed class ActorInstance<TAutomaton, TState, TEvent, TEffect>
     public IReadOnlyList<TEvent> ProcessedMessages => _core.Events;
 
     private ActorInstance(
-        AutomatonRuntime<TAutomaton, TState, TEvent, TEffect> core,
+        AutomatonRuntime<TAutomaton, TState, TEvent, TEffect, TParameters> core,
         Channel<TEvent> mailbox,
         ActorRef<TEvent> actorRef)
     {
@@ -103,11 +105,11 @@ public sealed class ActorInstance<TAutomaton, TState, TEvent, TEffect>
         Ref = actorRef;
     }
 
-    public static ActorInstance<TAutomaton, TState, TEvent, TEffect> Spawn(
+    public static ActorInstance<TAutomaton, TState, TEvent, TEffect, TParameters> Spawn(
         string name,
         Func<TEffect, ActorRef<TEvent>, Task>? effectHandler = null)
     {
-        var (state, _) = TAutomaton.Init();
+        var (state, _) = TAutomaton.Init(default!);
         var mailbox = Channel.CreateUnbounded<TEvent>(new UnboundedChannelOptions
         {
             SingleReader = true,
@@ -117,21 +119,22 @@ public sealed class ActorInstance<TAutomaton, TState, TEvent, TEffect>
         var actorRef = new ActorRef<TEvent>(name, mailbox.Writer);
 
         // Observer: no-op — actor state is internal
-        Observer<TState, TEvent, TEffect> observer = (_, _, _) => Task.CompletedTask;
+        Observer<TState, TEvent, TEffect> observer = (_, _, _) => PipelineResult.Ok;
 
         // Interpreter: wraps the effect handler with self-reference
         Interpreter<TEffect, TEvent> interpreter = effectHandler is not null
             ? async effect =>
             {
                 await effectHandler(effect, actorRef);
-                return [];
+                return Result<TEvent[], PipelineError>.Ok([]);
             }
-            : _ => new ValueTask<TEvent[]>([]);
+            : _ => new ValueTask<Result<TEvent[], PipelineError>>(
+                Result<TEvent[], PipelineError>.Ok([]));
 
-        var core = new AutomatonRuntime<TAutomaton, TState, TEvent, TEffect>(
+        var core = new AutomatonRuntime<TAutomaton, TState, TEvent, TEffect, TParameters>(
             state, observer, interpreter);
 
-        var actor = new ActorInstance<TAutomaton, TState, TEvent, TEffect>(
+        var actor = new ActorInstance<TAutomaton, TState, TEvent, TEffect, TParameters>(
             core, mailbox, actorRef);
 
         // Start the processing loop
@@ -184,7 +187,7 @@ Key design decisions:
 ## Step 3: Spawn and Send Messages
 
 ```csharp
-var actor = ActorInstance<Counter, CounterState, CounterEvent, CounterEffect>
+var actor = ActorInstance<Counter, CounterState, CounterEvent, CounterEffect, Unit>
     .Spawn("counter-1");
 
 // Fire-and-forget: messages are queued
@@ -208,7 +211,7 @@ Pass an effect handler to `Spawn`. It receives the effect and a reference to the
 ```csharp
 var logs = new List<string>();
 
-var actor = ActorInstance<Counter, CounterState, CounterEvent, CounterEffect>
+var actor = ActorInstance<Counter, CounterState, CounterEvent, CounterEffect, Unit>
     .Spawn("counter-1", effectHandler: async (effect, self) =>
     {
         if (effect is CounterEffect.Log log)
@@ -234,7 +237,7 @@ await actor.Stop();
 Because messages are processed sequentially from the mailbox, the actor is inherently thread-safe — even when messages arrive from multiple threads:
 
 ```csharp
-var actor = ActorInstance<Counter, CounterState, CounterEvent, CounterEffect>
+var actor = ActorInstance<Counter, CounterState, CounterEvent, CounterEffect, Unit>
     .Spawn("concurrent-counter");
 
 // Send 100 messages from many threads simultaneously
@@ -315,3 +318,13 @@ The same `Counter` transition function drives the actor, the MVU runtime, and th
 
 - **[Command Validation](05-command-validation.md)** — Validate commands before sending them to actors
 - **[Observability](06-observability.md)** — Add distributed tracing to your actor system
+
+### Deepen Your Understanding
+
+| Topic | Link |
+| ----- | ---- |
+| How Observer and Interpreter work | [The Runtime](../concepts/the-runtime.md) |
+| Thread safety and serialization | [Runtime Reference](../reference/runtime.md) |
+| Building other custom runtimes | [Building Custom Runtimes](../guides/building-custom-runtimes.md) |
+| Choosing between MVU, ES, and Actors | [Runtimes Compared](../concepts/runtimes-compared.md) |
+| Testing actors and runtimes | [Testing Strategies](../guides/testing-strategies.md) |

@@ -55,10 +55,11 @@ public class CrossRuntimeTests
     public async Task AllThreeRuntimes_ProduceIdenticalFinalState()
     {
         // --- MVU (receives events) ---
-        var mvu = await MvuRuntime<Thermostat, ThermostatState, ThermostatEvent, ThermostatEffect, string>
+        var mvu = await MvuRuntime<Thermostat, ThermostatState, ThermostatEvent, ThermostatEffect, string, Unit>
             .Start(
                 s => $"{s.CurrentTemp}°C (target: {s.TargetTemp}°C, heating: {s.Heating})",
-                _ => new ValueTask<ThermostatEvent[]>([]));
+                _ => new ValueTask<Result<ThermostatEvent[], PipelineError>>(
+                    Result<ThermostatEvent[], PipelineError>.Ok([])));
 
         foreach (var e in _eventScenario)
         {
@@ -67,7 +68,7 @@ public class CrossRuntimeTests
 
         // --- Event Sourcing (receives commands) ---
         var aggregate = AggregateRunner<Thermostat, ThermostatState, ThermostatCommand,
-            ThermostatEvent, ThermostatEffect, ThermostatError>.Create();
+            ThermostatEvent, ThermostatEffect, ThermostatError, Unit>.Create();
 
         foreach (var cmd in _commandScenario)
         {
@@ -75,7 +76,7 @@ public class CrossRuntimeTests
         }
 
         // --- Actor (receives events) ---
-        var actor = ActorInstance<Thermostat, ThermostatState, ThermostatEvent, ThermostatEffect>
+        var actor = ActorInstance<Thermostat, ThermostatState, ThermostatEvent, ThermostatEffect, Unit>
             .Spawn("cross-test");
 
         foreach (var e in _eventScenario)
@@ -101,10 +102,11 @@ public class CrossRuntimeTests
     public async Task EventSourcing_CanRebuild_ToSameStateAsMvu()
     {
         // Run through MVU (events)
-        var mvu = await MvuRuntime<Thermostat, ThermostatState, ThermostatEvent, ThermostatEffect, string>
+        var mvu = await MvuRuntime<Thermostat, ThermostatState, ThermostatEvent, ThermostatEffect, string, Unit>
             .Start(
                 s => $"{s.CurrentTemp}°C",
-                _ => new ValueTask<ThermostatEvent[]>([]));
+                _ => new ValueTask<Result<ThermostatEvent[], PipelineError>>(
+                    Result<ThermostatEvent[], PipelineError>.Ok([])));
 
         foreach (var e in _eventScenario)
         {
@@ -113,7 +115,7 @@ public class CrossRuntimeTests
 
         // Run through ES (commands) and rebuild from scratch
         var aggregate = AggregateRunner<Thermostat, ThermostatState, ThermostatCommand,
-            ThermostatEvent, ThermostatEffect, ThermostatError>.Create();
+            ThermostatEvent, ThermostatEffect, ThermostatError, Unit>.Create();
 
         foreach (var cmd in _commandScenario)
         {
@@ -143,7 +145,7 @@ public class CrossRuntimeTests
     {
         // state = events.Aggregate(init, transition)
         // This IS event sourcing. This IS MVU. This IS actor state.
-        var (seed, _) = Thermostat.Init();
+        var (seed, _) = Thermostat.Init(default);
 
         var finalState = _eventScenario.Aggregate(seed, (state, @event) =>
             Thermostat.Transition(state, @event).State);

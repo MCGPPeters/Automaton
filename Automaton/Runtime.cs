@@ -10,10 +10,16 @@
 // It is parameterized by two extension points:
 //
 // 1. Observer  — sees each (State, Event, Effect) triple after transition.
+//                Returns Result<Unit, PipelineError> to propagate errors as values.
 //                Used for rendering (MVU), persisting (ES), or logging.
 //
 // 2. Interpreter — converts effects into feedback events.
+//                   Returns Result<Events, PipelineError> to propagate errors as values.
 //                   Used for effect handling / command execution.
+//
+// Both Observer and Interpreter form monadic pipelines: they compose via
+// standard FP combinators (Then, Where, Select, Catch, Combine) using
+// C#/.NET naming conventions (LINQ-style Where/Select).
 //
 // Every specialized runtime (MVU, ES, Actor) is an instance of this
 // structure with specific Observer and Interpreter implementations.
@@ -35,23 +41,60 @@ using System.Runtime.CompilerServices;
 
 namespace Automaton;
 
+// =============================================================================
+// Pipeline Error — structured error for Observer and Interpreter failures
+// =============================================================================
+
+/// <summary>
+/// A structured error from an Observer or Interpreter pipeline stage.
+/// </summary>
+/// <remarks>
+/// <para>
+/// Pipeline errors are values, not exceptions. They propagate through the
+/// dispatch chain via <see cref="Result{TSuccess,TError}"/>, giving callers
+/// structured, composable error handling.
+/// </para>
+/// <para>
+/// Use <see cref="ObserverExtensions.Catch"/> or <see cref="InterpreterExtensions.Catch"/>
+/// combinators to recover from specific errors without breaking the pipeline.
+/// </para>
+/// </remarks>
+/// <param name="Message">Human-readable description of the failure.</param>
+/// <param name="Source">The pipeline stage that produced the error (e.g., "persist", "render").</param>
+/// <param name="Exception">The underlying exception, if the error originated from a caught exception.</param>
+public readonly record struct PipelineError(
+    string Message,
+    string? Source = null,
+    Exception? Exception = null)
+{
+    /// <inheritdoc/>
+    public override string ToString() =>
+        Source is not null ? $"[{Source}] {Message}" : Message;
+}
+
 /// <summary>
 /// Observes each transition triple (state, event, effect) after the automaton steps.
 /// </summary>
 /// <remarks>
+/// <para>
 /// The observer is the extension point for side effects that depend on the
 /// transition result: rendering a view (MVU), persisting an event (ES),
 /// or logging an audit trail.
-/// Implementations SHOULD NOT throw exceptions. If an observer throws after
-/// a transition, the state has already advanced and the exception propagates
-/// to the caller.
-/// Returns <see cref="ValueTask"/> to avoid heap allocation for synchronous
+/// </para>
+/// <para>
+/// Returns <c>Result&lt;Unit, PipelineError&gt;</c> instead of throwing exceptions.
+/// Errors propagate as values through the dispatch pipeline — callers receive
+/// a structured <see cref="PipelineError"/> and can decide how to handle it.
+/// </para>
+/// <para>
+/// Returns <see cref="ValueTask{TResult}"/> to avoid heap allocation for synchronous
 /// implementations (the common case).
+/// </para>
 /// </remarks>
 /// <typeparam name="TState">The state produced by the transition.</typeparam>
 /// <typeparam name="TEvent">The event that triggered the transition.</typeparam>
 /// <typeparam name="TEffect">The effect produced by the transition.</typeparam>
-public delegate ValueTask Observer<in TState, in TEvent, in TEffect>(
+public delegate ValueTask<Result<Unit, PipelineError>> Observer<in TState, in TEvent, in TEffect>(
     TState state,
     TEvent @event,
     TEffect effect);
@@ -60,18 +103,42 @@ public delegate ValueTask Observer<in TState, in TEvent, in TEffect>(
 /// Interprets an effect by converting it into zero or more feedback events.
 /// </summary>
 /// <remarks>
+/// <para>
 /// The interpreter is the extension point for effect execution. Feedback
 /// events are dispatched back into the automaton, creating a closed loop.
 /// Return an empty array for fire-and-forget effects.
-/// Implementations SHOULD NOT throw exceptions. If an interpreter throws,
-/// the state has already advanced and the exception propagates to the caller.
+/// </para>
+/// <para>
+/// Returns <c>Result&lt;TEvent[], PipelineError&gt;</c> instead of throwing exceptions.
+/// Errors propagate as values — callers receive a structured <see cref="PipelineError"/>
+/// and can decide how to handle it.
+/// </para>
+/// <para>
 /// Returns <see cref="ValueTask{TResult}"/> to avoid heap allocation when
 /// returning synchronously (the common case — most interpreters return
 /// an empty array without awaiting).
+/// </para>
 /// </remarks>
 /// <typeparam name="TEffect">The effect to interpret.</typeparam>
 /// <typeparam name="TEvent">The feedback events produced by interpretation.</typeparam>
-public delegate ValueTask<TEvent[]> Interpreter<in TEffect, TEvent>(TEffect effect);
+public delegate ValueTask<Result<TEvent[], PipelineError>> Interpreter<in TEffect, TEvent>(TEffect effect);
+
+// =============================================================================
+// Cached Result values for the fast path (avoid allocating new Result per call)
+// =============================================================================
+
+/// <summary>
+/// Pre-allocated Result values for common pipeline outcomes.
+/// Avoids allocating a new <c>Result&lt;Unit, PipelineError&gt;</c> on every observer call.
+/// </summary>
+public static class PipelineResult
+{
+    /// <summary>
+    /// A completed ValueTask containing Ok(Unit) — the happy path for observers.
+    /// </summary>
+    public static readonly ValueTask<Result<Unit, PipelineError>> Ok =
+        new(Result<Unit, PipelineError>.Ok(Unit.Value));
+}
 
 /// <summary>
 /// The shared automaton runtime: a monadic left fold with Observer and Interpreter.
@@ -79,7 +146,7 @@ public delegate ValueTask<TEvent[]> Interpreter<in TEffect, TEvent>(TEffect effe
 /// <remarks>
 /// <para>
 /// This is the structural core from which MVU, Event Sourcing, and the Actor Model
-/// are derived. Each specialized runtime constructs an <see cref="AutomatonRuntime{TAutomaton,TState,TEvent,TEffect}"/>
+/// are derived. Each specialized runtime constructs an <see cref="AutomatonRuntime{TAutomaton,TState,TEvent,TEffect,TParameters}"/>
 /// with domain-specific Observer and Interpreter implementations.
 /// </para>
 /// <para>
@@ -94,20 +161,30 @@ public delegate ValueTask<TEvent[]> Interpreter<in TEffect, TEvent>(TEffect effe
 /// <see cref="MaxFeedbackDepth"/>. Exceeding this limit throws
 /// <see cref="InvalidOperationException"/> to prevent stack overflows.
 /// </para>
+/// <para>
+/// <b>Error propagation:</b> Observer and Interpreter return
+/// <c>Result&lt;T, PipelineError&gt;</c>. Errors short-circuit the pipeline and
+/// propagate to the caller as values, not exceptions.
+/// </para>
 /// <example>
 /// <code>
 /// // Create a runtime with logging observer and no-op interpreter
 /// Observer&lt;ThermostatState, ThermostatEvent, ThermostatEffect&gt; log =
-///     (state, @event, effect) =&gt; { Console.WriteLine($"{@event} → {state}"); return ValueTask.CompletedTask; };
+///     (state, @event, effect) =&gt;
+///     {
+///         Console.WriteLine($"{@event} → {state}");
+///         return PipelineResult.Ok;
+///     };
 ///
 /// Interpreter&lt;ThermostatEffect, ThermostatEvent&gt; noOp =
-///     _ =&gt; new ValueTask&lt;ThermostatEvent[]&gt;([]);
+///     _ =&gt; new ValueTask&lt;Result&lt;ThermostatEvent[], PipelineError&gt;&gt;(
+///         Result&lt;ThermostatEvent[], PipelineError&gt;.Ok([]));
 ///
-/// var runtime = await AutomatonRuntime&lt;Thermostat, ThermostatState, ThermostatEvent, ThermostatEffect&gt;
-///     .Start(log, noOp);
+/// var runtime = await AutomatonRuntime&lt;Thermostat, ThermostatState, ThermostatEvent, ThermostatEffect, Unit&gt;
+///     .Start(default, log, noOp);
 ///
-/// await runtime.Dispatch(new ThermostatEvent.TemperatureRecorded(18m));
-/// // runtime.State.CurrentTemp == 18
+/// var result = await runtime.Dispatch(new ThermostatEvent.TemperatureRecorded(18m));
+/// // result.IsOk == true, runtime.State.CurrentTemp == 18
 /// </code>
 /// </example>
 /// </remarks>
@@ -115,8 +192,9 @@ public delegate ValueTask<TEvent[]> Interpreter<in TEffect, TEvent>(TEffect effe
 /// <typeparam name="TState">The state of the automaton.</typeparam>
 /// <typeparam name="TEvent">The events that drive transitions.</typeparam>
 /// <typeparam name="TEffect">The effects produced by transitions.</typeparam>
-public sealed class AutomatonRuntime<TAutomaton, TState, TEvent, TEffect> : IDisposable
-    where TAutomaton : Automaton<TState, TEvent, TEffect>
+/// <typeparam name="TParameters">The initialization parameters for the automaton.</typeparam>
+public sealed class AutomatonRuntime<TAutomaton, TState, TEvent, TEffect, TParameters> : IDisposable
+    where TAutomaton : Automaton<TState, TEvent, TEffect, TParameters>
 {
     /// <summary>
     /// Maximum recursion depth for interpreter feedback loops.
@@ -188,6 +266,7 @@ public sealed class AutomatonRuntime<TAutomaton, TState, TEvent, TEffect> : IDis
     /// <summary>
     /// Creates and starts a runtime, interpreting init effects immediately.
     /// </summary>
+    /// <param name="parameters">Initialization parameters passed to the automaton's Init method.</param>
     /// <param name="observer">Observer called after each transition.</param>
     /// <param name="interpreter">Interpreter that converts effects to feedback events.</param>
     /// <param name="threadSafe">
@@ -200,7 +279,8 @@ public sealed class AutomatonRuntime<TAutomaton, TState, TEvent, TEffect> : IDis
     /// </param>
     /// <param name="cancellationToken">Token to cancel the operation.</param>
     [AsyncMethodBuilder(typeof(PoolingAsyncValueTaskMethodBuilder<>))]
-    public static async ValueTask<AutomatonRuntime<TAutomaton, TState, TEvent, TEffect>> Start(
+    public static async ValueTask<AutomatonRuntime<TAutomaton, TState, TEvent, TEffect, TParameters>> Start(
+        TParameters parameters,
         Observer<TState, TEvent, TEffect> observer,
         Interpreter<TEffect, TEvent> interpreter,
         bool threadSafe = true,
@@ -211,8 +291,8 @@ public sealed class AutomatonRuntime<TAutomaton, TState, TEvent, TEffect> : IDis
         activity?.SetTag("automaton.type", _automatonTypeName);
         activity?.SetTag("automaton.state.type", _stateTypeName);
 
-        var (state, effect) = TAutomaton.Init();
-        var runtime = new AutomatonRuntime<TAutomaton, TState, TEvent, TEffect>(state, observer, interpreter, threadSafe, trackEvents);
+        var (state, effect) = TAutomaton.Init(parameters);
+        var runtime = new AutomatonRuntime<TAutomaton, TState, TEvent, TEffect, TParameters>(state, observer, interpreter, threadSafe, trackEvents);
         await runtime.InterpretEffect(effect, cancellationToken).ConfigureAwait(false);
 
         activity?.SetStatus(ActivityStatusCode.Ok);
@@ -221,6 +301,8 @@ public sealed class AutomatonRuntime<TAutomaton, TState, TEvent, TEffect> : IDis
 
     /// <summary>
     /// Dispatches an event: transition → observe → interpret effects.
+    /// Returns <c>Ok(Unit)</c> on success or <c>Err(PipelineError)</c> if the observer
+    /// or interpreter pipeline reports a failure.
     /// </summary>
     /// <remarks>
     /// <para>
@@ -228,14 +310,13 @@ public sealed class AutomatonRuntime<TAutomaton, TState, TEvent, TEffect> : IDis
     /// </para>
     /// <para>
     /// The transition function is pure and cannot fail. If the observer or interpreter
-    /// throws, the state has already advanced (the transition is committed) and the
-    /// exception propagates to the caller. Callers should ensure their observer and
-    /// interpreter implementations handle errors internally.
+    /// returns <c>Err</c>, the state has already advanced (the transition is committed)
+    /// and the error is propagated to the caller as a value.
     /// </para>
     /// </remarks>
     /// <param name="event">The event to dispatch.</param>
     /// <param name="cancellationToken">Token to cancel the operation.</param>
-    public ValueTask Dispatch(TEvent @event, CancellationToken cancellationToken = default)
+    public ValueTask<Result<Unit, PipelineError>> Dispatch(TEvent @event, CancellationToken cancellationToken = default)
     {
         var activity = AutomatonDiagnostics.Source.StartActivity("Automaton.Dispatch");
         activity?.SetTag("automaton.type", _automatonTypeName);
@@ -254,16 +335,21 @@ public sealed class AutomatonRuntime<TAutomaton, TState, TEvent, TEffect> : IDis
         return DispatchUnserialized(@event, cancellationToken, activity);
     }
 
-    private ValueTask DispatchUnserialized(TEvent @event, CancellationToken cancellationToken, Activity? activity)
+    private ValueTask<Result<Unit, PipelineError>> DispatchUnserialized(
+        TEvent @event, CancellationToken cancellationToken, Activity? activity)
     {
         try
         {
             var coreTask = DispatchCore(@event, cancellationToken);
             if (coreTask.IsCompletedSuccessfully)
             {
-                activity?.SetStatus(ActivityStatusCode.Ok);
+                var result = coreTask.Result;
+                if (result.IsOk)
+                    activity?.SetStatus(ActivityStatusCode.Ok);
+                else
+                    activity?.SetStatus(ActivityStatusCode.Error, result.Error.Message);
                 activity?.Dispose();
-                return ValueTask.CompletedTask;
+                return new ValueTask<Result<Unit, PipelineError>>(result);
             }
 
             return AwaitCoreUnserialized(coreTask, activity);
@@ -276,14 +362,19 @@ public sealed class AutomatonRuntime<TAutomaton, TState, TEvent, TEffect> : IDis
         }
     }
 
-    [AsyncMethodBuilder(typeof(PoolingAsyncValueTaskMethodBuilder))]
-    private async ValueTask AwaitCoreUnserialized(ValueTask coreTask, Activity? activity)
+    [AsyncMethodBuilder(typeof(PoolingAsyncValueTaskMethodBuilder<>))]
+    private async ValueTask<Result<Unit, PipelineError>> AwaitCoreUnserialized(
+        ValueTask<Result<Unit, PipelineError>> coreTask, Activity? activity)
     {
         using var _ = activity;
         try
         {
-            await coreTask.ConfigureAwait(false);
-            activity?.SetStatus(ActivityStatusCode.Ok);
+            var result = await coreTask.ConfigureAwait(false);
+            if (result.IsOk)
+                activity?.SetStatus(ActivityStatusCode.Ok);
+            else
+                activity?.SetStatus(ActivityStatusCode.Error, result.Error.Message);
+            return result;
         }
         catch (Exception ex)
         {
@@ -292,17 +383,22 @@ public sealed class AutomatonRuntime<TAutomaton, TState, TEvent, TEffect> : IDis
         }
     }
 
-    private ValueTask DispatchAfterGate(TEvent @event, CancellationToken cancellationToken, Activity? activity)
+    private ValueTask<Result<Unit, PipelineError>> DispatchAfterGate(
+        TEvent @event, CancellationToken cancellationToken, Activity? activity)
     {
         try
         {
             var coreTask = DispatchCore(@event, cancellationToken);
             if (coreTask.IsCompletedSuccessfully)
             {
-                activity?.SetStatus(ActivityStatusCode.Ok);
+                var result = coreTask.Result;
+                if (result.IsOk)
+                    activity?.SetStatus(ActivityStatusCode.Ok);
+                else
+                    activity?.SetStatus(ActivityStatusCode.Error, result.Error.Message);
                 activity?.Dispose();
                 _gate.Release();
-                return ValueTask.CompletedTask;
+                return new ValueTask<Result<Unit, PipelineError>>(result);
             }
 
             return AwaitCoreThenRelease(coreTask, activity);
@@ -316,14 +412,19 @@ public sealed class AutomatonRuntime<TAutomaton, TState, TEvent, TEffect> : IDis
         }
     }
 
-    [AsyncMethodBuilder(typeof(PoolingAsyncValueTaskMethodBuilder))]
-    private async ValueTask AwaitCoreThenRelease(ValueTask coreTask, Activity? activity)
+    [AsyncMethodBuilder(typeof(PoolingAsyncValueTaskMethodBuilder<>))]
+    private async ValueTask<Result<Unit, PipelineError>> AwaitCoreThenRelease(
+        ValueTask<Result<Unit, PipelineError>> coreTask, Activity? activity)
     {
         using var _ = activity;
         try
         {
-            await coreTask.ConfigureAwait(false);
-            activity?.SetStatus(ActivityStatusCode.Ok);
+            var result = await coreTask.ConfigureAwait(false);
+            if (result.IsOk)
+                activity?.SetStatus(ActivityStatusCode.Ok);
+            else
+                activity?.SetStatus(ActivityStatusCode.Error, result.Error.Message);
+            return result;
         }
         catch (Exception ex)
         {
@@ -336,16 +437,20 @@ public sealed class AutomatonRuntime<TAutomaton, TState, TEvent, TEffect> : IDis
         }
     }
 
-    [AsyncMethodBuilder(typeof(PoolingAsyncValueTaskMethodBuilder))]
-    private async ValueTask AwaitGateThenDispatch(
+    [AsyncMethodBuilder(typeof(PoolingAsyncValueTaskMethodBuilder<>))]
+    private async ValueTask<Result<Unit, PipelineError>> AwaitGateThenDispatch(
         Task waitTask, TEvent @event, CancellationToken cancellationToken, Activity? activity)
     {
         using var _ = activity;
         await waitTask.ConfigureAwait(false);
         try
         {
-            await DispatchCore(@event, cancellationToken).ConfigureAwait(false);
-            activity?.SetStatus(ActivityStatusCode.Ok);
+            var result = await DispatchCore(@event, cancellationToken).ConfigureAwait(false);
+            if (result.IsOk)
+                activity?.SetStatus(ActivityStatusCode.Ok);
+            else
+                activity?.SetStatus(ActivityStatusCode.Error, result.Error.Message);
+            return result;
         }
         catch (Exception ex)
         {
@@ -540,10 +645,11 @@ public sealed class AutomatonRuntime<TAutomaton, TState, TEvent, TEffect> : IDis
     /// <summary>
     /// Dispatches an event without acquiring the gate.
     /// Must only be called while the gate is held.
-    /// Used by <see cref="DecidingRuntime{TDecider,TState,TCommand,TEvent,TEffect,TError}"/>
+    /// Used by <see cref="DecidingRuntime{TDecider,TState,TCommand,TEvent,TEffect,TError,TParameters}"/>
     /// to dispatch all events from a single Decide call atomically.
     /// </summary>
-    internal ValueTask DispatchUnlocked(TEvent @event, CancellationToken cancellationToken, int depth = 0)
+    internal ValueTask<Result<Unit, PipelineError>> DispatchUnlocked(
+        TEvent @event, CancellationToken cancellationToken, int depth = 0)
         => DispatchCore(@event, cancellationToken, depth);
 
     // =========================================================================
@@ -556,9 +662,14 @@ public sealed class AutomatonRuntime<TAutomaton, TState, TEvent, TEffect> : IDis
     // Pattern: check ValueTask.IsCompletedSuccessfully, return ValueTask
     // directly on the fast path (zero-alloc), fall back to an async helper
     // on the slow path.
+    //
+    // Observer and Interpreter now return Result<T, PipelineError>. The fast
+    // path checks both IsCompletedSuccessfully AND IsOk before continuing,
+    // short-circuiting on Err to propagate pipeline errors as values.
     // =========================================================================
 
-    private ValueTask DispatchCore(TEvent @event, CancellationToken cancellationToken, int depth = 0)
+    private ValueTask<Result<Unit, PipelineError>> DispatchCore(
+        TEvent @event, CancellationToken cancellationToken, int depth = 0)
     {
         cancellationToken.ThrowIfCancellationRequested();
 
@@ -569,21 +680,34 @@ public sealed class AutomatonRuntime<TAutomaton, TState, TEvent, TEffect> : IDis
 
         var observerTask = _observer(_state, @event, effect);
         if (observerTask.IsCompletedSuccessfully)
-            return InterpretEffectCore(effect, cancellationToken, depth);
+        {
+            var observerResult = observerTask.Result;
+            if (observerResult.IsErr)
+                return new ValueTask<Result<Unit, PipelineError>>(observerResult);
+
+            return InterpretEffectCoreWithResult(effect, cancellationToken, depth);
+        }
 
         return AwaitObserverThenInterpret(observerTask, effect, cancellationToken, depth);
     }
 
-    [AsyncMethodBuilder(typeof(PoolingAsyncValueTaskMethodBuilder))]
-    private async ValueTask AwaitObserverThenInterpret(
-        ValueTask observerTask, TEffect effect,
+    [AsyncMethodBuilder(typeof(PoolingAsyncValueTaskMethodBuilder<>))]
+    private async ValueTask<Result<Unit, PipelineError>> AwaitObserverThenInterpret(
+        ValueTask<Result<Unit, PipelineError>> observerTask, TEffect effect,
         CancellationToken cancellationToken, int depth)
     {
-        await observerTask.ConfigureAwait(false);
-        await InterpretEffectCore(effect, cancellationToken, depth).ConfigureAwait(false);
+        var observerResult = await observerTask.ConfigureAwait(false);
+        if (observerResult.IsErr)
+            return observerResult;
+
+        return await InterpretEffectCoreWithResult(effect, cancellationToken, depth).ConfigureAwait(false);
     }
 
-    private ValueTask InterpretEffectCore(TEffect effect, CancellationToken cancellationToken, int depth = 0)
+    /// <summary>
+    /// Interprets an effect and returns Result — used by DispatchCore pipeline.
+    /// </summary>
+    private ValueTask<Result<Unit, PipelineError>> InterpretEffectCoreWithResult(
+        TEffect effect, CancellationToken cancellationToken, int depth = 0)
     {
         if (depth > MaxFeedbackDepth)
             throw new InvalidOperationException(
@@ -595,57 +719,136 @@ public sealed class AutomatonRuntime<TAutomaton, TState, TEvent, TEffect> : IDis
 
         var interpreterTask = _interpreter(effect);
         if (interpreterTask.IsCompletedSuccessfully)
-            return DispatchFeedbackEvents(interpreterTask.Result, cancellationToken, depth);
+        {
+            var interpreterResult = interpreterTask.Result;
+            if (interpreterResult.IsErr)
+                return new ValueTask<Result<Unit, PipelineError>>(
+                    Result<Unit, PipelineError>.Err(interpreterResult.Error));
 
-        return AwaitInterpreterThenDispatch(interpreterTask, cancellationToken, depth);
+            return DispatchFeedbackEventsWithResult(interpreterResult.Value, cancellationToken, depth);
+        }
+
+        return AwaitInterpreterThenDispatchWithResult(interpreterTask, cancellationToken, depth);
     }
 
-    [AsyncMethodBuilder(typeof(PoolingAsyncValueTaskMethodBuilder))]
-    private async ValueTask AwaitInterpreterThenDispatch(
-        ValueTask<TEvent[]> interpreterTask,
+    [AsyncMethodBuilder(typeof(PoolingAsyncValueTaskMethodBuilder<>))]
+    private async ValueTask<Result<Unit, PipelineError>> AwaitInterpreterThenDispatchWithResult(
+        ValueTask<Result<TEvent[], PipelineError>> interpreterTask,
         CancellationToken cancellationToken, int depth)
     {
-        var feedbackEvents = await interpreterTask.ConfigureAwait(false);
-        await DispatchFeedbackEvents(feedbackEvents, cancellationToken, depth).ConfigureAwait(false);
+        var interpreterResult = await interpreterTask.ConfigureAwait(false);
+        if (interpreterResult.IsErr)
+            return Result<Unit, PipelineError>.Err(interpreterResult.Error);
+
+        return await DispatchFeedbackEventsWithResult(interpreterResult.Value, cancellationToken, depth)
+            .ConfigureAwait(false);
     }
 
-    private ValueTask DispatchFeedbackEvents(
+    private ValueTask<Result<Unit, PipelineError>> DispatchFeedbackEventsWithResult(
         TEvent[] feedbackEvents,
         CancellationToken cancellationToken, int depth)
     {
         if (feedbackEvents.Length == 0)
-            return ValueTask.CompletedTask;
+            return PipelineResult.Ok;
 
-        return DispatchFeedbackEventsAsync(feedbackEvents, cancellationToken, depth);
+        return DispatchFeedbackEventsWithResultAsync(feedbackEvents, cancellationToken, depth);
     }
 
-    [AsyncMethodBuilder(typeof(PoolingAsyncValueTaskMethodBuilder))]
-    private async ValueTask DispatchFeedbackEventsAsync(
+    [AsyncMethodBuilder(typeof(PoolingAsyncValueTaskMethodBuilder<>))]
+    private async ValueTask<Result<Unit, PipelineError>> DispatchFeedbackEventsWithResultAsync(
         TEvent[] feedbackEvents,
         CancellationToken cancellationToken, int depth)
     {
         for (var i = 0; i < feedbackEvents.Length; i++)
         {
-            await DispatchCore(feedbackEvents[i], cancellationToken, depth + 1).ConfigureAwait(false);
+            var result = await DispatchCore(feedbackEvents[i], cancellationToken, depth + 1)
+                .ConfigureAwait(false);
+            if (result.IsErr)
+                return result;
         }
+
+        return Result<Unit, PipelineError>.Ok(Unit.Value);
+    }
+
+    /// <summary>
+    /// Interprets an effect for the public InterpretEffect method (returns void-ValueTask).
+    /// Delegates to the Result-returning version and throws on pipeline errors.
+    /// </summary>
+    /// <remarks>
+    /// This is called from <see cref="Start"/> for init effects and from the public
+    /// <see cref="InterpretEffect"/>. Pipeline errors surface as exceptions because
+    /// these callers have no Result return channel.
+    /// </remarks>
+    private ValueTask InterpretEffectCore(TEffect effect, CancellationToken cancellationToken, int depth = 0)
+    {
+        var resultTask = InterpretEffectCoreWithResult(effect, cancellationToken, depth);
+        if (resultTask.IsCompletedSuccessfully)
+        {
+            var result = resultTask.Result;
+            if (result.IsErr)
+                ThrowInterpreterPipelineError(result.Error);
+            return ValueTask.CompletedTask;
+        }
+
+        return AwaitInterpretEffectCoreUnwrap(resultTask);
+    }
+
+    /// <summary>
+    /// Surfaces interpreter pipeline errors as exceptions for callers without a Result channel.
+    /// </summary>
+    private static void ThrowInterpreterPipelineError(PipelineError error) =>
+        throw new InvalidOperationException($"Interpreter pipeline failed: {error}", error.Exception);
+
+    [AsyncMethodBuilder(typeof(PoolingAsyncValueTaskMethodBuilder))]
+    private static async ValueTask AwaitInterpretEffectCoreUnwrap(
+        ValueTask<Result<Unit, PipelineError>> resultTask)
+    {
+        var result = await resultTask.ConfigureAwait(false);
+        if (result.IsErr)
+            ThrowInterpreterPipelineError(result.Error);
     }
 }
 
+// =============================================================================
+// Observer combinators — standard FP pipeline composition
+// =============================================================================
+
 /// <summary>
-/// Combinators for composing observers.
+/// Combinators for composing observers into monadic pipelines.
 /// </summary>
+/// <remarks>
+/// <para>
+/// Observers form a <b>monoid</b> under <see cref="Then{TState,TEvent,TEffect}"/> (sequential composition)
+/// and a <b>monad</b> under <see cref="Result{TSuccess,TError}"/> (railway-oriented
+/// error propagation). The combinator vocabulary uses C#/.NET naming conventions.
+/// </para>
+/// <para>
+/// <list type="table">
+///     <listheader><term>Combinator</term><description>FP Concept</description></listheader>
+///     <item><term><see cref="Then{TState,TEvent,TEffect}"/></term><description>Kleisli composition (>>=) — sequential, short-circuits on Err</description></item>
+///     <item><term><see cref="Where{TState,TEvent,TEffect}"/></term><description>Guard / filter — skip when predicate is false</description></item>
+///     <item><term><see cref="Select{TState2,TEvent2,TEffect2,TState1,TEvent1,TEffect1}"/></term><description>Contravariant functor (contramap) — transform the input triple</description></item>
+///     <item><term><see cref="Catch{TState,TEvent,TEffect}"/></term><description>Error recovery — handle PipelineError and resume</description></item>
+///     <item><term><see cref="Combine{TState,TEvent,TEffect}"/></term><description>Applicative — both run, first error wins</description></item>
+/// </list>
+/// </para>
+/// </remarks>
 public static class ObserverExtensions
 {
     /// <summary>
     /// Composes two observers sequentially: <paramref name="first"/> runs, then <paramref name="second"/>.
+    /// Short-circuits on error — if <paramref name="first"/> returns <c>Err</c>,
+    /// <paramref name="second"/> is never called.
     /// </summary>
     /// <remarks>
+    /// This is Kleisli composition (>>=) in the Result monad.
     /// Uses async elision: when both observers complete synchronously (the common case),
     /// no async state machine is allocated on the heap.
     /// </remarks>
     /// <example>
     /// <code>
-    /// var combined = renderObserver.Then(logObserver);
+    /// var pipeline = persistObserver.Then(logObserver);
+    /// // If persist fails, log is never called — error propagates
     /// </code>
     /// </example>
     public static Observer<TState, TEvent, TEffect> Then<TState, TEvent, TEffect>(
@@ -655,18 +858,318 @@ public static class ObserverExtensions
         {
             var t1 = first(state, @event, effect);
             if (t1.IsCompletedSuccessfully)
+            {
+                var r1 = t1.Result;
+                if (r1.IsErr)
+                    return new ValueTask<Result<Unit, PipelineError>>(r1);
                 return second(state, @event, effect);
+            }
 
             return AwaitFirstThenSecond(t1, second, state, @event, effect);
         };
 
-    [AsyncMethodBuilder(typeof(PoolingAsyncValueTaskMethodBuilder))]
-    private static async ValueTask AwaitFirstThenSecond<TState, TEvent, TEffect>(
-        ValueTask first,
+    [AsyncMethodBuilder(typeof(PoolingAsyncValueTaskMethodBuilder<>))]
+    private static async ValueTask<Result<Unit, PipelineError>> AwaitFirstThenSecond<TState, TEvent, TEffect>(
+        ValueTask<Result<Unit, PipelineError>> first,
         Observer<TState, TEvent, TEffect> second,
         TState state, TEvent @event, TEffect effect)
     {
-        await first.ConfigureAwait(false);
-        await second(state, @event, effect).ConfigureAwait(false);
+        var r1 = await first.ConfigureAwait(false);
+        if (r1.IsErr)
+            return r1;
+        return await second(state, @event, effect).ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// Conditionally invokes the observer only when the predicate is satisfied.
+    /// When the predicate returns <c>false</c>, returns <c>Ok(Unit)</c> (skip).
+    /// </summary>
+    /// <remarks>
+    /// Analogous to LINQ <c>Where</c> — filters which transitions the observer sees.
+    /// The predicate receives the full transition triple (state, event, effect).
+    /// </remarks>
+    /// <example>
+    /// <code>
+    /// // Only observe heater-related events
+    /// var heaterObserver = logObserver
+    ///     .Where((_, e, _) =&gt; e is ThermostatEvent.HeaterTurnedOn or ThermostatEvent.HeaterTurnedOff);
+    /// </code>
+    /// </example>
+    public static Observer<TState, TEvent, TEffect> Where<TState, TEvent, TEffect>(
+        this Observer<TState, TEvent, TEffect> observer,
+        Func<TState, TEvent, TEffect, bool> predicate) =>
+        (state, @event, effect) =>
+            predicate(state, @event, effect)
+                ? observer(state, @event, effect)
+                : PipelineResult.Ok;
+
+    /// <summary>
+    /// Transforms the observer's input by applying a projection to the transition triple.
+    /// This is the <b>contravariant functor</b> (contramap) operation.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Since observers <em>consume</em> values (they are contravariant in their inputs),
+    /// <c>Select</c> maps the <em>input</em> side. Given an observer of <c>(S2, E2, Eff2)</c>
+    /// and a function <c>(S1, E1, Eff1) → (S2, E2, Eff2)</c>, produces an observer of
+    /// <c>(S1, E1, Eff1)</c>.
+    /// </para>
+    /// </remarks>
+    public static Observer<TState1, TEvent1, TEffect1>
+        Select<TState2, TEvent2, TEffect2, TState1, TEvent1, TEffect1>(
+            this Observer<TState2, TEvent2, TEffect2> observer,
+            Func<TState1, TEvent1, TEffect1, (TState2 State, TEvent2 Event, TEffect2 Effect)> project) =>
+        (state, @event, effect) =>
+        {
+            var (s2, e2, eff2) = project(state, @event, effect);
+            return observer(s2, e2, eff2);
+        };
+
+    /// <summary>
+    /// Recovers from an observer error by applying a handler function.
+    /// If the observer returns <c>Err</c>, the handler decides whether to recover
+    /// (return <c>Ok</c>) or propagate a different error.
+    /// </summary>
+    /// <remarks>
+    /// Analogous to <c>catch</c> in exception handling, but as a pure function.
+    /// The handler receives the <see cref="PipelineError"/> and can:
+    /// <list type="bullet">
+    ///     <item>Return <c>Ok(Unit)</c> to swallow the error and continue</item>
+    ///     <item>Return <c>Err(newError)</c> to replace the error</item>
+    /// </list>
+    /// </remarks>
+    public static Observer<TState, TEvent, TEffect> Catch<TState, TEvent, TEffect>(
+        this Observer<TState, TEvent, TEffect> observer,
+        Func<PipelineError, Result<Unit, PipelineError>> handler) =>
+        (state, @event, effect) =>
+        {
+            var task = observer(state, @event, effect);
+            if (task.IsCompletedSuccessfully)
+            {
+                var result = task.Result;
+                return result.IsErr
+                    ? new ValueTask<Result<Unit, PipelineError>>(handler(result.Error))
+                    : task;
+            }
+
+            return AwaitThenCatch(task, handler);
+        };
+
+    [AsyncMethodBuilder(typeof(PoolingAsyncValueTaskMethodBuilder<>))]
+    private static async ValueTask<Result<Unit, PipelineError>> AwaitThenCatch(
+        ValueTask<Result<Unit, PipelineError>> task,
+        Func<PipelineError, Result<Unit, PipelineError>> handler)
+    {
+        var result = await task.ConfigureAwait(false);
+        return result.IsErr ? handler(result.Error) : result;
+    }
+
+    /// <summary>
+    /// Runs two observers in sequence, collecting the first error encountered.
+    /// Unlike <see cref="Then{TState,TEvent,TEffect}"/>, both observers always execute — the second is NOT
+    /// short-circuited by a first-observer error.
+    /// </summary>
+    /// <remarks>
+    /// Analogous to applicative (<c>&lt;*&gt;</c>) — "run both, combine results."
+    /// Useful when both observers must run (e.g., persist AND log) even if one fails.
+    /// If both fail, the first error is returned.
+    /// Observers execute sequentially to preserve ordering guarantees and avoid
+    /// races when observers touch shared resources.
+    /// </remarks>
+    public static Observer<TState, TEvent, TEffect> Combine<TState, TEvent, TEffect>(
+        this Observer<TState, TEvent, TEffect> first,
+        Observer<TState, TEvent, TEffect> second) =>
+        (state, @event, effect) =>
+        {
+            var t1 = first(state, @event, effect);
+            if (t1.IsCompletedSuccessfully)
+            {
+                var r1 = t1.Result;
+                var t2 = second(state, @event, effect);
+                if (t2.IsCompletedSuccessfully)
+                {
+                    var r2 = t2.Result;
+                    return r1.IsErr
+                        ? new ValueTask<Result<Unit, PipelineError>>(r1)
+                        : new ValueTask<Result<Unit, PipelineError>>(r2);
+                }
+
+                return AwaitSecondThenCombine(r1, t2);
+            }
+
+            return AwaitFirstThenRunSecondThenCombine(t1, second, state, @event, effect);
+        };
+
+    [AsyncMethodBuilder(typeof(PoolingAsyncValueTaskMethodBuilder<>))]
+    private static async ValueTask<Result<Unit, PipelineError>> AwaitSecondThenCombine(
+        Result<Unit, PipelineError> r1,
+        ValueTask<Result<Unit, PipelineError>> t2)
+    {
+        var r2 = await t2.ConfigureAwait(false);
+        return r1.IsErr ? r1 : r2;
+    }
+
+    [AsyncMethodBuilder(typeof(PoolingAsyncValueTaskMethodBuilder<>))]
+    private static async ValueTask<Result<Unit, PipelineError>> AwaitFirstThenRunSecondThenCombine<TState, TEvent, TEffect>(
+        ValueTask<Result<Unit, PipelineError>> t1,
+        Observer<TState, TEvent, TEffect> second,
+        TState state,
+        TEvent @event,
+        TEffect effect)
+    {
+        var r1 = await t1.ConfigureAwait(false);
+        var r2 = await second(state, @event, effect).ConfigureAwait(false);
+        return r1.IsErr ? r1 : r2;
+    }
+}
+
+// =============================================================================
+// Interpreter combinators — standard FP pipeline composition
+// =============================================================================
+
+/// <summary>
+/// Combinators for composing interpreters into monadic pipelines.
+/// </summary>
+/// <remarks>
+/// <para>
+/// Interpreters compose similarly to observers, with the addition that their
+/// success value (feedback events) can be concatenated.
+/// </para>
+/// <para>
+/// <list type="table">
+///     <listheader><term>Combinator</term><description>FP Concept</description></listheader>
+///     <item><term><see cref="Then{TEffect,TEvent}"/></term><description>Kleisli composition — sequential, short-circuits on Err, concatenates events</description></item>
+///     <item><term><see cref="Where{TEffect,TEvent}"/></term><description>Guard / filter — only interpret certain effects</description></item>
+///     <item><term><see cref="Select{TEffect2,TEvent,TEffect1}"/></term><description>Contravariant functor — transform the effect before interpreting</description></item>
+///     <item><term><see cref="Catch{TEffect,TEvent}"/></term><description>Error recovery — handle PipelineError and resume</description></item>
+/// </list>
+/// </para>
+/// </remarks>
+public static class InterpreterExtensions
+{
+    /// <summary>
+    /// Composes two interpreters sequentially: <paramref name="first"/> runs, then <paramref name="second"/>.
+    /// Feedback events from both are concatenated. Short-circuits on error.
+    /// </summary>
+    /// <remarks>
+    /// Optimizes for the common case where one interpreter returns an empty array —
+    /// avoids allocating a concatenated array when one side has nothing to contribute.
+    /// </remarks>
+    public static Interpreter<TEffect, TEvent> Then<TEffect, TEvent>(
+        this Interpreter<TEffect, TEvent> first,
+        Interpreter<TEffect, TEvent> second) =>
+        effect =>
+        {
+            var t1 = first(effect);
+            if (t1.IsCompletedSuccessfully)
+            {
+                var r1 = t1.Result;
+                if (r1.IsErr)
+                    return new ValueTask<Result<TEvent[], PipelineError>>(r1);
+
+                var firstEvents = r1.Value;
+                var t2 = second(effect);
+                if (t2.IsCompletedSuccessfully)
+                {
+                    var r2 = t2.Result;
+                    if (r2.IsErr)
+                        return new ValueTask<Result<TEvent[], PipelineError>>(r2);
+
+                    var secondEvents = r2.Value;
+                    var combined = ConcatEvents(firstEvents, secondEvents);
+                    return new ValueTask<Result<TEvent[], PipelineError>>(
+                        Result<TEvent[], PipelineError>.Ok(combined));
+                }
+
+                return AwaitSecondInterpreter(firstEvents, t2);
+            }
+
+            return AwaitFirstThenSecondInterpreter(t1, second, effect);
+        };
+
+    /// <summary>
+    /// Concatenates two event arrays, optimizing for the common case where one is empty.
+    /// </summary>
+    private static TEvent[] ConcatEvents<TEvent>(TEvent[] first, TEvent[] second) =>
+        first.Length == 0 ? second
+        : second.Length == 0 ? first
+        : [.. first, .. second];
+
+    [AsyncMethodBuilder(typeof(PoolingAsyncValueTaskMethodBuilder<>))]
+    private static async ValueTask<Result<TEvent[], PipelineError>> AwaitSecondInterpreter<TEvent>(
+        TEvent[] firstEvents,
+        ValueTask<Result<TEvent[], PipelineError>> secondTask)
+    {
+        var r2 = await secondTask.ConfigureAwait(false);
+        return r2.IsErr
+            ? r2
+            : Result<TEvent[], PipelineError>.Ok(ConcatEvents(firstEvents, r2.Value));
+    }
+
+    [AsyncMethodBuilder(typeof(PoolingAsyncValueTaskMethodBuilder<>))]
+    private static async ValueTask<Result<TEvent[], PipelineError>> AwaitFirstThenSecondInterpreter<TEffect, TEvent>(
+        ValueTask<Result<TEvent[], PipelineError>> firstTask,
+        Interpreter<TEffect, TEvent> second,
+        TEffect effect)
+    {
+        var r1 = await firstTask.ConfigureAwait(false);
+        if (r1.IsErr)
+            return r1;
+
+        var r2 = await second(effect).ConfigureAwait(false);
+        return r2.IsErr
+            ? r2
+            : Result<TEvent[], PipelineError>.Ok(ConcatEvents(r1.Value, r2.Value));
+    }
+
+    /// <summary>
+    /// Conditionally invokes the interpreter only when the predicate is satisfied.
+    /// When the predicate returns <c>false</c>, returns <c>Ok([])</c> (no feedback events).
+    /// </summary>
+    public static Interpreter<TEffect, TEvent> Where<TEffect, TEvent>(
+        this Interpreter<TEffect, TEvent> interpreter,
+        Func<TEffect, bool> predicate) =>
+        effect =>
+            predicate(effect)
+                ? interpreter(effect)
+                : new ValueTask<Result<TEvent[], PipelineError>>(
+                    Result<TEvent[], PipelineError>.Ok([]));
+
+    /// <summary>
+    /// Transforms the interpreter's input by applying a projection to the effect.
+    /// This is the contravariant functor (contramap) operation.
+    /// </summary>
+    public static Interpreter<TEffect1, TEvent> Select<TEffect2, TEvent, TEffect1>(
+        this Interpreter<TEffect2, TEvent> interpreter,
+        Func<TEffect1, TEffect2> project) =>
+        effect => interpreter(project(effect));
+
+    /// <summary>
+    /// Recovers from an interpreter error by applying a handler function.
+    /// </summary>
+    public static Interpreter<TEffect, TEvent> Catch<TEffect, TEvent>(
+        this Interpreter<TEffect, TEvent> interpreter,
+        Func<PipelineError, Result<TEvent[], PipelineError>> handler) =>
+        effect =>
+        {
+            var task = interpreter(effect);
+            if (task.IsCompletedSuccessfully)
+            {
+                var result = task.Result;
+                return result.IsErr
+                    ? new ValueTask<Result<TEvent[], PipelineError>>(handler(result.Error))
+                    : task;
+            }
+
+            return AwaitInterpreterThenCatch(task, handler);
+        };
+
+    [AsyncMethodBuilder(typeof(PoolingAsyncValueTaskMethodBuilder<>))]
+    private static async ValueTask<Result<TEvent[], PipelineError>> AwaitInterpreterThenCatch<TEvent>(
+        ValueTask<Result<TEvent[], PipelineError>> task,
+        Func<PipelineError, Result<TEvent[], PipelineError>> handler)
+    {
+        var result = await task.ConfigureAwait(false);
+        return result.IsErr ? handler(result.Error) : result;
     }
 }

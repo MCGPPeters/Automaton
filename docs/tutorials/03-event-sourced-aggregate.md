@@ -2,9 +2,11 @@
 
 Build a command-driven thermostat aggregate with an event store, replay, projections, and terminal state.
 
+> **Concept reference:** This tutorial uses the [Decider pattern](../concepts/the-decider.md) and the [Result type](../reference/result.md). For production event sourcing with optimistic concurrency, see the [Automaton.Patterns](../patterns/index.md) package (coming soon).
+
 ## What You'll Learn
 
-- How Event Sourcing maps to the Automaton kernel
+- How Event Sourcing maps to the [Automaton kernel](../concepts/the-kernel.md)
 - How to add **commands** and **validation** to the thermostat from Tutorial 01
 - How to build an in-memory event store
 - How to implement the decide-then-append pattern
@@ -86,13 +88,13 @@ The Decider separates **what should happen** (`Decide`) from **how it happens** 
 
 ```csharp
 public class Thermostat
-    : Decider<ThermostatState, ThermostatCommand, ThermostatEvent, ThermostatEffect, ThermostatError>
+    : Decider<ThermostatState, ThermostatCommand, ThermostatEvent, ThermostatEffect, ThermostatError, Unit>
 {
     public const decimal MinTarget = 5.0m;
     public const decimal MaxTarget = 40.0m;
     public const decimal AlertThreshold = 35.0m;
 
-    public static (ThermostatState State, ThermostatEffect Effect) Init() =>
+    public static (ThermostatState State, ThermostatEffect Effect) Init(Unit _) =>
         (new ThermostatState(20.0m, 22.0m, Heating: false, Active: true),
          new ThermostatEffect.None());
 
@@ -218,8 +220,8 @@ public sealed class EventStore<TEvent>
 The aggregate runner implements the **decide → transition → append** pattern:
 
 ```csharp
-public sealed class AggregateRunner<TDecider, TState, TCommand, TEvent, TEffect, TError>
-    where TDecider : Decider<TState, TCommand, TEvent, TEffect, TError>
+public sealed class AggregateRunner<TDecider, TState, TCommand, TEvent, TEffect, TError, TParameters>
+    where TDecider : Decider<TState, TCommand, TEvent, TEffect, TError, TParameters>
 {
     private TState _state;
     private readonly EventStore<TEvent> _store;
@@ -273,7 +275,7 @@ Key design decisions:
 
 ```csharp
 var aggregate = AggregateRunner<Thermostat, ThermostatState, ThermostatCommand,
-    ThermostatEvent, ThermostatEffect, ThermostatError>.Create();
+    ThermostatEvent, ThermostatEffect, ThermostatError, Unit>.Create();
 
 // Room is cold → heater starts
 var result = aggregate.Handle(new ThermostatCommand.RecordReading(18.0m));
@@ -329,7 +331,7 @@ The defining feature of Event Sourcing — rebuild current state by replaying:
 // Add to AggregateRunner:
 public TState Rebuild()
 {
-    var (seed, _) = TDecider.Init();
+    var (seed, _) = TDecider.Init(default!);
     _state = _store.Replay(seed, (s, e) => TDecider.Transition(s, e).State);
     return _state;
 }
@@ -358,7 +360,7 @@ store.Append(new ThermostatEvent.TemperatureRecorded(23.0m));
 store.Append(new ThermostatEvent.HeaterTurnedOff());
 
 var aggregate = AggregateRunner<Thermostat, ThermostatState, ThermostatCommand,
-    ThermostatEvent, ThermostatEffect, ThermostatError>.FromStore(store);
+    ThermostatEvent, ThermostatEffect, ThermostatError, Unit>.FromStore(store);
 
 Console.WriteLine(aggregate.State.CurrentTemp); // 23
 Console.WriteLine(aggregate.State.Heating);     // False
@@ -504,3 +506,13 @@ The same thermostat `Transition` function from Tutorial 01 drives the event-sour
 - **[Actor System](04-actor-system.md)** — Process sensor readings from a mailbox
 - **[Command Validation](05-command-validation.md)** — Deep dive into the Decider pattern and Result type
 - **[Observability](06-observability.md)** — Add distributed tracing to your aggregate
+
+### Deepen Your Understanding
+
+| Topic | Link |
+| ----- | ---- |
+| How Decide, Transition, and IsTerminal relate | [The Decider](../concepts/the-decider.md) |
+| Map, Bind, and MapError recipes | [Error Handling Patterns](../guides/error-handling-patterns.md) |
+| Upgrading from Automaton to Decider | [Upgrading to Decider](../guides/upgrading-to-decider.md) |
+| Production ES with concurrency resolution | [Automaton.Patterns](../patterns/index.md) |
+| Full Decider API | [Decider Reference](../reference/decider.md) |

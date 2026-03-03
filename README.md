@@ -207,13 +207,19 @@ Since `Decider<...> : Automaton<...>`, upgrading is **non-breaking** — all exi
 ```csharp
 var result = Counter.Decide(state, command);
 
-// Exhaustive pattern match
-var message = result.Match(
-    events => $"Produced {events.Count()} events",
-    error => $"Rejected: {error}");
+// Pattern matching
+var message = result.IsOk
+    ? $"Produced {result.Value.Length} events"
+    : $"Rejected: {result.Error}";
 
-// Functor (Map), Monad (Bind), Bifunctor (MapError)
-result.Map(events => events.Count())
+// LINQ query syntax (railway-oriented programming)
+var final =
+    from events in Counter.Decide(state, addCmd)
+    from count in Result<int, CounterError>.Ok(events.Length)
+    select $"{count} events produced";
+
+// Fluent API — Functor (Map), Monad (Bind), Bifunctor (MapError)
+result.Map(events => events.Length)
       .Bind(count => count > 0
           ? Result<string, CounterError>.Ok($"{count} events")
           : Result<string, CounterError>.Err(new CounterError.AlreadyAtZero()));

@@ -19,14 +19,14 @@ The shared runtime is a **monadic left fold** over an event stream, parameterize
 
 | Extension Point | Signature | Purpose |
 |----------------|-----------|---------|
-| **Observer** | `(State, Event, Effect) → Task` | See each transition triple (render, persist, log) |
-| **Interpreter** | `Effect → ValueTask<Event[]>` | Convert effects to feedback events |
+| **Observer** | `(State, Event, Effect) → ValueTask<Result<Unit, PipelineError>>` | See each transition triple (render, persist, log) |
+| **Interpreter** | `Effect → ValueTask<Result<Event[], PipelineError>>` | Convert effects to feedback events |
 
 ```csharp
-public delegate ValueTask Observer<in TState, in TEvent, in TEffect>(
+public delegate ValueTask<Result<Unit, PipelineError>> Observer<in TState, in TEvent, in TEffect>(
     TState state, TEvent @event, TEffect effect);
 
-public delegate ValueTask<TEvent[]> Interpreter<in TEffect, TEvent>(TEffect effect);
+public delegate ValueTask<Result<TEvent[], PipelineError>> Interpreter<in TEffect, TEvent>(TEffect effect);
 ```
 
 The runtime loop:
@@ -71,21 +71,28 @@ The observer accumulates side effects alongside state transitions. This is the *
 
 $$\text{Writer}\;W\;A = (A, W)$$
 
-Where $W$ is a monoid of observations (logs, renders, persisted events). The `Then` combinator for composing observers corresponds to the monoidal append:
+The observer returns `Result<Unit, PipelineError>`, making it a Kleisli arrow in `Result`. The `Then` combinator is Kleisli composition (`>=>`) that short-circuits on `Err`:
 
 ```csharp
 public static Observer<S, E, F> Then<S, E, F>(
     this Observer<S, E, F> first, Observer<S, E, F> second) =>
     async (state, @event, effect) =>
     {
-        await first(state, @event, effect);
-        await second(state, @event, effect);
+        var result = await first(state, @event, effect);
+        if (result.IsErr) return result;  // short-circuit
+        return await second(state, @event, effect);
     };
 ```
 
 This satisfies the monoid laws:
-- **Identity**: a no-op observer (`(_, _, _) => Task.CompletedTask`) is the identity element
-- **Associativity**: `(a.Then(b)).Then(c)` ≡ `a.Then(b.Then(c))` — both execute a, b, c in order
+- **Identity**: a no-op observer (`(_, _, _) => PipelineResult.Ok`) is the identity element
+- **Associativity**: `(a.Then(b)).Then(c)` ≡ `a.Then(b.Then(c))` — both execute a, b, c in order (or short-circuit on first `Err`)
+
+Additional combinators form a richer algebra:
+- **`Where`** — guard (skips observer when predicate is false)
+- **`Select`** — contramap (adapts observer inputs)
+- **`Catch`** — error handler (recovers from Err)
+- **`Combine`** — applicative (both run regardless of individual failures)
 
 ### Interpreter as Kleisli Arrow
 
@@ -115,6 +122,8 @@ The runtime's mathematical structure has remained unchanged since this ADR was a
 - **ADR-008 (Production Hardening)** — adds thread safety (SemaphoreSlim), CancellationToken support, feedback depth guard (MaxFeedbackDepth = 64), and ArgumentNullException guards. These preserve the sequential fold semantics while adding concurrency safety.
 - **ADR-009 (OpenTelemetry Tracing)** — instruments `Start`, `Dispatch`, and `InterpretEffect` with `System.Diagnostics.Activity` spans. Tracing is a natural transformation that does not alter the fold's behavior.
 - **ADR-010 (Reference Implementations)** — the MVU and Actor runtimes that directly use `AutomatonRuntime` were moved from the core library to the test project as reference implementations.
+- **ADR-011 (Monadic Observer/Interpreter Pipelines)** — Observer and Interpreter now return `Result<T, PipelineError>` instead of bare `ValueTask`/`ValueTask<T[]>`. This change makes the `Then` combinator into proper Kleisli composition with short-circuit semantics, and adds `Where`, `Select`, `Catch`, and `Combine` combinators. The fold semantics are preserved — errors propagate as values through the pipeline rather than as exceptions.
+- **ADR-012 (LINQ Query Syntax for Result)** — `Result` gains `Select` and `SelectMany`, making it a LINQ monad. `Match` methods are removed in favor of `IsOk`/`IsErr` + pattern matching or LINQ query syntax.
 
 ## Consequences
 
