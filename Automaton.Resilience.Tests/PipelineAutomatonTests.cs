@@ -15,7 +15,7 @@ public class PipelineAutomatonTests
         Func<CancellationToken, ValueTask<int>> operation = _ => ValueTask.FromResult(42);
         var parameters = new PipelineParameters<int>(strategy, operation);
 
-        var (state, effect) = PipelineAutomaton<int>.Init(parameters);
+        var (state, effect) = PipelineAutomaton<int>.Initialize(parameters);
 
         Assert.IsType<PipelineState<int>.Pending>(state);
         var runPipeline = Assert.IsType<PipelineEffect<int>.RunPipeline>(effect);
@@ -174,7 +174,7 @@ public class PipelineAutomatonTests
     public void Pending_plus_operation_completed_goes_directly_to_succeeded()
     {
         // OperationCompleted can arrive from any non-terminal state
-        // (Init emits RunPipeline immediately, so the interpreter
+        // (Initialize emits RunPipeline immediately, so the interpreter
         //  might fire before the Execute event is processed)
         var state = new PipelineState<int>.Pending();
         var @event = new PipelineEvent<int>.OperationCompleted(42);

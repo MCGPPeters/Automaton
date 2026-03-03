@@ -51,7 +51,7 @@ public class Counter
     : Decider<CounterState, CounterCommand, CounterEvent, CounterEffect, CounterError, Unit>
 ```
 
-Because `Decider<...> : Automaton<...>`, your existing `Init` and `Transition` methods are still valid. Nothing breaks.
+Because `Decider<...> : Automaton<...>`, your existing `Initialize` and `Transition` methods are still valid. Nothing breaks.
 
 ## Step 3: Add the Decide Function
 

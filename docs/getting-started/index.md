@@ -33,12 +33,12 @@ public interface CounterEffect
 
 ## Implement the Automaton
 
-Two methods — `Init` and `Transition` — define the entire behavior:
+Two methods — `Initialize` and `Transition` — define the entire behavior:
 
 ```csharp
 public class Counter : Automaton<CounterState, CounterEvent, CounterEffect, Unit>
 {
-    public static (CounterState, CounterEffect) Init(Unit _) =>
+    public static (CounterState, CounterEffect) Initialize(Unit _) =>
         (new CounterState(0), new CounterEffect.None());
 
     public static (CounterState, CounterEffect) Transition(

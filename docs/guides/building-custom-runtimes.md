@@ -117,7 +117,7 @@ public sealed class SnapshotRuntime<TAutomaton, TState, TEvent, TEffect, TParame
             return PipelineResult.Ok;
         };
 
-        var (state, effect) = TAutomaton.Init(parameters);
+        var (state, effect) = TAutomaton.Initialize(parameters);
         runtime._core = new AutomatonRuntime<TAutomaton, TState, TEvent, TEffect, TParameters>(
             state, observer, interpreter);
         await runtime._core.InterpretEffect(effect);
@@ -134,10 +134,10 @@ public sealed class SnapshotRuntime<TAutomaton, TState, TEvent, TEffect, TParame
 
 ### Use the Constructor When You Need Control
 
-The `Start` factory method calls `Init()` and interprets the init effect immediately. If you need to do something between initialization and effect interpretation (like the MVU runtime rendering the initial view), use the constructor:
+The `Start` factory method calls `Initialize()` and interprets the initial effects immediately. If you need to do something between initialization and effect interpretation (like the MVU runtime rendering the initial view), use the constructor:
 
 ```csharp
-var (state, effect) = TAutomaton.Init(parameters);
+var (state, effect) = TAutomaton.Initialize(parameters);
 
 // Do something with the initial state first
 initialView = render(state);
@@ -145,7 +145,7 @@ initialView = render(state);
 var core = new AutomatonRuntime<TAutomaton, TState, TEvent, TEffect, TParameters>(
     state, observer, interpreter);
 
-// Now interpret init effects
+// Now interpret initial effects
 await core.InterpretEffect(effect);
 ```
 

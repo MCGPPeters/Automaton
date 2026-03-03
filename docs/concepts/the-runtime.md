@@ -73,7 +73,7 @@ It's all the same fold. The runtime just wires it differently.
 
 ### Using `Start` (recommended)
 
-`Start` creates the runtime, calls `Init()`, and interprets the init effect:
+`Start` creates the runtime, calls `Initialize()`, and interprets the initial effects:
 
 ```csharp
 var runtime = await AutomatonRuntime<Counter, CounterState, CounterEvent, CounterEffect, Unit>
@@ -85,7 +85,7 @@ var runtime = await AutomatonRuntime<Counter, CounterState, CounterEvent, Counte
 The constructor lets you control initialization order — useful when you need to render an initial view before interpreting effects:
 
 ```csharp
-var (state, effect) = Counter.Init(default);
+var (state, effect) = Counter.Initialize(default);
 
 // Render the initial state before any effects run
 views.Add(render(state));
@@ -93,7 +93,7 @@ views.Add(render(state));
 var runtime = new AutomatonRuntime<Counter, CounterState, CounterEvent, CounterEffect, Unit>(
     state, observer, interpreter);
 
-// Now interpret the init effect
+// Now interpret the initial effects
 await runtime.InterpretEffect(effect);
 ```
 

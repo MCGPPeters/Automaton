@@ -106,7 +106,7 @@ A read model built by folding events through a different accumulator than the ag
 
 ### Pure Function
 
-A function with two properties: (1) its return value depends only on its arguments, and (2) it has no side effects. All `Init`, `Transition`, and `Decide` functions in Automaton must be pure. This makes them deterministic, testable, and replayable.
+A function with two properties: (1) its return value depends only on its arguments, and (2) it has no side effects. All `Initialize`, `Transition`, and `Decide` functions in Automaton must be pure. This makes them deterministic, testable, and replayable.
 
 ### Reset
 
@@ -122,7 +122,7 @@ The component that executes the automaton's transition function in a loop. Handl
 
 ### State
 
-What the automaton remembers between transitions. Represented as an immutable record. The `with` expression creates modified copies. State is the first element of the tuple returned by `Init()` and `Transition()`.
+What the automaton remembers between transitions. Represented as an immutable record. The `with` expression creates modified copies. State is the first element of the tuple returned by `Initialize()` and `Transition()`.
 
 ### Tell
 

@@ -73,7 +73,7 @@ namespace Automaton.Patterns.EventSourcing;
 /// // A counter with commutative increments:
 /// public class MyDecider : ConflictResolver&lt;State, Cmd, Event, Effect, Error&gt;
 /// {
-///     // ... Init, Decide, Transition ...
+///     // ... Initialize, Decide, Transition ...
 ///
 ///     public static Result&lt;Event[], ConflictNotResolved&gt; ResolveConflicts(
 ///         State currentState, State projectedState,
@@ -95,7 +95,7 @@ namespace Automaton.Patterns.EventSourcing;
 /// <typeparam name="TEvent">Events representing validated facts.</typeparam>
 /// <typeparam name="TEffect">Effects produced by transitions.</typeparam>
 /// <typeparam name="TError">Errors produced by invalid commands.</typeparam>
-/// <typeparam name="TParameters">The type of parameters passed to <see cref="Automaton{TState,TEvent,TEffect,TParameters}.Init"/>.</typeparam>
+/// <typeparam name="TParameters">The type of parameters passed to <see cref="Automaton{TState,TEvent,TEffect,TParameters}.Initialize"/>.</typeparam>
 public interface ConflictResolver<TState, TCommand, TEvent, TEffect, TError, TParameters>
     : Decider<TState, TCommand, TEvent, TEffect, TError, TParameters>
 {

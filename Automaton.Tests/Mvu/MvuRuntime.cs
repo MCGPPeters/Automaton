@@ -75,13 +75,13 @@ public sealed class MvuRuntime<TAutomaton, TState, TEvent, TEffect, TView, TPara
     }
 
     /// <summary>
-    /// Starts the MVU runtime, executing init and rendering the initial view.
+    /// Starts the MVU runtime, executing initialization and rendering the initial view.
     /// </summary>
     public static async Task<MvuRuntime<TAutomaton, TState, TEvent, TEffect, TView, TParameters>> Start(
         Render<TState, TView> render,
         Interpreter<TEffect, TEvent> interpreter)
     {
-        var (state, effect) = TAutomaton.Init(default!);
+        var (state, effect) = TAutomaton.Initialize(default!);
         var views = new List<TView>();
 
         // Observer: render the new state after each transition
@@ -97,7 +97,7 @@ public sealed class MvuRuntime<TAutomaton, TState, TEvent, TEffect, TView, TPara
         // Render initial view (before effects, so the user sees something immediately)
         views.Add(render(state));
 
-        // Handle init effects (may produce feedback events → more renders)
+        // Handle initial effects (may produce feedback events → more renders)
         await core.InterpretEffect(effect);
 
         return new MvuRuntime<TAutomaton, TState, TEvent, TEffect, TView, TParameters>(core, views);

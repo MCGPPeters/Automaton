@@ -11,14 +11,14 @@
 //     decide : Command → Reader<State, Result<Events, Error>>
 //
 // The Decider composes with the Automaton:
-// - Automaton provides:  Transition (evolve) + Init (initial state)
+// - Automaton provides:  Transition (evolve) + Initialize (initial state)
 // - Decider adds:        Decide (command validation) + IsTerminal (lifecycle)
 //
 // Together they form the seven elements of the Decider pattern:
 //   1. Command type
 //   2. Event type
 //   3. State type
-//   4. Initial state       (Init)
+//   4. Initial state       (Initialize)
 //   5. decide function      (Decide)
 //   6. evolve function      (Transition)
 //   7. isTerminal function  (IsTerminal)
@@ -52,7 +52,7 @@ namespace Automaton;
 /// public class Thermostat
 ///     : Decider&lt;ThermostatState, ThermostatCommand, ThermostatEvent, ThermostatEffect, ThermostatError, Unit&gt;
 /// {
-///     public static (ThermostatState, ThermostatEffect) Init(Unit _) =&gt;
+///     public static (ThermostatState, ThermostatEffect) Initialize(Unit _) =&gt;
 ///         (new ThermostatState(20.0m, 22.0m, false, true), new ThermostatEffect.None());
 ///
 ///     public static Result&lt;ThermostatEvent[], ThermostatError&gt; Decide(
@@ -177,9 +177,9 @@ public sealed class DecidingRuntime<TDecider, TState, TCommand, TEvent, TEffect,
     }
 
     /// <summary>
-    /// Creates and starts a deciding runtime, interpreting init effects immediately.
+    /// Creates and starts a deciding runtime, interpreting initial effects immediately.
     /// </summary>
-    /// <param name="parameters">Initialization parameters passed to the automaton's Init method.</param>
+    /// <param name="parameters">Initialization parameters passed to the automaton's Initialize method.</param>
     /// <param name="observer">Observer called after each transition.</param>
     /// <param name="interpreter">Interpreter that converts effects to feedback events.</param>
     /// <param name="threadSafe">

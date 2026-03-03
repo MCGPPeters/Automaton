@@ -99,7 +99,7 @@ Every runtime in this library is built on the **same kernel**:
 ```csharp
 public interface Automaton<TState, TEvent, TEffect, TParameters>
 {
-    static abstract (TState State, TEffect Effect) Init(TParameters parameters);
+    static abstract (TState State, TEffect Effect) Initialize(TParameters parameters);
     static abstract (TState State, TEffect Effect) Transition(TState state, TEvent @event);
 }
 ```

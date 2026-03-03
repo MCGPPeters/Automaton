@@ -45,7 +45,7 @@ $$\text{foldl} : (B \to A \to B) \to B \to [A] \to B$$
 
 Applied to state machines:
 
-$$\text{state} = \text{foldl}\;\text{transition}\;\text{init}\;\text{events}$$
+$$\text{state} = \text{foldl}\;\text{transition}\;\text{initial}\;\text{events}$$
 
 This is exactly Event Sourcing's state reconstruction:
 
@@ -111,7 +111,7 @@ MVU and Actor share the `AutomatonRuntime` directly, with different observer and
 | **MVU** | Render state → view | Execute commands → feedback events | Interactive loop |
 | **Actor** | No-op (state is internal) | Execute effect via self-reference | Concurrent mailbox |
 
-**Event Sourcing** uses a conceptually identical fold but a separate implementation (see ADR-006). The `AggregateRunner` is synchronous, command-driven via the Decider constraint, and does not depend on `AutomatonRuntime`. Its fold is the same left fold mathematically — `state = foldl transition init events` — but the implementation is a direct `Decide → Transition → Append` loop without the async Observer/Interpreter layer.
+**Event Sourcing** uses a conceptually identical fold but a separate implementation (see ADR-006). The `AggregateRunner` is synchronous, command-driven via the Decider constraint, and does not depend on `AutomatonRuntime`. Its fold is the same left fold mathematically — `state = foldl transition initial events` — but the implementation is a direct `Decide → Transition → Append` loop without the async Observer/Interpreter layer.
 
 The structural identity across MVU and Actor is the key insight: swapping the observer/interpreter transforms the behavior while preserving the core loop. ES preserves the *mathematical* identity (left fold) while using a different runtime suited to its command-driven, synchronous nature.
 

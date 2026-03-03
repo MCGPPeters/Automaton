@@ -94,7 +94,7 @@ public class Thermostat
     public const decimal MaxTarget = 40.0m;
     public const decimal AlertThreshold = 35.0m;
 
-    public static (ThermostatState State, ThermostatEffect Effect) Init(Unit _) =>
+    public static (ThermostatState State, ThermostatEffect Effect) Initialize(Unit _) =>
         (new ThermostatState(20.0m, 22.0m, Heating: false, Active: true),
          new ThermostatEffect.None());
 
@@ -331,7 +331,7 @@ The defining feature of Event Sourcing — rebuild current state by replaying:
 // Add to AggregateRunner:
 public TState Rebuild()
 {
-    var (seed, _) = TDecider.Init(default!);
+    var (seed, _) = TDecider.Initialize(default!);
     _state = _store.Replay(seed, (s, e) => TDecider.Transition(s, e).State);
     return _state;
 }

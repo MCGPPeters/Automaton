@@ -34,14 +34,14 @@ The pipeline becomes:
 Command → Decide(state) → Result<Events, Error> → [Transition(state, event)]* → (State', Effect)
 ```
 
-Together with the Automaton's `Init` and `Transition`, this gives the **seven elements** of the Decider:
+Together with the Automaton's `Initialize` and `Transition`, this gives the **seven elements** of the Decider:
 
 | # | Element | Provider | Method |
 |---|---------|----------|--------|
 | 1 | Command type | Type parameter | `TCommand` |
 | 2 | Event type | Type parameter | `TEvent` |
 | 3 | State type | Type parameter | `TState` |
-| 4 | Initial state | Automaton | `Init(parameters)` |
+| 4 | Initial state | Automaton | `Initialize(parameters)` |
 | 5 | Decide | Decider | `Decide(state, command)` |
 | 6 | Evolve | Automaton | `Transition(state, event)` |
 | 7 | Is terminal | Decider | `IsTerminal(state)` |

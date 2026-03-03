@@ -123,7 +123,7 @@ public class RateLimiterAutomatonTests
     [Fact]
     public void Init_starts_with_full_bucket()
     {
-        var (state, effect) = RateLimiterAutomaton.Init(new RateLimiterOptions(PermitLimit: 10));
+        var (state, effect) = RateLimiterAutomaton.Initialize(new RateLimiterOptions(PermitLimit: 10));
 
         Assert.IsType<RateLimiterState.Available>(state);
         var available = (RateLimiterState.Available)state;
@@ -189,7 +189,7 @@ public class RateLimiterAutomatonTests
     [Fact]
     public void Full_lifecycle_consume_replenish()
     {
-        var (state, _) = RateLimiterAutomaton.Init(new RateLimiterOptions(PermitLimit: 2));
+        var (state, _) = RateLimiterAutomaton.Initialize(new RateLimiterOptions(PermitLimit: 2));
 
         // Consume both tokens
         (state, _) = RateLimiterAutomaton.Transition(state, new RateLimiterEvent.RequestAttempted());

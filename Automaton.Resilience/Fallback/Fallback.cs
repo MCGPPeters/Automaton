@@ -108,7 +108,7 @@ public class FallbackAutomaton : Automaton<FallbackState, FallbackEvent, Fallbac
     /// <summary>
     /// Initializes the fallback automaton, ready to execute the primary operation.
     /// </summary>
-    public static (FallbackState State, FallbackEffect Effect) Init(Unit parameters) =>
+    public static (FallbackState State, FallbackEffect Effect) Initialize(Unit parameters) =>
         (new FallbackState.Executing(), new FallbackEffect.ExecutePrimary());
 
     /// <summary>

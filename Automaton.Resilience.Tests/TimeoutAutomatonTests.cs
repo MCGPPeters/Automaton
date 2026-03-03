@@ -5,13 +5,13 @@ namespace Automaton.Resilience.Tests;
 public class TimeoutAutomatonTests
 {
     // =========================================================================
-    // Init
+    // Initialize
     // =========================================================================
 
     [Fact]
     public void Init_produces_running_state_and_start_timer_effect()
     {
-        var (state, effect) = TimeoutAutomaton.Init(new TimeoutOptions(Duration: TimeSpan.FromSeconds(5)));
+        var (state, effect) = TimeoutAutomaton.Initialize(new TimeoutOptions(Duration: TimeSpan.FromSeconds(5)));
 
         var running = Assert.IsType<TimeoutState.Running>(state);
         Assert.Equal(TimeSpan.FromSeconds(5), running.Duration);

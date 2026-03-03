@@ -7,14 +7,14 @@ The entire Automaton library is built on one interface and one idea.
 ```csharp
 public interface Automaton<TState, TEvent, TEffect, TParameters>
 {
-    static abstract (TState State, TEffect Effect) Init(TParameters parameters);
+    static abstract (TState State, TEffect Effect) Initialize(TParameters parameters);
     static abstract (TState State, TEffect Effect) Transition(TState state, TEvent @event);
 }
 ```
 
 Two methods. Zero dependencies. That's the whole kernel.
 
-- **`Init(parameters)`** — returns the initial state and any startup effect. Use `Unit` as `TParameters` for automata that require no initialization parameters.
+- **`Initialize(parameters)`** — returns the initial state and any startup effect. Use `Unit` as `TParameters` for automata that require no initialization parameters.
 - **`Transition(state, event)`** — given the current state and an event, returns the new state and an effect.
 
 ## The Idea: Mealy Machines

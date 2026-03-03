@@ -9,7 +9,7 @@ The kernel interface — a deterministic state machine with effects (Mealy machi
 ```csharp
 public interface Automaton<TState, TEvent, TEffect, TParameters>
 {
-    static abstract (TState State, TEffect Effect) Init(TParameters parameters);
+    static abstract (TState State, TEffect Effect) Initialize(TParameters parameters);
     static abstract (TState State, TEffect Effect) Transition(TState state, TEvent @event);
 }
 ```
@@ -25,15 +25,15 @@ public interface Automaton<TState, TEvent, TEffect, TParameters>
 
 ## Methods
 
-### Init
+### Initialize
 
 ```csharp
-static abstract (TState State, TEffect Effect) Init(TParameters parameters);
+static abstract (TState State, TEffect Effect) Initialize(TParameters parameters);
 ```
 
 Produces the initial state and any startup effect from the given parameters.
 
-Called once when the runtime starts. The init effect is interpreted immediately by the runtime's Interpreter, which may produce feedback events that trigger additional transitions. Use `Unit` as `TParameters` for automata that require no initialization parameters.
+Called once when the runtime starts. The initial effects is interpreted immediately by the runtime's Interpreter, which may produce feedback events that trigger additional transitions. Use `Unit` as `TParameters` for automata that require no initialization parameters.
 
 **Parameters:**
 
@@ -87,7 +87,7 @@ public interface CounterEffect
 ```csharp
 public class Counter : Automaton<CounterState, CounterEvent, CounterEffect, Unit>
 {
-    public static (CounterState, CounterEffect) Init(Unit _) =>
+    public static (CounterState, CounterEffect) Initialize(Unit _) =>
         (new CounterState(0), new CounterEffect.None());
 
     public static (CounterState, CounterEffect) Transition(
@@ -105,10 +105,10 @@ public class Counter : Automaton<CounterState, CounterEvent, CounterEffect, Unit
 
 ### Testing Directly
 
-Because `Init` and `Transition` are static methods, you can test them without any runtime:
+Because `Initialize` and `Transition` are static methods, you can test them without any runtime:
 
 ```csharp
-var (state, effect) = Counter.Init(default);
+var (state, effect) = Counter.Initialize(default);
 Assert.Equal(0, state.Count);
 
 var (next, _) = Counter.Transition(state, new CounterEvent.Increment());

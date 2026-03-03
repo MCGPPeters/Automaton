@@ -146,7 +146,7 @@ var totalIncrements = new Projection<CounterEvent, int>(
 ```csharp
 public TState Rebuild()
 {
-    var (seed, _) = TDecider.Init(default!);
+    var (seed, _) = TDecider.Initialize(default!);
     _state = _store.Replay(seed, (s, e) => TDecider.Transition(s, e).State);
     return _state;
 }
@@ -165,7 +165,7 @@ Loading an existing aggregate replays without re-validation:
 ```csharp
 public static AggregateRunner<...> FromStore(EventStore<TEvent> store)
 {
-    var (seed, _) = TDecider.Init(default!);
+    var (seed, _) = TDecider.Initialize(default!);
     var state = store.Replay(seed, (s, e) => TDecider.Transition(s, e).State);
     return new AggregateRunner<...>(state, store);
 }

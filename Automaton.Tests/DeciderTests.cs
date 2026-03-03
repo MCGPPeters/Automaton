@@ -44,7 +44,7 @@ public class DeciderTests
     {
         var runtime = await CreateRuntime();
 
-        // Init: CurrentTemp=20, TargetTemp=22, Heating=false
+        // Initialize: CurrentTemp=20, TargetTemp=22, Heating=false
         // RecordReading(22) → temp >= target, not heating → just TemperatureRecorded
         var eventsBefore = runtime.Events.Count;
 

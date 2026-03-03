@@ -6,7 +6,7 @@ Complete type and method documentation for the `Automaton` package.
 
 | Type | Namespace | Purpose |
 | ---- | --------- | ------- |
-| [`Automaton<TState, TEvent, TEffect, TParameters>`](automaton.md) | `Automaton` | The kernel interface — Init + Transition |
+| [`Automaton<TState, TEvent, TEffect, TParameters>`](automaton.md) | `Automaton` | The kernel interface — Initialize + Transition |
 | [`AutomatonRuntime<TAutomaton, TState, TEvent, TEffect, TParameters>`](runtime.md) | `Automaton` | Thread-safe async runtime |
 | [`Observer<TState, TEvent, TEffect>`](runtime.md#observer) | `Automaton` | Transition observer delegate |
 | [`Interpreter<TEffect, TEvent>`](runtime.md#interpreter) | `Automaton` | Effect interpreter delegate |

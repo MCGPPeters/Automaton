@@ -5,13 +5,13 @@ namespace Automaton.Resilience.Tests;
 public class RetryAutomatonTests
 {
     // =========================================================================
-    // Init
+    // Initialize
     // =========================================================================
 
     [Fact]
     public void Init_produces_waiting_state_and_execute_effect()
     {
-        var (state, effect) = RetryAutomaton.Init(new RetryOptions(MaxAttempts: 3));
+        var (state, effect) = RetryAutomaton.Initialize(new RetryOptions(MaxAttempts: 3));
 
         var waiting = Assert.IsType<RetryState.Waiting>(state);
         Assert.Equal(1, waiting.Attempt);
@@ -144,8 +144,8 @@ public class RetryAutomatonTests
     [Fact]
     public void Full_lifecycle_success_on_second_attempt()
     {
-        // Init
-        var (state, effect) = RetryAutomaton.Init(new RetryOptions(MaxAttempts: 3));
+        // Initialize
+        var (state, effect) = RetryAutomaton.Initialize(new RetryOptions(MaxAttempts: 3));
         Assert.IsType<RetryState.Waiting>(state);
         Assert.IsType<RetryEffect.ExecuteAttempt>(effect);
 
@@ -171,7 +171,7 @@ public class RetryAutomatonTests
     public void Full_lifecycle_all_attempts_exhausted()
     {
         var opts = new RetryOptions(MaxAttempts: 2);
-        var (state, _) = RetryAutomaton.Init(opts);
+        var (state, _) = RetryAutomaton.Initialize(opts);
 
         // Attempt 1 fails
         (state, _) = RetryAutomaton.Transition(state, new RetryEvent.AttemptFailed(new Exception("fail 1")));

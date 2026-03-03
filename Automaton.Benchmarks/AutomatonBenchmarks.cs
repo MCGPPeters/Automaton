@@ -47,7 +47,7 @@ public class AutomatonBenchmarks
     [IterationSetup]
     public void Setup()
     {
-        var (initState, _) = BenchAutomaton.Init(default);
+        var (initState, _) = BenchAutomaton.Initialize(default);
 
         _runtimeNoOp = new AutomatonRuntime<BenchAutomaton, BenchState, BenchEvent, BenchEffect, Unit>(
             initState, BenchObservers.NoOp, BenchInterpreters.NoOp);

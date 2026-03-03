@@ -7,7 +7,7 @@
 // state is reconstructed by replaying the event stream through the transition
 // function (a left fold):
 //
-//     state = events.Aggregate(init, transition)
+//     state = events.Aggregate(initial, transition)
 //
 // Event Sourcing is fundamentally command-driven: commands arrive, are validated
 // against the current state via Decide, and only the resulting events are
@@ -145,7 +145,7 @@ public sealed class AggregateRunner<TDecider, TState, TCommand, TEvent, TEffect,
     /// </summary>
     public static AggregateRunner<TDecider, TState, TCommand, TEvent, TEffect, TError, TParameters> Create()
     {
-        var (state, _) = TDecider.Init(default!);
+        var (state, _) = TDecider.Initialize(default!);
         return new AggregateRunner<TDecider, TState, TCommand, TEvent, TEffect, TError, TParameters>(
             state, new EventStore<TEvent>());
     }
@@ -160,7 +160,7 @@ public sealed class AggregateRunner<TDecider, TState, TCommand, TEvent, TEffect,
     public static AggregateRunner<TDecider, TState, TCommand, TEvent, TEffect, TError, TParameters> FromStore(
         EventStore<TEvent> store)
     {
-        var (seed, _) = TDecider.Init(default!);
+        var (seed, _) = TDecider.Initialize(default!);
         var state = store.Replay(seed, (s, e) => TDecider.Transition(s, e).State);
         return new AggregateRunner<TDecider, TState, TCommand, TEvent, TEffect, TError, TParameters>(state, store);
     }
@@ -220,7 +220,7 @@ public sealed class AggregateRunner<TDecider, TState, TCommand, TEvent, TEffect,
     /// </summary>
     public TState Rebuild()
     {
-        var (seed, _) = TDecider.Init(default!);
+        var (seed, _) = TDecider.Initialize(default!);
         _state = _store.Replay(seed, (s, e) => TDecider.Transition(s, e).State);
         return _state;
     }
