@@ -12,7 +12,7 @@ public class RuntimeTests
     [Fact]
     public async Task Dispatch_UpdatesState()
     {
-        var runtime = new AutomatonRuntime<Thermostat, ThermostatState, ThermostatEvent, ThermostatEffect>(
+        var runtime = new AutomatonRuntime<Thermostat, ThermostatState, ThermostatEvent, ThermostatEffect, Unit>(
             new ThermostatState(20m, 22m, false, true), ThermostatObservers.NoOp, ThermostatInterpreters.NoOp);
 
         await runtime.Dispatch(new ThermostatEvent.TemperatureRecorded(18m));
@@ -28,7 +28,7 @@ public class RuntimeTests
     {
         var observed = new List<(ThermostatState State, ThermostatEvent Event, ThermostatEffect Effect)>();
 
-        var runtime = new AutomatonRuntime<Thermostat, ThermostatState, ThermostatEvent, ThermostatEffect>(
+        var runtime = new AutomatonRuntime<Thermostat, ThermostatState, ThermostatEvent, ThermostatEffect, Unit>(
             new ThermostatState(20m, 22m, false, true), ThermostatObservers.Capture(observed), ThermostatInterpreters.NoOp);
 
         await runtime.Dispatch(new ThermostatEvent.TemperatureRecorded(25m));
@@ -59,7 +59,7 @@ public class RuntimeTests
                 Result<ThermostatEvent[], PipelineError>.Ok([]));
         };
 
-        var runtime = new AutomatonRuntime<Thermostat, ThermostatState, ThermostatEvent, ThermostatEffect>(
+        var runtime = new AutomatonRuntime<Thermostat, ThermostatState, ThermostatEvent, ThermostatEffect, Unit>(
             new ThermostatState(20m, 22m, false, true), ThermostatObservers.NoOp, interpreter);
 
         // HeaterTurnedOn -> Heating=true, ActivateHeater effect -> interpreter returns TemperatureRecorded(19)
@@ -90,7 +90,7 @@ public class RuntimeTests
 
         var combined = first.Then(second);
 
-        var runtime = new AutomatonRuntime<Thermostat, ThermostatState, ThermostatEvent, ThermostatEffect>(
+        var runtime = new AutomatonRuntime<Thermostat, ThermostatState, ThermostatEvent, ThermostatEffect, Unit>(
             new ThermostatState(20m, 22m, false, true), combined, ThermostatInterpreters.NoOp);
 
         await runtime.Dispatch(new ThermostatEvent.TemperatureRecorded(18m));
@@ -103,7 +103,7 @@ public class RuntimeTests
     [Fact]
     public void Reset_ReplacesStateWithoutTransition()
     {
-        var runtime = new AutomatonRuntime<Thermostat, ThermostatState, ThermostatEvent, ThermostatEffect>(
+        var runtime = new AutomatonRuntime<Thermostat, ThermostatState, ThermostatEvent, ThermostatEffect, Unit>(
             new ThermostatState(20m, 22m, false, true), ThermostatObservers.NoOp, ThermostatInterpreters.NoOp);
 
         runtime.Reset(new ThermostatState(25m, 30m, true, true));
@@ -133,7 +133,7 @@ public class RuntimeTests
                 Result<ThermostatEvent[], PipelineError>.Ok([]));
         };
 
-        var runtime = new AutomatonRuntime<Thermostat, ThermostatState, ThermostatEvent, ThermostatEffect>(
+        var runtime = new AutomatonRuntime<Thermostat, ThermostatState, ThermostatEvent, ThermostatEffect, Unit>(
             new ThermostatState(20m, 22m, false, true), ThermostatObservers.NoOp, interpreter);
 
         await runtime.Dispatch(new ThermostatEvent.HeaterTurnedOn());
@@ -147,8 +147,8 @@ public class RuntimeTests
     [Fact]
     public async Task Start_CreatesRuntimeAndInterpretsInitEffect()
     {
-        var runtime = await AutomatonRuntime<Thermostat, ThermostatState, ThermostatEvent, ThermostatEffect>
-            .Start(ThermostatObservers.NoOp, ThermostatInterpreters.NoOp);
+        var runtime = await AutomatonRuntime<Thermostat, ThermostatState, ThermostatEvent, ThermostatEffect, Unit>
+            .Start(default, ThermostatObservers.NoOp, ThermostatInterpreters.NoOp);
 
         // Thermostat.Init() produces (CurrentTemp=20, TargetTemp=22, Heating=false, Active=true), None
         Assert.Equal(20m, runtime.State.CurrentTemp);
@@ -167,7 +167,7 @@ public class RuntimeTests
     {
         // Arrange: 100 concurrent temperature readings
         const int concurrency = 100;
-        var runtime = new AutomatonRuntime<Thermostat, ThermostatState, ThermostatEvent, ThermostatEffect>(
+        var runtime = new AutomatonRuntime<Thermostat, ThermostatState, ThermostatEvent, ThermostatEffect, Unit>(
             new ThermostatState(20m, 22m, false, true), ThermostatObservers.NoOp, ThermostatInterpreters.NoOp);
 
         // Act: fire all dispatches concurrently
@@ -189,7 +189,7 @@ public class RuntimeTests
         const int onCount = 50;
         const int offCount = 30;
 
-        var runtime = new AutomatonRuntime<Thermostat, ThermostatState, ThermostatEvent, ThermostatEffect>(
+        var runtime = new AutomatonRuntime<Thermostat, ThermostatState, ThermostatEvent, ThermostatEffect, Unit>(
             new ThermostatState(20m, 22m, false, true), ThermostatObservers.NoOp, ThermostatInterpreters.NoOp);
 
         // Act: interleave on/off events concurrently
@@ -211,7 +211,7 @@ public class RuntimeTests
     [Fact]
     public async Task Dispatch_ThrowsWhenCancelled()
     {
-        var runtime = new AutomatonRuntime<Thermostat, ThermostatState, ThermostatEvent, ThermostatEffect>(
+        var runtime = new AutomatonRuntime<Thermostat, ThermostatState, ThermostatEvent, ThermostatEffect, Unit>(
             new ThermostatState(20m, 22m, false, true), ThermostatObservers.NoOp, ThermostatInterpreters.NoOp);
 
         using var cts = new CancellationTokenSource();
@@ -227,7 +227,7 @@ public class RuntimeTests
     [Fact]
     public async Task InterpretEffect_ThrowsWhenCancelled()
     {
-        var runtime = new AutomatonRuntime<Thermostat, ThermostatState, ThermostatEvent, ThermostatEffect>(
+        var runtime = new AutomatonRuntime<Thermostat, ThermostatState, ThermostatEvent, ThermostatEffect, Unit>(
             new ThermostatState(20m, 22m, false, true), ThermostatObservers.NoOp, ThermostatInterpreters.NoOp);
 
         using var cts = new CancellationTokenSource();
@@ -244,8 +244,8 @@ public class RuntimeTests
         cts.Cancel();
 
         await Assert.ThrowsAnyAsync<OperationCanceledException>(
-            () => AutomatonRuntime<Thermostat, ThermostatState, ThermostatEvent, ThermostatEffect>
-                .Start(ThermostatObservers.NoOp, ThermostatInterpreters.NoOp, cancellationToken: cts.Token).AsTask());
+            () => AutomatonRuntime<Thermostat, ThermostatState, ThermostatEvent, ThermostatEffect, Unit>
+                .Start(default, ThermostatObservers.NoOp, ThermostatInterpreters.NoOp, cancellationToken: cts.Token).AsTask());
     }
 
     [Fact]
@@ -273,7 +273,7 @@ public class RuntimeTests
                 Result<ThermostatEvent[], PipelineError>.Ok([]));
         };
 
-        var runtime = new AutomatonRuntime<Thermostat, ThermostatState, ThermostatEvent, ThermostatEffect>(
+        var runtime = new AutomatonRuntime<Thermostat, ThermostatState, ThermostatEvent, ThermostatEffect, Unit>(
             new ThermostatState(20m, 22m, false, true), ThermostatObservers.NoOp, cancellingInterpreter);
 
         // AlertRaised -> SendNotification effect -> interpreter returns [AlertRaised] -> loop
@@ -282,7 +282,7 @@ public class RuntimeTests
 
         // The loop was stopped before depth 64
         Assert.True(interpreterCalls >= 2);
-        Assert.True(interpreterCalls < AutomatonRuntime<Thermostat, ThermostatState, ThermostatEvent, ThermostatEffect>.MaxFeedbackDepth);
+        Assert.True(interpreterCalls < AutomatonRuntime<Thermostat, ThermostatState, ThermostatEvent, ThermostatEffect, Unit>.MaxFeedbackDepth);
     }
 
     // =========================================================================
@@ -306,7 +306,7 @@ public class RuntimeTests
                 Result<ThermostatEvent[], PipelineError>.Ok([]));
         };
 
-        var runtime = new AutomatonRuntime<Thermostat, ThermostatState, ThermostatEvent, ThermostatEffect>(
+        var runtime = new AutomatonRuntime<Thermostat, ThermostatState, ThermostatEvent, ThermostatEffect, Unit>(
             new ThermostatState(20m, 22m, false, true), ThermostatObservers.NoOp, runawayInterpreter);
 
         // AlertRaised -> SendNotification -> AlertRaised -> ... -> depth exceeded
@@ -314,14 +314,14 @@ public class RuntimeTests
             () => runtime.Dispatch(new ThermostatEvent.AlertRaised("test")).AsTask());
 
         Assert.Contains("maximum depth", ex.Message);
-        Assert.Contains(AutomatonRuntime<Thermostat, ThermostatState, ThermostatEvent, ThermostatEffect>
+        Assert.Contains(AutomatonRuntime<Thermostat, ThermostatState, ThermostatEvent, ThermostatEffect, Unit>
             .MaxFeedbackDepth.ToString(), ex.Message);
     }
 
     [Fact]
     public void MaxFeedbackDepth_Is64()
     {
-        Assert.Equal(64, AutomatonRuntime<Thermostat, ThermostatState, ThermostatEvent, ThermostatEffect>.MaxFeedbackDepth);
+        Assert.Equal(64, AutomatonRuntime<Thermostat, ThermostatState, ThermostatEvent, ThermostatEffect, Unit>.MaxFeedbackDepth);
     }
 
     // =========================================================================
@@ -332,7 +332,7 @@ public class RuntimeTests
     public void Constructor_ThrowsOnNullObserver()
     {
         Assert.Throws<ArgumentNullException>(() =>
-            new AutomatonRuntime<Thermostat, ThermostatState, ThermostatEvent, ThermostatEffect>(
+            new AutomatonRuntime<Thermostat, ThermostatState, ThermostatEvent, ThermostatEffect, Unit>(
                 new ThermostatState(20m, 22m, false, true), null!, ThermostatInterpreters.NoOp));
     }
 
@@ -340,7 +340,7 @@ public class RuntimeTests
     public void Constructor_ThrowsOnNullInterpreter()
     {
         Assert.Throws<ArgumentNullException>(() =>
-            new AutomatonRuntime<Thermostat, ThermostatState, ThermostatEvent, ThermostatEffect>(
+            new AutomatonRuntime<Thermostat, ThermostatState, ThermostatEvent, ThermostatEffect, Unit>(
                 new ThermostatState(20m, 22m, false, true), ThermostatObservers.NoOp, null!));
     }
 
@@ -351,7 +351,7 @@ public class RuntimeTests
     [Fact]
     public async Task Dispatch_Unserialized_UpdatesState()
     {
-        var runtime = new AutomatonRuntime<Thermostat, ThermostatState, ThermostatEvent, ThermostatEffect>(
+        var runtime = new AutomatonRuntime<Thermostat, ThermostatState, ThermostatEvent, ThermostatEffect, Unit>(
             new ThermostatState(20m, 22m, false, true), ThermostatObservers.NoOp, ThermostatInterpreters.NoOp,
             threadSafe: false);
 
@@ -363,8 +363,8 @@ public class RuntimeTests
     [Fact]
     public async Task Start_Unserialized_CreatesRuntime()
     {
-        var runtime = await AutomatonRuntime<Thermostat, ThermostatState, ThermostatEvent, ThermostatEffect>
-            .Start(ThermostatObservers.NoOp, ThermostatInterpreters.NoOp, threadSafe: false);
+        var runtime = await AutomatonRuntime<Thermostat, ThermostatState, ThermostatEvent, ThermostatEffect, Unit>
+            .Start(default, ThermostatObservers.NoOp, ThermostatInterpreters.NoOp, threadSafe: false);
 
         Assert.Equal(20m, runtime.State.CurrentTemp);
         Assert.True(runtime.State.Active);
@@ -373,7 +373,7 @@ public class RuntimeTests
     [Fact]
     public async Task InterpretEffect_Unserialized_Works()
     {
-        var runtime = new AutomatonRuntime<Thermostat, ThermostatState, ThermostatEvent, ThermostatEffect>(
+        var runtime = new AutomatonRuntime<Thermostat, ThermostatState, ThermostatEvent, ThermostatEffect, Unit>(
             new ThermostatState(20m, 22m, false, true), ThermostatObservers.NoOp, ThermostatInterpreters.NoOp,
             threadSafe: false);
 
@@ -389,7 +389,7 @@ public class RuntimeTests
     [Fact]
     public async Task Dispatch_TrackingDisabled_DoesNotRecordEvents()
     {
-        var runtime = new AutomatonRuntime<Thermostat, ThermostatState, ThermostatEvent, ThermostatEffect>(
+        var runtime = new AutomatonRuntime<Thermostat, ThermostatState, ThermostatEvent, ThermostatEffect, Unit>(
             new ThermostatState(20m, 22m, false, true), ThermostatObservers.NoOp, ThermostatInterpreters.NoOp,
             trackEvents: false);
 
@@ -404,7 +404,7 @@ public class RuntimeTests
     [Fact]
     public async Task Dispatch_TrackingEnabled_RecordsEvents()
     {
-        var runtime = new AutomatonRuntime<Thermostat, ThermostatState, ThermostatEvent, ThermostatEffect>(
+        var runtime = new AutomatonRuntime<Thermostat, ThermostatState, ThermostatEvent, ThermostatEffect, Unit>(
             new ThermostatState(20m, 22m, false, true), ThermostatObservers.NoOp, ThermostatInterpreters.NoOp,
             trackEvents: true);
 
@@ -420,7 +420,7 @@ public class RuntimeTests
     [Fact]
     public async Task LeanMode_DispatchesCorrectly()
     {
-        var runtime = new AutomatonRuntime<Thermostat, ThermostatState, ThermostatEvent, ThermostatEffect>(
+        var runtime = new AutomatonRuntime<Thermostat, ThermostatState, ThermostatEvent, ThermostatEffect, Unit>(
             new ThermostatState(20m, 22m, false, true), ThermostatObservers.NoOp, ThermostatInterpreters.NoOp,
             threadSafe: false, trackEvents: false);
 
@@ -452,7 +452,7 @@ public class RuntimeTests
                 Result<ThermostatEvent[], PipelineError>.Ok([]));
         };
 
-        var runtime = new AutomatonRuntime<Thermostat, ThermostatState, ThermostatEvent, ThermostatEffect>(
+        var runtime = new AutomatonRuntime<Thermostat, ThermostatState, ThermostatEvent, ThermostatEffect, Unit>(
             new ThermostatState(20m, 22m, false, true), ThermostatObservers.NoOp, interpreter,
             threadSafe: false, trackEvents: false);
 
@@ -466,8 +466,8 @@ public class RuntimeTests
     [Fact]
     public async Task LeanMode_Start_Works()
     {
-        var runtime = await AutomatonRuntime<Thermostat, ThermostatState, ThermostatEvent, ThermostatEffect>
-            .Start(ThermostatObservers.NoOp, ThermostatInterpreters.NoOp,
+        var runtime = await AutomatonRuntime<Thermostat, ThermostatState, ThermostatEvent, ThermostatEffect, Unit>
+            .Start(default, ThermostatObservers.NoOp, ThermostatInterpreters.NoOp,
                 threadSafe: false, trackEvents: false);
 
         Assert.Equal(20m, runtime.State.CurrentTemp);
@@ -481,7 +481,7 @@ public class RuntimeTests
     [Fact]
     public void Reset_ThreadSafe_AcquiresGate()
     {
-        var runtime = new AutomatonRuntime<Thermostat, ThermostatState, ThermostatEvent, ThermostatEffect>(
+        var runtime = new AutomatonRuntime<Thermostat, ThermostatState, ThermostatEvent, ThermostatEffect, Unit>(
             new ThermostatState(20m, 22m, false, true), ThermostatObservers.NoOp, ThermostatInterpreters.NoOp,
             threadSafe: true);
 
@@ -494,7 +494,7 @@ public class RuntimeTests
     [Fact]
     public void Reset_Unserialized_Works()
     {
-        var runtime = new AutomatonRuntime<Thermostat, ThermostatState, ThermostatEvent, ThermostatEffect>(
+        var runtime = new AutomatonRuntime<Thermostat, ThermostatState, ThermostatEvent, ThermostatEffect, Unit>(
             new ThermostatState(20m, 22m, false, true), ThermostatObservers.NoOp, ThermostatInterpreters.NoOp,
             threadSafe: false);
 
@@ -519,7 +519,7 @@ public class RuntimeTests
                 return Result<Unit, PipelineError>.Ok(Unit.Value);
             };
 
-        var runtime = new AutomatonRuntime<Thermostat, ThermostatState, ThermostatEvent, ThermostatEffect>(
+        var runtime = new AutomatonRuntime<Thermostat, ThermostatState, ThermostatEvent, ThermostatEffect, Unit>(
             new ThermostatState(20m, 22m, false, true), slowObserver, ThermostatInterpreters.NoOp,
             threadSafe: true);
 
@@ -555,7 +555,7 @@ public class RuntimeTests
     [Fact]
     public void Dispose_CanBeCalledMultipleTimes()
     {
-        var runtime = new AutomatonRuntime<Thermostat, ThermostatState, ThermostatEvent, ThermostatEffect>(
+        var runtime = new AutomatonRuntime<Thermostat, ThermostatState, ThermostatEvent, ThermostatEffect, Unit>(
             new ThermostatState(20m, 22m, false, true), ThermostatObservers.NoOp, ThermostatInterpreters.NoOp);
 
         runtime.Dispose();
@@ -565,7 +565,7 @@ public class RuntimeTests
     [Fact]
     public async Task Dispose_AfterUse_DoesNotThrow()
     {
-        using var runtime = new AutomatonRuntime<Thermostat, ThermostatState, ThermostatEvent, ThermostatEffect>(
+        using var runtime = new AutomatonRuntime<Thermostat, ThermostatState, ThermostatEvent, ThermostatEffect, Unit>(
             new ThermostatState(20m, 22m, false, true), ThermostatObservers.NoOp, ThermostatInterpreters.NoOp);
 
         await runtime.Dispatch(new ThermostatEvent.TemperatureRecorded(18m));

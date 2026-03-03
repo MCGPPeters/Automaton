@@ -48,7 +48,7 @@ The `Automaton` package contains everything you need:
 
 | Type | Purpose |
 | ---- | ------- |
-| `Automaton<TState, TEvent, TEffect>` | The kernel interface |
+| `Automaton<TState, TEvent, TEffect, TParameters>` | The kernel interface |
 | `AutomatonRuntime<...>` | Thread-safe async runtime |
 | `Observer<...>` | Transition observer delegate |
 | `Interpreter<...>` | Effect interpreter delegate |
@@ -60,14 +60,14 @@ The `Automaton` package contains everything you need:
 
 No additional packages are required. The library has **zero dependencies** beyond the .NET runtime.
 
-## Coming Soon: Automaton.Patterns
+## Automaton.Patterns
 
-The `Automaton.Patterns` package will provide production-ready patterns built on the kernel:
+The `Automaton.Patterns` package provides production-ready patterns built on the kernel:
 
 - **Event Sourcing** — EventStore, AggregateRunner, Projections, ConflictResolver
 - **Saga** — Multi-aggregate coordination
 
-This package is currently in development. See the [Patterns placeholder](../patterns/index.md) for details.
+See the [Patterns documentation](../patterns/index.md) for details.
 
 ## Next Steps
 

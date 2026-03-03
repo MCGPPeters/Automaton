@@ -74,8 +74,8 @@ Notice how errors carry *context* — not just "invalid" but *why* it's invalid.
 A Decider extends the Automaton interface:
 
 ```csharp
-public interface Decider<TState, TCommand, TEvent, TEffect, TError>
-    : Automaton<TState, TEvent, TEffect>
+public interface Decider<TState, TCommand, TEvent, TEffect, TError, TParameters>
+    : Automaton<TState, TEvent, TEffect, TParameters>
 {
     static abstract Result<TEvent[], TError> Decide(
         TState state, TCommand command);
@@ -88,11 +88,11 @@ The `Decide` function is pure: given state and command, it returns either events
 
 ```csharp
 public class Counter
-    : Decider<CounterState, CounterCommand, CounterEvent, CounterEffect, CounterError>
+    : Decider<CounterState, CounterCommand, CounterEvent, CounterEffect, CounterError, Unit>
 {
     public const int MaxCount = 100;
 
-    public static (CounterState, CounterEffect) Init() =>
+    public static (CounterState, CounterEffect) Init(Unit _) =>
         (new CounterState(0), new CounterEffect.None());
 
     public static Result<CounterEvent[], CounterError> Decide(
@@ -171,7 +171,7 @@ Interpreter<CounterEffect, CounterEvent> interpreter =
         Result<CounterEvent[], PipelineError>.Ok([]));
 
 var runtime = await DecidingRuntime<Counter, CounterState, CounterCommand,
-    CounterEvent, CounterEffect, CounterError>.Start(observer, interpreter);
+    CounterEvent, CounterEffect, CounterError, Unit>.Start(default, observer, interpreter);
 ```
 
 ### Successful Commands
@@ -346,7 +346,7 @@ The Decider pattern has seven elements. The Automaton kernel provides four, the 
 | 1 | Command type | Type parameter | `TCommand` |
 | 2 | Event type | Type parameter | `TEvent` |
 | 3 | State type | Type parameter | `TState` |
-| 4 | Initial state | Automaton | `Init()` |
+| 4 | Initial state | Automaton | `Init(parameters)` |
 | 5 | Decide | **Decider** | `Decide(state, command)` |
 | 6 | Evolve | Automaton | `Transition(state, event)` |
 | 7 | Is terminal | **Decider** | `IsTerminal(state)` |

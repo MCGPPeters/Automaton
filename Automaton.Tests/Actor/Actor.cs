@@ -55,7 +55,7 @@ public sealed class ActorRef<TEvent>
 /// </summary>
 /// <remarks>
 /// <para>
-/// Internally delegates to <see cref="AutomatonRuntime{TAutomaton,TState,TEvent,TEffect}"/>
+/// Internally delegates to <see cref="AutomatonRuntime{TAutomaton,TState,TEvent,TEffect,TParameters}"/>
 /// with a no-op observer and an interpreter that wraps the effect handler.
 /// </para>
 /// <para>
@@ -65,7 +65,7 @@ public sealed class ActorRef<TEvent>
 /// </para>
 /// <example>
 /// <code>
-/// var actor = ActorInstance&lt;Thermostat, ThermostatState, ThermostatEvent, ThermostatEffect&gt;
+/// var actor = ActorInstance&lt;Thermostat, ThermostatState, ThermostatEvent, ThermostatEffect, Unit&gt;
 ///     .Spawn("thermostat-1");
 ///
 /// await actor.Ref.Tell(new ThermostatEvent.TemperatureRecorded(18m));
@@ -74,10 +74,10 @@ public sealed class ActorRef<TEvent>
 /// </code>
 /// </example>
 /// </remarks>
-public sealed class ActorInstance<TAutomaton, TState, TEvent, TEffect>
-    where TAutomaton : Automaton<TState, TEvent, TEffect>
+public sealed class ActorInstance<TAutomaton, TState, TEvent, TEffect, TParameters>
+    where TAutomaton : Automaton<TState, TEvent, TEffect, TParameters>
 {
-    private readonly AutomatonRuntime<TAutomaton, TState, TEvent, TEffect> _core;
+    private readonly AutomatonRuntime<TAutomaton, TState, TEvent, TEffect, TParameters> _core;
     private readonly Channel<TEvent> _mailbox;
     private readonly CancellationTokenSource _cts = new();
     private int _processedCount;
@@ -98,7 +98,7 @@ public sealed class ActorInstance<TAutomaton, TState, TEvent, TEffect>
     public IReadOnlyList<TEvent> ProcessedMessages => _core.Events;
 
     private ActorInstance(
-        AutomatonRuntime<TAutomaton, TState, TEvent, TEffect> core,
+        AutomatonRuntime<TAutomaton, TState, TEvent, TEffect, TParameters> core,
         Channel<TEvent> mailbox,
         ActorRef<TEvent> actorRef)
     {
@@ -110,11 +110,11 @@ public sealed class ActorInstance<TAutomaton, TState, TEvent, TEffect>
     /// <summary>
     /// Spawns a new actor with the given name, starting its processing loop.
     /// </summary>
-    public static ActorInstance<TAutomaton, TState, TEvent, TEffect> Spawn(
+    public static ActorInstance<TAutomaton, TState, TEvent, TEffect, TParameters> Spawn(
         string name,
         Func<TEffect, ActorRef<TEvent>, Task>? effectHandler = null)
     {
-        var (state, _) = TAutomaton.Init();
+        var (state, _) = TAutomaton.Init(default!);
         var mailbox = Channel.CreateUnbounded<TEvent>(new UnboundedChannelOptions
         {
             SingleReader = true,
@@ -136,10 +136,10 @@ public sealed class ActorInstance<TAutomaton, TState, TEvent, TEffect>
         : _ => new ValueTask<Result<TEvent[], PipelineError>>(
             Result<TEvent[], PipelineError>.Ok([]));
 
-        var core = new AutomatonRuntime<TAutomaton, TState, TEvent, TEffect>(
+        var core = new AutomatonRuntime<TAutomaton, TState, TEvent, TEffect, TParameters>(
             state, observer, interpreter);
 
-        var actor = new ActorInstance<TAutomaton, TState, TEvent, TEffect>(
+        var actor = new ActorInstance<TAutomaton, TState, TEvent, TEffect, TParameters>(
             core, mailbox, actorRef);
 
         // Start the processing loop

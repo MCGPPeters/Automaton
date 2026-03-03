@@ -91,11 +91,11 @@ Feedback events are dispatched back into the automaton, creating a closed loop. 
 
 ---
 
-## AutomatonRuntime&lt;TAutomaton, TState, TEvent, TEffect&gt;
+## AutomatonRuntime&lt;TAutomaton, TState, TEvent, TEffect, TParameters&gt;
 
 ```csharp
-public sealed class AutomatonRuntime<TAutomaton, TState, TEvent, TEffect> : IDisposable
-    where TAutomaton : Automaton<TState, TEvent, TEffect>
+public sealed class AutomatonRuntime<TAutomaton, TState, TEvent, TEffect, TParameters> : IDisposable
+    where TAutomaton : Automaton<TState, TEvent, TEffect, TParameters>
 ```
 
 The shared automaton runtime: a monadic left fold with Observer and Interpreter.
@@ -139,7 +139,8 @@ Creates a runtime with the given initial state, observer, and interpreter. Use w
 ### Start
 
 ```csharp
-public static async ValueTask<AutomatonRuntime<TAutomaton, TState, TEvent, TEffect>> Start(
+public static async ValueTask<AutomatonRuntime<TAutomaton, TState, TEvent, TEffect, TParameters>> Start(
+    TParameters parameters,
     Observer<TState, TEvent, TEffect> observer,
     Interpreter<TEffect, TEvent> interpreter,
     bool threadSafe = true,
@@ -149,7 +150,7 @@ public static async ValueTask<AutomatonRuntime<TAutomaton, TState, TEvent, TEffe
 
 Creates and starts a runtime, interpreting init effects immediately. This is the recommended way to create a runtime.
 
-Calls `TAutomaton.Init()`, then interprets the init effect (which may produce feedback events and additional transitions).
+Calls `TAutomaton.Init(parameters)`, then interprets the init effect (which may produce feedback events and additional transitions).
 
 ### Dispatch
 

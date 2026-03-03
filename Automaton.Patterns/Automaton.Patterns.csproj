@@ -1,0 +1,32 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+  </PropertyGroup>
+
+  <!-- NuGet package metadata -->
+  <PropertyGroup>
+    <PackageId>Automaton.Patterns</PackageId>
+    <Title>Automaton.Patterns</Title>
+    <Description>Production-ready Event Sourcing and Saga (Process Manager) runtimes built on the Automaton Mealy machine kernel. Includes async event store abstraction, aggregate runner with optimistic concurrency and OpenTelemetry tracing, projections, and a saga runtime for multi-aggregate coordination.</Description>
+    <Authors>Maurice Peters</Authors>
+    <PackageTags>automaton;event-sourcing;saga;process-manager;aggregate;cqrs;ddd;mealy-machine;projection;read-model</PackageTags>
+    <PackageLicenseExpression>Apache-2.0</PackageLicenseExpression>
+    <PackageReadmeFile>README.md</PackageReadmeFile>
+    <RepositoryUrl>https://github.com/MCGPPeters/Automaton</RepositoryUrl>
+    <RepositoryType>git</RepositoryType>
+    <PackageProjectUrl>https://github.com/MCGPPeters/Automaton</PackageProjectUrl>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <None Include="README.md" Pack="true" PackagePath="\" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Automaton\Automaton.csproj" />
+  </ItemGroup>
+
+</Project>

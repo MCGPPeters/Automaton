@@ -5,16 +5,16 @@ The entire Automaton library is built on one interface and one idea.
 ## The Interface
 
 ```csharp
-public interface Automaton<TState, TEvent, TEffect>
+public interface Automaton<TState, TEvent, TEffect, TParameters>
 {
-    static abstract (TState State, TEffect Effect) Init();
+    static abstract (TState State, TEffect Effect) Init(TParameters parameters);
     static abstract (TState State, TEffect Effect) Transition(TState state, TEvent @event);
 }
 ```
 
 Two methods. Zero dependencies. That's the whole kernel.
 
-- **`Init()`** — returns the initial state and any startup effect.
+- **`Init(parameters)`** — returns the initial state and any startup effect. Use `Unit` as `TParameters` for automata that require no initialization parameters.
 - **`Transition(state, event)`** — given the current state and an event, returns the new state and an effect.
 
 ## The Idea: Mealy Machines
@@ -72,7 +72,7 @@ This pattern is known as the [**functional core, imperative shell**](https://www
 
 ## The Three Types
 
-Every automaton is parameterized by three types:
+Every automaton is parameterized by three domain types (plus a `TParameters` type for initialization):
 
 ### State — what the machine remembers
 

@@ -97,9 +97,9 @@ Design rationale with mathematical grounding.
 Every runtime in this library is built on the **same kernel**:
 
 ```csharp
-public interface Automaton<TState, TEvent, TEffect>
+public interface Automaton<TState, TEvent, TEffect, TParameters>
 {
-    static abstract (TState State, TEffect Effect) Init();
+    static abstract (TState State, TEffect Effect) Init(TParameters parameters);
     static abstract (TState State, TEffect Effect) Transition(TState state, TEvent @event);
 }
 ```
@@ -117,4 +117,4 @@ You write your domain logic as a pure transition function. The runtime handles t
 | Package | Description | Status |
 |---------|-------------|--------|
 | [`Automaton`](https://www.nuget.org/packages/Automaton) | Core kernel, runtime, Decider, Result, diagnostics | ✅ Stable |
-| `Automaton.Patterns` | Production Event Sourcing, Saga, ConflictResolver | 🚧 Coming soon |
+| `Automaton.Patterns` | Production Event Sourcing, Saga, ConflictResolver | ✅ Stable |

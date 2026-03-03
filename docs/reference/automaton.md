@@ -1,4 +1,4 @@
-# Automaton&lt;TState, TEvent, TEffect&gt;
+# Automaton&lt;TState, TEvent, TEffect, TParameters&gt;
 
 `namespace Automaton`
 
@@ -7,9 +7,9 @@ The kernel interface — a deterministic state machine with effects (Mealy machi
 ## Definition
 
 ```csharp
-public interface Automaton<TState, TEvent, TEffect>
+public interface Automaton<TState, TEvent, TEffect, TParameters>
 {
-    static abstract (TState State, TEffect Effect) Init();
+    static abstract (TState State, TEffect Effect) Init(TParameters parameters);
     static abstract (TState State, TEffect Effect) Transition(TState state, TEvent @event);
 }
 ```
@@ -21,18 +21,25 @@ public interface Automaton<TState, TEvent, TEffect>
 | `TState` | The state of the automaton. Should be an immutable record. |
 | `TEvent` | The input events that drive transitions. Typically an interface with nested record structs. |
 | `TEffect` | The output effects produced by transitions. Typically an interface with nested record structs. |
+| `TParameters` | The parameters required to initialize the automaton. Use `Unit` for parameterless automata. |
 
 ## Methods
 
 ### Init
 
 ```csharp
-static abstract (TState State, TEffect Effect) Init();
+static abstract (TState State, TEffect Effect) Init(TParameters parameters);
 ```
 
-Produces the initial state and any startup effect.
+Produces the initial state and any startup effect from the given parameters.
 
-Called once when the runtime starts. The init effect is interpreted immediately by the runtime's Interpreter, which may produce feedback events that trigger additional transitions.
+Called once when the runtime starts. The init effect is interpreted immediately by the runtime's Interpreter, which may produce feedback events that trigger additional transitions. Use `Unit` as `TParameters` for automata that require no initialization parameters.
+
+**Parameters:**
+
+| Parameter | Description |
+| --------- | ----------- |
+| `parameters` | The initialization parameters. Use `default` for `Unit`-parameterized automata. |
 
 **Returns:** A tuple of the initial state and a startup effect.
 
@@ -77,9 +84,10 @@ public interface CounterEffect
     record struct None : CounterEffect;
 }
 
-public class Counter : Automaton<CounterState, CounterEvent, CounterEffect>
+```csharp
+public class Counter : Automaton<CounterState, CounterEvent, CounterEffect, Unit>
 {
-    public static (CounterState, CounterEffect) Init() =>
+    public static (CounterState, CounterEffect) Init(Unit _) =>
         (new CounterState(0), new CounterEffect.None());
 
     public static (CounterState, CounterEffect) Transition(
@@ -100,7 +108,7 @@ public class Counter : Automaton<CounterState, CounterEvent, CounterEffect>
 Because `Init` and `Transition` are static methods, you can test them without any runtime:
 
 ```csharp
-var (state, effect) = Counter.Init();
+var (state, effect) = Counter.Init(default);
 Assert.Equal(0, state.Count);
 
 var (next, _) = Counter.Transition(state, new CounterEvent.Increment());

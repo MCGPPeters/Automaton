@@ -329,7 +329,7 @@ public class ThermostatEventSourcingTests
         store.Append(new ThermostatEvent.HeaterTurnedOff());
 
         var aggregate = AggregateRunner<Thermostat, ThermostatState, ThermostatCommand,
-            ThermostatEvent, ThermostatEffect, ThermostatError>.FromStore(store);
+            ThermostatEvent, ThermostatEffect, ThermostatError, Unit>.FromStore(store);
 
         Assert.Equal(23.0m, aggregate.State.CurrentTemp);
         Assert.False(aggregate.State.Heating);
@@ -344,7 +344,7 @@ public class ThermostatEventSourcingTests
         store.Append(new ThermostatEvent.HeaterTurnedOn());
 
         var aggregate = AggregateRunner<Thermostat, ThermostatState, ThermostatCommand,
-            ThermostatEvent, ThermostatEffect, ThermostatError>.FromStore(store);
+            ThermostatEvent, ThermostatEffect, ThermostatError, Unit>.FromStore(store);
 
         // Continue processing
         aggregate.Handle(new ThermostatCommand.RecordReading(23.0m));
@@ -361,7 +361,7 @@ public class ThermostatEventSourcingTests
         store.Append(new ThermostatEvent.ShutdownCompleted());
 
         var aggregate = AggregateRunner<Thermostat, ThermostatState, ThermostatCommand,
-            ThermostatEvent, ThermostatEffect, ThermostatError>.FromStore(store);
+            ThermostatEvent, ThermostatEffect, ThermostatError, Unit>.FromStore(store);
 
         Assert.True(aggregate.IsTerminal);
         Assert.False(aggregate.State.Active);
@@ -506,7 +506,7 @@ public class ThermostatEventSourcingTests
     // =========================================================================
 
     private static AggregateRunner<Thermostat, ThermostatState, ThermostatCommand,
-        ThermostatEvent, ThermostatEffect, ThermostatError> CreateAggregate() =>
+            ThermostatEvent, ThermostatEffect, ThermostatError, Unit> CreateAggregate() =>
         AggregateRunner<Thermostat, ThermostatState, ThermostatCommand,
-            ThermostatEvent, ThermostatEffect, ThermostatError>.Create();
+            ThermostatEvent, ThermostatEffect, ThermostatError, Unit>.Create();
 }

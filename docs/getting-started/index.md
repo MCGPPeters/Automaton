@@ -36,9 +36,9 @@ public interface CounterEffect
 Two methods — `Init` and `Transition` — define the entire behavior:
 
 ```csharp
-public class Counter : Automaton<CounterState, CounterEvent, CounterEffect>
+public class Counter : Automaton<CounterState, CounterEvent, CounterEffect, Unit>
 {
-    public static (CounterState, CounterEffect) Init() =>
+    public static (CounterState, CounterEffect) Init(Unit _) =>
         (new CounterState(0), new CounterEffect.None());
 
     public static (CounterState, CounterEffect) Transition(
@@ -61,8 +61,9 @@ public class Counter : Automaton<CounterState, CounterEvent, CounterEffect>
 ```csharp
 using Automaton;
 
-var runtime = await AutomatonRuntime<Counter, CounterState, CounterEvent, CounterEffect>
+var runtime = await AutomatonRuntime<Counter, CounterState, CounterEvent, CounterEffect, Unit>
     .Start(
+        default,
         observer: (state, @event, effect) =>
         {
             Console.WriteLine($"{@event.GetType().Name} → Count: {state.Count}");

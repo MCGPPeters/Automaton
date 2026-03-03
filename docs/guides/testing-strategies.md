@@ -111,8 +111,9 @@ public async Task Dispatch_RecordsAllTransitions()
 {
     var log = new List<(CounterState State, CounterEvent Event, CounterEffect Effect)>();
 
-    var runtime = await AutomatonRuntime<Counter, CounterState, CounterEvent, CounterEffect>
+    var runtime = await AutomatonRuntime<Counter, CounterState, CounterEvent, CounterEffect, Unit>
         .Start(
+            default,
             observer: (state, @event, effect) =>
             {
                 log.Add((state, @event, effect));
@@ -140,8 +141,9 @@ public async Task Reset_ProducesLogEffect()
 {
     var effects = new List<CounterEffect>();
 
-    var runtime = await AutomatonRuntime<Counter, CounterState, CounterEvent, CounterEffect>
+    var runtime = await AutomatonRuntime<Counter, CounterState, CounterEvent, CounterEffect, Unit>
         .Start(
+            default,
             observer: (_, _, _) => PipelineResult.Ok,
             interpreter: effect =>
             {
@@ -164,7 +166,8 @@ public async Task Reset_ProducesLogEffect()
 public async Task Handle_ValidCommand_UpdatesState()
 {
     var runtime = await DecidingRuntime<Counter, CounterState, CounterCommand,
-        CounterEvent, CounterEffect, CounterError>.Start(
+        CounterEvent, CounterEffect, CounterError, Unit>.Start(
+            default,
             (_, _, _) => PipelineResult.Ok,
             _ => new ValueTask<Result<CounterEvent[], PipelineError>>(
                 Result<CounterEvent[], PipelineError>.Ok([])));
@@ -179,7 +182,8 @@ public async Task Handle_ValidCommand_UpdatesState()
 public async Task Handle_InvalidCommand_LeavesStateUnchanged()
 {
     var runtime = await DecidingRuntime<Counter, CounterState, CounterCommand,
-        CounterEvent, CounterEffect, CounterError>.Start(
+        CounterEvent, CounterEffect, CounterError, Unit>.Start(
+            default,
             (_, _, _) => PipelineResult.Ok,
             _ => new ValueTask<Result<CounterEvent[], PipelineError>>(
                 Result<CounterEvent[], PipelineError>.Ok([])));
@@ -203,7 +207,8 @@ Test the full system including feedback loops:
 public async Task Interpreter_FeedbackLoop_ProducesMultipleTransitions()
 {
     var runtime = await AutomatonRuntime<Thermostat, ThermostatState,
-        ThermostatEvent, ThermostatEffect>.Start(
+        ThermostatEvent, ThermostatEffect, Unit>.Start(
+            default,
             observer: (_, _, _) => PipelineResult.Ok,
             interpreter: effect => new ValueTask<Result<ThermostatEvent[], PipelineError>>(
                 Result<ThermostatEvent[], PipelineError>.Ok(effect switch
@@ -228,7 +233,7 @@ public async Task Interpreter_FeedbackLoop_ProducesMultipleTransitions()
 public async Task Events_IncludesFeedbackEvents()
 {
     var runtime = await AutomatonRuntime<Thermostat, ThermostatState,
-        ThermostatEvent, ThermostatEffect>.Start(observer, interpreter);
+        ThermostatEvent, ThermostatEffect, Unit>.Start(default, observer, interpreter);
 
     await runtime.Dispatch(new ThermostatEvent.TemperatureReading(18.0m));
     await runtime.Dispatch(new ThermostatEvent.TemperatureReading(22.5m));

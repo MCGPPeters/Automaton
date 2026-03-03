@@ -1,7 +1,7 @@
 # ADR-001: Automaton Kernel as Mealy Machine
 
-**Status:** Accepted  
-**Date:** 2025-06-01  
+**Status:** Accepted
+**Date:** 2025-06-01
 **Deciders:** Maurice Peters
 
 ## Context
@@ -29,9 +29,9 @@ transition : (State × Event) → (State × Effect)
 In C#:
 
 ```csharp
-public interface Automaton<TState, TEvent, TEffect>
+public interface Automaton<TState, TEvent, TEffect, TParameters>
 {
-    static abstract (TState State, TEffect Effect) Init();
+    static abstract (TState State, TEffect Effect) Init(TParameters parameters);
     static abstract (TState State, TEffect Effect) Transition(TState state, TEvent @event);
 }
 ```

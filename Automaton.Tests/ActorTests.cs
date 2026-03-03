@@ -14,7 +14,7 @@ public class ActorTests
     [Fact]
     public async Task Actor_InitialState_IsDefault()
     {
-        var actor = ActorInstance<Thermostat, ThermostatState, ThermostatEvent, ThermostatEffect>
+        var actor = ActorInstance<Thermostat, ThermostatState, ThermostatEvent, ThermostatEffect, Unit>
             .Spawn("thermostat");
 
         Assert.Equal(20m, actor.State.CurrentTemp);
@@ -28,7 +28,7 @@ public class ActorTests
     [Fact]
     public async Task Actor_ProcessesMessages_FromMailbox()
     {
-        var actor = ActorInstance<Thermostat, ThermostatState, ThermostatEvent, ThermostatEffect>
+        var actor = ActorInstance<Thermostat, ThermostatState, ThermostatEvent, ThermostatEffect, Unit>
             .Spawn("thermostat");
 
         await actor.Ref.Tell(new ThermostatEvent.TemperatureRecorded(18m));
@@ -47,7 +47,7 @@ public class ActorTests
     [Fact]
     public async Task Actor_ProcessesMessages_Sequentially()
     {
-        var actor = ActorInstance<Thermostat, ThermostatState, ThermostatEvent, ThermostatEffect>
+        var actor = ActorInstance<Thermostat, ThermostatState, ThermostatEvent, ThermostatEffect, Unit>
             .Spawn("thermostat");
 
         // Send many messages concurrently
@@ -69,7 +69,7 @@ public class ActorTests
     {
         var notifications = new List<string>();
 
-        var actor = ActorInstance<Thermostat, ThermostatState, ThermostatEvent, ThermostatEffect>.Spawn(
+        var actor = ActorInstance<Thermostat, ThermostatState, ThermostatEvent, ThermostatEffect, Unit>.Spawn(
             "thermostat",
             effectHandler: (effect, self) =>
             {
@@ -95,7 +95,7 @@ public class ActorTests
     [Fact]
     public async Task ActorRef_HasName()
     {
-        var actor = ActorInstance<Thermostat, ThermostatState, ThermostatEvent, ThermostatEffect>
+        var actor = ActorInstance<Thermostat, ThermostatState, ThermostatEvent, ThermostatEffect, Unit>
             .Spawn("my-thermostat");
 
         Assert.Equal("my-thermostat", actor.Ref.Name);
@@ -106,7 +106,7 @@ public class ActorTests
     [Fact]
     public async Task Actor_HeaterCycle_ProducesCorrectState()
     {
-        var actor = ActorInstance<Thermostat, ThermostatState, ThermostatEvent, ThermostatEffect>
+        var actor = ActorInstance<Thermostat, ThermostatState, ThermostatEvent, ThermostatEffect, Unit>
             .Spawn("thermostat");
 
         await actor.Ref.Tell(new ThermostatEvent.TemperatureRecorded(18m));

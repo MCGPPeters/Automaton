@@ -88,13 +88,13 @@ The Decider separates **what should happen** (`Decide`) from **how it happens** 
 
 ```csharp
 public class Thermostat
-    : Decider<ThermostatState, ThermostatCommand, ThermostatEvent, ThermostatEffect, ThermostatError>
+    : Decider<ThermostatState, ThermostatCommand, ThermostatEvent, ThermostatEffect, ThermostatError, Unit>
 {
     public const decimal MinTarget = 5.0m;
     public const decimal MaxTarget = 40.0m;
     public const decimal AlertThreshold = 35.0m;
 
-    public static (ThermostatState State, ThermostatEffect Effect) Init() =>
+    public static (ThermostatState State, ThermostatEffect Effect) Init(Unit _) =>
         (new ThermostatState(20.0m, 22.0m, Heating: false, Active: true),
          new ThermostatEffect.None());
 
@@ -220,8 +220,8 @@ public sealed class EventStore<TEvent>
 The aggregate runner implements the **decide → transition → append** pattern:
 
 ```csharp
-public sealed class AggregateRunner<TDecider, TState, TCommand, TEvent, TEffect, TError>
-    where TDecider : Decider<TState, TCommand, TEvent, TEffect, TError>
+public sealed class AggregateRunner<TDecider, TState, TCommand, TEvent, TEffect, TError, TParameters>
+    where TDecider : Decider<TState, TCommand, TEvent, TEffect, TError, TParameters>
 {
     private TState _state;
     private readonly EventStore<TEvent> _store;
@@ -275,7 +275,7 @@ Key design decisions:
 
 ```csharp
 var aggregate = AggregateRunner<Thermostat, ThermostatState, ThermostatCommand,
-    ThermostatEvent, ThermostatEffect, ThermostatError>.Create();
+    ThermostatEvent, ThermostatEffect, ThermostatError, Unit>.Create();
 
 // Room is cold → heater starts
 var result = aggregate.Handle(new ThermostatCommand.RecordReading(18.0m));
@@ -331,7 +331,7 @@ The defining feature of Event Sourcing — rebuild current state by replaying:
 // Add to AggregateRunner:
 public TState Rebuild()
 {
-    var (seed, _) = TDecider.Init();
+    var (seed, _) = TDecider.Init(default!);
     _state = _store.Replay(seed, (s, e) => TDecider.Transition(s, e).State);
     return _state;
 }
@@ -360,7 +360,7 @@ store.Append(new ThermostatEvent.TemperatureRecorded(23.0m));
 store.Append(new ThermostatEvent.HeaterTurnedOff());
 
 var aggregate = AggregateRunner<Thermostat, ThermostatState, ThermostatCommand,
-    ThermostatEvent, ThermostatEffect, ThermostatError>.FromStore(store);
+    ThermostatEvent, ThermostatEffect, ThermostatError, Unit>.FromStore(store);
 
 Console.WriteLine(aggregate.State.CurrentTemp); // 23
 Console.WriteLine(aggregate.State.Heating);     // False
