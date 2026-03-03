@@ -121,21 +121,15 @@ public class CounterDecider
         IReadOnlyList<CounterEvent> theirEvents)
     {
         // Reset is non-commutative — cannot be resolved
-        foreach (var e in ourEvents)
-        {
-            if (e is CounterEvent.WasReset)
-                return Result<CounterEvent[], ConflictNotResolved>.Err(
-                    new ConflictNotResolved(
-                        "Reset conflicts with concurrent changes — reset depends on exact count."));
-        }
+        if (ourEvents.Any(e => e is CounterEvent.WasReset))
+            return Result<CounterEvent[], ConflictNotResolved>.Err(
+                new ConflictNotResolved(
+                    "Reset conflicts with concurrent changes — reset depends on exact count."));
 
-        foreach (var e in theirEvents)
-        {
-            if (e is CounterEvent.WasReset)
-                return Result<CounterEvent[], ConflictNotResolved>.Err(
-                    new ConflictNotResolved(
-                        "Cannot apply changes after a concurrent reset — state has been zeroed."));
-        }
+        if (theirEvents.Any(e => e is CounterEvent.WasReset))
+            return Result<CounterEvent[], ConflictNotResolved>.Err(
+                new ConflictNotResolved(
+                    "Cannot apply changes after a concurrent reset — state has been zeroed."));
 
         // Validate invariants on the projected state (pre-computed by the runner)
         return projectedState.Count switch
