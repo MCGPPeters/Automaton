@@ -79,32 +79,25 @@ public class ResolvingAggregateRunnerTests : IDisposable
     {
         // Two aggregates pointing to the same stream
         var agg1 = CreateAggregate();
-        var agg2 = ResolvingAggregateRunner<CounterDecider, CounterState, CounterCommand,
+        using var agg2 = ResolvingAggregateRunner<CounterDecider, CounterState, CounterCommand,
             CounterEvent, CounterEffect, CounterError, Unit>.Create(_store, _streamId, default);
 
-        try
-        {
-            // agg1 adds 3 (version 0 → 3)
-            await agg1.Handle(new CounterCommand.Add(3));
+        // agg1 adds 3 (version 0 → 3)
+        await agg1.Handle(new CounterCommand.Add(3));
 
-            // agg2 still at version 0, adds 5
-            // Without conflict resolution, this would throw ConcurrencyException.
-            // With resolution: loads their 3 Incremented events, merges state to count=3,
-            // projects our 5 Incremented events → count=8 (within bounds), returns ourEvents.
-            var result = await agg2.Handle(new CounterCommand.Add(5));
+        // agg2 still at version 0, adds 5
+        // Without conflict resolution, this would throw ConcurrencyException.
+        // With resolution: loads their 3 Incremented events, merges state to count=3,
+        // projects our 5 Incremented events → count=8 (within bounds), returns ourEvents.
+        var result = await agg2.Handle(new CounterCommand.Add(5));
 
-            Assert.True(result.IsOk);
-            Assert.Equal(8, result.Value.Count);
-            Assert.Equal(8, agg2.Version);
+        Assert.True(result.IsOk);
+        Assert.Equal(8, result.Value.Count);
+        Assert.Equal(8, agg2.Version);
 
-            // Store should have all 8 events
-            var stream = _store.GetStream(_streamId);
-            Assert.Equal(8, stream.Count);
-        }
-        finally
-        {
-            agg2.Dispose();
-        }
+        // Store should have all 8 events
+        var stream = _store.GetStream(_streamId);
+        Assert.Equal(8, stream.Count);
     }
 
     [Fact]
@@ -119,25 +112,18 @@ public class ResolvingAggregateRunnerTests : IDisposable
         // Two aggregates load from version 50
         var agg1 = await ResolvingAggregateRunner<CounterDecider, CounterState, CounterCommand,
             CounterEvent, CounterEffect, CounterError, Unit>.Load(_store, _streamId, default);
-        var agg2 = await ResolvingAggregateRunner<CounterDecider, CounterState, CounterCommand,
+        using var agg2 = await ResolvingAggregateRunner<CounterDecider, CounterState, CounterCommand,
             CounterEvent, CounterEffect, CounterError, Unit>.Load(_store, _streamId, default);
         _aggregate = agg1;
 
-        try
-        {
-            // agg1 subtracts 10 → count=40
-            await agg1.Handle(new CounterCommand.Add(-10));
+        // agg1 subtracts 10 → count=40
+        await agg1.Handle(new CounterCommand.Add(-10));
 
-            // agg2 subtracts 20 → conflict, resolves to count=20 (50-10-20=20)
-            var result = await agg2.Handle(new CounterCommand.Add(-20));
+        // agg2 subtracts 20 → conflict, resolves to count=20 (50-10-20=20)
+        var result = await agg2.Handle(new CounterCommand.Add(-20));
 
-            Assert.True(result.IsOk);
-            Assert.Equal(20, result.Value.Count);
-        }
-        finally
-        {
-            agg2.Dispose();
-        }
+        Assert.True(result.IsOk);
+        Assert.Equal(20, result.Value.Count);
     }
 
     // ── Conflict Resolution: Non-Commutative (Reset) ──
@@ -153,24 +139,17 @@ public class ResolvingAggregateRunnerTests : IDisposable
 
         var agg1 = await ResolvingAggregateRunner<CounterDecider, CounterState, CounterCommand,
             CounterEvent, CounterEffect, CounterError, Unit>.Load(_store, _streamId, default);
-        var agg2 = await ResolvingAggregateRunner<CounterDecider, CounterState, CounterCommand,
+        using var agg2 = await ResolvingAggregateRunner<CounterDecider, CounterState, CounterCommand,
             CounterEvent, CounterEffect, CounterError, Unit>.Load(_store, _streamId, default);
         _aggregate = agg1;
 
-        try
-        {
-            // agg1 adds 5 → count=15
-            await agg1.Handle(new CounterCommand.Add(5));
+        // agg1 adds 5 → count=15
+        await agg1.Handle(new CounterCommand.Add(5));
 
-            // agg2 tries to reset → conflict, Reset is non-commutative
-            // Runner converts ConflictNotResolved to ConcurrencyException at boundary
-            await Assert.ThrowsAsync<ConcurrencyException>(async () =>
-                await agg2.Handle(new CounterCommand.Reset()));
-        }
-        finally
-        {
-            agg2.Dispose();
-        }
+        // agg2 tries to reset → conflict, Reset is non-commutative
+        // Runner converts ConflictNotResolved to ConcurrencyException at boundary
+        await Assert.ThrowsAsync<ConcurrencyException>(async () =>
+            await agg2.Handle(new CounterCommand.Reset()));
     }
 
     [Fact]
@@ -184,24 +163,17 @@ public class ResolvingAggregateRunnerTests : IDisposable
 
         var agg1 = await ResolvingAggregateRunner<CounterDecider, CounterState, CounterCommand,
             CounterEvent, CounterEffect, CounterError, Unit>.Load(_store, _streamId, default);
-        var agg2 = await ResolvingAggregateRunner<CounterDecider, CounterState, CounterCommand,
+        using var agg2 = await ResolvingAggregateRunner<CounterDecider, CounterState, CounterCommand,
             CounterEvent, CounterEffect, CounterError, Unit>.Load(_store, _streamId, default);
         _aggregate = agg1;
 
-        try
-        {
-            // agg1 resets → count=0
-            await agg1.Handle(new CounterCommand.Reset());
+        // agg1 resets → count=0
+        await agg1.Handle(new CounterCommand.Reset());
 
-            // agg2 tries to add 5 → conflict, their reset makes our add meaningless
-            // Runner converts ConflictNotResolved to ConcurrencyException at boundary
-            await Assert.ThrowsAsync<ConcurrencyException>(async () =>
-                await agg2.Handle(new CounterCommand.Add(5)));
-        }
-        finally
-        {
-            agg2.Dispose();
-        }
+        // agg2 tries to add 5 → conflict, their reset makes our add meaningless
+        // Runner converts ConflictNotResolved to ConcurrencyException at boundary
+        await Assert.ThrowsAsync<ConcurrencyException>(async () =>
+            await agg2.Handle(new CounterCommand.Add(5)));
     }
 
     // ── Conflict Resolution: Invariant Violation ──
@@ -217,23 +189,16 @@ public class ResolvingAggregateRunnerTests : IDisposable
 
         var agg1 = await ResolvingAggregateRunner<CounterDecider, CounterState, CounterCommand,
             CounterEvent, CounterEffect, CounterError, Unit>.Load(_store, _streamId, default);
-        var agg2 = await ResolvingAggregateRunner<CounterDecider, CounterState, CounterCommand,
+        using var agg2 = await ResolvingAggregateRunner<CounterDecider, CounterState, CounterCommand,
             CounterEvent, CounterEffect, CounterError, Unit>.Load(_store, _streamId, default);
         _aggregate = agg1;
 
-        try
-        {
-            // agg1 adds 8 → count=98
-            await agg1.Handle(new CounterCommand.Add(8));
+        // agg1 adds 8 → count=98
+        await agg1.Handle(new CounterCommand.Add(8));
 
-            // agg2 adds 5 → conflict, merged state=98, projected=103 > MaxCount
-            await Assert.ThrowsAsync<ConcurrencyException>(async () =>
-                await agg2.Handle(new CounterCommand.Add(5)));
-        }
-        finally
-        {
-            agg2.Dispose();
-        }
+        // agg2 adds 5 → conflict, merged state=98, projected=103 > MaxCount
+        await Assert.ThrowsAsync<ConcurrencyException>(async () =>
+            await agg2.Handle(new CounterCommand.Add(5)));
     }
 
     [Fact]
@@ -247,23 +212,16 @@ public class ResolvingAggregateRunnerTests : IDisposable
 
         var agg1 = await ResolvingAggregateRunner<CounterDecider, CounterState, CounterCommand,
             CounterEvent, CounterEffect, CounterError, Unit>.Load(_store, _streamId, default);
-        var agg2 = await ResolvingAggregateRunner<CounterDecider, CounterState, CounterCommand,
+        using var agg2 = await ResolvingAggregateRunner<CounterDecider, CounterState, CounterCommand,
             CounterEvent, CounterEffect, CounterError, Unit>.Load(_store, _streamId, default);
         _aggregate = agg1;
 
-        try
-        {
-            // agg1 subtracts 8 → count=2
-            await agg1.Handle(new CounterCommand.Add(-8));
+        // agg1 subtracts 8 → count=2
+        await agg1.Handle(new CounterCommand.Add(-8));
 
-            // agg2 subtracts 5 → conflict, merged state=2, projected=-3 < 0
-            await Assert.ThrowsAsync<ConcurrencyException>(async () =>
-                await agg2.Handle(new CounterCommand.Add(-5)));
-        }
-        finally
-        {
-            agg2.Dispose();
-        }
+        // agg2 subtracts 5 → conflict, merged state=2, projected=-3 < 0
+        await Assert.ThrowsAsync<ConcurrencyException>(async () =>
+            await agg2.Handle(new CounterCommand.Add(-5)));
     }
 
     // ── Load / Replay ──
@@ -353,32 +311,25 @@ public class ResolvingAggregateRunnerTests : IDisposable
     public async Task Handle_AfterResolvedConflict_StateAndVersionAreCorrect()
     {
         var agg1 = CreateAggregate();
-        var agg2 = ResolvingAggregateRunner<CounterDecider, CounterState, CounterCommand,
+        using var agg2 = ResolvingAggregateRunner<CounterDecider, CounterState, CounterCommand,
             CounterEvent, CounterEffect, CounterError, Unit>.Create(_store, _streamId, default);
 
-        try
-        {
-            // agg1 adds 2 → version 2
-            await agg1.Handle(new CounterCommand.Add(2));
+        // agg1 adds 2 → version 2
+        await agg1.Handle(new CounterCommand.Add(2));
 
-            // agg2 adds 3 → conflict resolved → version 5 (2 theirs + 3 ours)
-            var result = await agg2.Handle(new CounterCommand.Add(3));
+        // agg2 adds 3 → conflict resolved → version 5 (2 theirs + 3 ours)
+        var result = await agg2.Handle(new CounterCommand.Add(3));
 
-            Assert.True(result.IsOk);
-            Assert.Equal(5, result.Value.Count);
-            Assert.Equal(5, agg2.Version);
+        Assert.True(result.IsOk);
+        Assert.Equal(5, result.Value.Count);
+        Assert.Equal(5, agg2.Version);
 
-            // agg2 can continue handling commands at the new version
-            var result2 = await agg2.Handle(new CounterCommand.Add(1));
+        // agg2 can continue handling commands at the new version
+        var result2 = await agg2.Handle(new CounterCommand.Add(1));
 
-            Assert.True(result2.IsOk);
-            Assert.Equal(6, result2.Value.Count);
-            Assert.Equal(6, agg2.Version);
-        }
-        finally
-        {
-            agg2.Dispose();
-        }
+        Assert.True(result2.IsOk);
+        Assert.Equal(6, result2.Value.Count);
+        Assert.Equal(6, agg2.Version);
     }
 
     // ── Effects After Resolved Conflict ──
@@ -387,20 +338,13 @@ public class ResolvingAggregateRunnerTests : IDisposable
     public async Task Handle_AfterResolvedConflict_EffectsFromResolvedEventsAreRecorded()
     {
         var agg1 = CreateAggregate();
-        var agg2 = ResolvingAggregateRunner<CounterDecider, CounterState, CounterCommand,
+        using var agg2 = ResolvingAggregateRunner<CounterDecider, CounterState, CounterCommand,
             CounterEvent, CounterEffect, CounterError, Unit>.Create(_store, _streamId, default);
 
-        try
-        {
-            await agg1.Handle(new CounterCommand.Add(2));
-            await agg2.Handle(new CounterCommand.Add(3));
+        await agg1.Handle(new CounterCommand.Add(2));
+        await agg2.Handle(new CounterCommand.Add(3));
 
-            // agg2 should have 3 effects (from the 3 resolved Incremented events)
-            Assert.Equal(3, agg2.Effects.Count);
-        }
-        finally
-        {
-            agg2.Dispose();
-        }
+        // agg2 should have 3 effects (from the 3 resolved Incremented events)
+        Assert.Equal(3, agg2.Effects.Count);
     }
 }

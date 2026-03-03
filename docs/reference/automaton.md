@@ -117,7 +117,7 @@ Assert.Equal(1, next.Count);
 
 ## Remarks
 
-- The Automaton interface uses C# static abstract members, requiring .NET 7+ and a class (not struct) implementation.
+- The Automaton interface uses C# static abstract members, requiring .NET 10.0+ and a class (not struct) implementation.
 - The implementing class itself holds no state — all state flows through the `TState` parameter.
 - Effects are data, not actions. The transition function describes what should happen; the [Interpreter](runtime.md#interpreter) makes it happen.
 

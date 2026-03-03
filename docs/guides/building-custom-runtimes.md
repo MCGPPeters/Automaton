@@ -87,7 +87,7 @@ A runtime that periodically snapshots state:
 public sealed class SnapshotRuntime<TAutomaton, TState, TEvent, TEffect, TParameters>
     where TAutomaton : Automaton<TState, TEvent, TEffect, TParameters>
 {
-    private readonly AutomatonRuntime<TAutomaton, TState, TEvent, TEffect, TParameters> _core;
+    private AutomatonRuntime<TAutomaton, TState, TEvent, TEffect, TParameters> _core = null!;
     private readonly List<(long Version, TState State)> _snapshots = [];
     private long _version;
     private readonly int _snapshotInterval;
@@ -95,11 +95,8 @@ public sealed class SnapshotRuntime<TAutomaton, TState, TEvent, TEffect, TParame
     public TState State => _core.State;
     public IReadOnlyList<(long Version, TState State)> Snapshots => _snapshots;
 
-    private SnapshotRuntime(
-        AutomatonRuntime<TAutomaton, TState, TEvent, TEffect, TParameters> core,
-        int snapshotInterval)
+    private SnapshotRuntime(int snapshotInterval)
     {
-        _core = core;
         _snapshotInterval = snapshotInterval;
     }
 
@@ -108,8 +105,9 @@ public sealed class SnapshotRuntime<TAutomaton, TState, TEvent, TEffect, TParame
         Interpreter<TEffect, TEvent> interpreter,
         int snapshotInterval = 100)
     {
+        // Create the runtime first so the observer closure captures the final instance.
         var runtime = new SnapshotRuntime<TAutomaton, TState, TEvent, TEffect, TParameters>(
-            null!, snapshotInterval);
+            snapshotInterval);
 
         Observer<TState, TEvent, TEffect> observer = (state, _, _) =>
         {
@@ -120,12 +118,11 @@ public sealed class SnapshotRuntime<TAutomaton, TState, TEvent, TEffect, TParame
         };
 
         var (state, effect) = TAutomaton.Init(parameters);
-        var core = new AutomatonRuntime<TAutomaton, TState, TEvent, TEffect, TParameters>(
+        runtime._core = new AutomatonRuntime<TAutomaton, TState, TEvent, TEffect, TParameters>(
             state, observer, interpreter);
-        await core.InterpretEffect(effect);
+        await runtime._core.InterpretEffect(effect);
 
-        // Use reflection-free field setting via a factory pattern instead
-        return new SnapshotRuntime<TAutomaton, TState, TEvent, TEffect, TParameters>(core, snapshotInterval);
+        return runtime;
     }
 
     public ValueTask<Result<Unit, PipelineError>> Dispatch(TEvent @event, CancellationToken ct = default) =>

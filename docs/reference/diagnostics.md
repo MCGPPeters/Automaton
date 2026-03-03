@@ -23,11 +23,11 @@ The runtime creates the following `Activity` spans:
 
 | Span name | Created by | Description |
 | --------- | ---------- | ----------- |
+| `Automaton.Start` | `AutomatonRuntime.Start` | Covers runtime initialization (Init + first effect interpretation). |
 | `Automaton.Dispatch` | `AutomatonRuntime.Dispatch` | Covers the full Transition → Observe → Interpret → Feedback cycle. |
-| `Automaton.Transition` | `AutomatonRuntime.Dispatch` | Covers a single `Transition(state, event)` call. |
 | `Automaton.InterpretEffect` | `AutomatonRuntime.InterpretEffect` | Covers interpretation of one effect. |
-| `Automaton.Handle` | `DecidingRuntime.Handle` | Covers command handling: Decide → Transition → Observe → Interpret. |
-| `Automaton.Decide` | `DecidingRuntime.Handle` | Covers a single `Decide(state, command)` call. |
+| `Automaton.Decider.Start` | `DecidingRuntime.Start` | Covers Decider runtime initialization. |
+| `Automaton.Decider.Handle` | `DecidingRuntime.Handle` | Covers command handling: Decide → Transition → Observe → Interpret. |
 
 ## Tags
 
@@ -35,10 +35,13 @@ Spans carry the following tags (attributes):
 
 | Tag | Type | Added to | Description |
 | --- | ---- | -------- | ----------- |
-| `automaton.event_count` | `int` | Dispatch, Handle | Number of events produced. |
-| `automaton.effect_count` | `int` | Dispatch, Handle | Number of effects produced. |
-| `automaton.feedback_depth` | `int` | Dispatch | Current recursion depth in the feedback loop. |
-| `automaton.is_terminal` | `bool` | Handle | Whether the Decider reached a terminal state. |
+| `automaton.type` | `string` | Start, Dispatch, InterpretEffect, Decider.Start, Decider.Handle | The automaton/decider type name. |
+| `automaton.state.type` | `string` | Start, Decider.Start | The state type name. |
+| `automaton.event.type` | `string` | Dispatch | The event type name that triggered the transition. |
+| `automaton.effect.type` | `string` | InterpretEffect | The effect type name being interpreted. |
+| `automaton.command.type` | `string` | Decider.Handle | The command type name being handled. |
+| `automaton.result` | `string` | Decider.Handle | `"ok"` or `"error"` — the outcome of command validation. |
+| `automaton.error.type` | `string` | Decider.Handle | The error type name (only set when `result` is `"error"`). |
 
 ## Subscribing to Traces
 

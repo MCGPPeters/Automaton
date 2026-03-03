@@ -215,26 +215,19 @@ public class AggregateRunnerTests : IDisposable
     {
         // Two aggregates pointing to the same stream
         var agg1 = CreateAggregate();
-        var agg2 = AggregateRunner<CounterDecider, CounterState, CounterCommand,
+        using var agg2 = AggregateRunner<CounterDecider, CounterState, CounterCommand,
             CounterEvent, CounterEffect, CounterError, Unit>.Create(_store, _streamId, default);
 
-        try
-        {
-            // Both start at version 0
-            await agg1.Handle(new CounterCommand.Add(1));
+        // Both start at version 0
+        await agg1.Handle(new CounterCommand.Add(1));
 
-            // agg2 still thinks version is 0, but store is at version 1
-            await Assert.ThrowsAsync<ConcurrencyException>(async () =>
-                await agg2.Handle(new CounterCommand.Add(1)));
+        // agg2 still thinks version is 0, but store is at version 1
+        await Assert.ThrowsAsync<ConcurrencyException>(async () =>
+            await agg2.Handle(new CounterCommand.Add(1)));
 
-            // agg2 state should be unchanged (still at initial)
-            Assert.Equal(0, agg2.State.Count);
-            Assert.Equal(0, agg2.Version);
-        }
-        finally
-        {
-            agg2.Dispose();
-        }
+        // agg2 state should be unchanged (still at initial)
+        Assert.Equal(0, agg2.State.Count);
+        Assert.Equal(0, agg2.Version);
     }
 
     // ── Thread safety ──
