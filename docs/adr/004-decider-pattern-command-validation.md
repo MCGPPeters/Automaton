@@ -20,8 +20,8 @@ The kernel's `Transition` is a **total function** — it always succeeds. We nee
 Adopt the **Decider pattern** (Chassaing, 2021) as an extension of the Automaton kernel:
 
 ```csharp
-public interface Decider<TState, TCommand, TEvent, TEffect, TError>
-    : Automaton<TState, TEvent, TEffect>
+public interface Decider<TState, TCommand, TEvent, TEffect, TError, TParameters>
+    : Automaton<TState, TEvent, TEffect, TParameters>
 {
     static abstract Result<TEvent[], TError> Decide(TState state, TCommand command);
     static virtual bool IsTerminal(TState state) => false;
@@ -41,7 +41,7 @@ Together with the Automaton's `Init` and `Transition`, this gives the **seven el
 | 1 | Command type | Type parameter | `TCommand` |
 | 2 | Event type | Type parameter | `TEvent` |
 | 3 | State type | Type parameter | `TState` |
-| 4 | Initial state | Automaton | `Init()` |
+| 4 | Initial state | Automaton | `Init(parameters)` |
 | 5 | Decide | Decider | `Decide(state, command)` |
 | 6 | Evolve | Automaton | `Transition(state, event)` |
 | 7 | Is terminal | Decider | `IsTerminal(state)` |
@@ -102,9 +102,9 @@ The default implementation returns `false` (never terminal), making this opt-in.
 
 ### Backward Compatibility via Subtyping
 
-Since `Decider<S, C, E, F, Err> : Automaton<S, E, F>`, upgrading from Automaton to Decider is **non-breaking**. The Liskov Substitution Principle holds:
+Since `Decider<S, C, E, F, Err, P> : Automaton<S, E, F, P>`, upgrading from Automaton to Decider is **non-breaking**. The Liskov Substitution Principle holds:
 
-$$\text{Decider}\langle S, C, E, F, Err \rangle <: \text{Automaton}\langle S, E, F \rangle$$
+$$\text{Decider}\langle S, C, E, F, Err, P \rangle <: \text{Automaton}\langle S, E, F, P \rangle$$
 
 Any code expecting an `Automaton` will work with a `Decider`. The `Decide` and `IsTerminal` methods are strictly additive.
 
@@ -138,7 +138,7 @@ This is a Kleisli composition of the decision function with the fold over the tr
 
 ### Negative
 
-- **Additional type parameters** — `Decider<TState, TCommand, TEvent, TEffect, TError>` has five type parameters vs Automaton's three. This increases signature verbosity.
+- **Additional type parameters** — `Decider<TState, TCommand, TEvent, TEffect, TError, TParameters>` has six type parameters vs Automaton's four. This increases signature verbosity.
 - **Two-step design** — developers must think about both the command→event mapping (Decide) and the event→state mapping (Transition), rather than a single step.
 - **Not all domains need it** — simple UI state machines (MVU) rarely need command validation. The Decider is optional — Automaton remains the simpler choice.
 

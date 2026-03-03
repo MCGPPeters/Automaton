@@ -23,7 +23,7 @@ public class MvuRuntimeTests
     [Fact]
     public async Task Init_ProducesInitialState_AndRendersInitialView()
     {
-        var runtime = await MvuRuntime<Thermostat, ThermostatState, ThermostatEvent, ThermostatEffect, string>
+        var runtime = await MvuRuntime<Thermostat, ThermostatState, ThermostatEvent, ThermostatEffect, string, Unit>
             .Start(RenderThermostat, ThermostatInterpreters.NoOp);
 
         Assert.Equal(20m, runtime.State.CurrentTemp);
@@ -34,7 +34,7 @@ public class MvuRuntimeTests
     [Fact]
     public async Task Dispatch_TemperatureRecorded_UpdatesStateAndRendersNewView()
     {
-        var runtime = await MvuRuntime<Thermostat, ThermostatState, ThermostatEvent, ThermostatEffect, string>
+        var runtime = await MvuRuntime<Thermostat, ThermostatState, ThermostatEvent, ThermostatEffect, string, Unit>
             .Start(RenderThermostat, ThermostatInterpreters.NoOp);
 
         await runtime.Dispatch(new ThermostatEvent.TemperatureRecorded(18m));
@@ -47,7 +47,7 @@ public class MvuRuntimeTests
     [Fact]
     public async Task Dispatch_MultipleEvents_ProducesCorrectSequenceOfViews()
     {
-        var runtime = await MvuRuntime<Thermostat, ThermostatState, ThermostatEvent, ThermostatEffect, string>
+        var runtime = await MvuRuntime<Thermostat, ThermostatState, ThermostatEvent, ThermostatEffect, string, Unit>
             .Start(RenderThermostat, ThermostatInterpreters.NoOp);
 
         await runtime.Dispatch(new ThermostatEvent.TemperatureRecorded(18m));
@@ -70,7 +70,7 @@ public class MvuRuntimeTests
     {
         var notifications = new List<string>();
 
-        var runtime = await MvuRuntime<Thermostat, ThermostatState, ThermostatEvent, ThermostatEffect, string>
+        var runtime = await MvuRuntime<Thermostat, ThermostatState, ThermostatEvent, ThermostatEffect, string, Unit>
             .Start(RenderThermostat, ThermostatInterpreters.CaptureNotifications(notifications));
 
         await runtime.Dispatch(new ThermostatEvent.ShutdownCompleted());
@@ -83,7 +83,7 @@ public class MvuRuntimeTests
     [Fact]
     public async Task Events_AreRecorded()
     {
-        var runtime = await MvuRuntime<Thermostat, ThermostatState, ThermostatEvent, ThermostatEffect, string>
+        var runtime = await MvuRuntime<Thermostat, ThermostatState, ThermostatEvent, ThermostatEffect, string, Unit>
             .Start(RenderThermostat, ThermostatInterpreters.NoOp);
 
         await runtime.Dispatch(new ThermostatEvent.TemperatureRecorded(18m));

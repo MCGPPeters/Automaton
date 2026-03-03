@@ -85,7 +85,7 @@ public interface CounterEffect
 /// </para>
 /// </remarks>
 public class Counter
-    : Decider<CounterState, CounterCommand, CounterEvent, CounterEffect, CounterError>
+    : Decider<CounterState, CounterCommand, CounterEvent, CounterEffect, CounterError, Unit>
 {
     /// <summary>
     /// Upper bound for the counter value.
@@ -95,7 +95,7 @@ public class Counter
     /// <summary>
     /// Initial state: count is zero, no startup effects.
     /// </summary>
-    public static (CounterState State, CounterEffect Effect) Init() =>
+    public static (CounterState State, CounterEffect Effect) Init(Unit _) =>
         (new CounterState(0), new CounterEffect.None());
 
     /// <summary>

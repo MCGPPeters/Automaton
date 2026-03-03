@@ -18,16 +18,16 @@ Build your first automaton — a smart thermostat with state, events, effects, a
 The entire library is built on one interface:
 
 ```csharp
-public interface Automaton<TState, TEvent, TEffect>
+public interface Automaton<TState, TEvent, TEffect, TParameters>
 {
-    static abstract (TState State, TEffect Effect) Init();
+    static abstract (TState State, TEffect Effect) Init(TParameters parameters);
     static abstract (TState State, TEffect Effect) Transition(TState state, TEvent @event);
 }
 ```
 
 That's it. Two methods:
 
-- **`Init()`** — returns the initial state and any startup effect.
+- **`Init(parameters)`** — returns the initial state and any startup effect. Use `Unit` as `TParameters` for automata that need no initialization parameters.
 - **`Transition(state, event)`** — given the current state and an event, returns the new state and an effect.
 
 This is a [Mealy machine](https://en.wikipedia.org/wiki/Mealy_machine) — a finite-state transducer where outputs depend on both state and input:
@@ -89,11 +89,11 @@ Notice the effects: `TurnOnHeater`, `TurnOffHeater`, and `SendAlert` are *descri
 
 ```csharp
 public class Thermostat
-    : Automaton<ThermostatState, ThermostatEvent, ThermostatEffect>
+    : Automaton<ThermostatState, ThermostatEvent, ThermostatEffect, Unit>
 {
     public const decimal AlertThreshold = 35.0m;
 
-    public static (ThermostatState, ThermostatEffect) Init() =>
+    public static (ThermostatState, ThermostatEffect) Init(Unit _) =>
         (new ThermostatState(
             CurrentTemp: 20.0m,
             TargetTemp: 22.0m,
@@ -167,8 +167,9 @@ The `AutomatonRuntime` executes the automaton loop. You give it two callbacks:
 ```csharp
 using Automaton;
 
-var runtime = await AutomatonRuntime<Thermostat, ThermostatState, ThermostatEvent, ThermostatEffect>
+var runtime = await AutomatonRuntime<Thermostat, ThermostatState, ThermostatEvent, ThermostatEffect, Unit>
     .Start(
+        default,
         observer: (state, @event, effect) =>
         {
             Console.WriteLine($"[{@event.GetType().Name}] → {state} | Effect: {effect}");
@@ -303,8 +304,8 @@ Observer<ThermostatState, ThermostatEvent, ThermostatEffect> metrics =
 
 var combined = logger.Then(alertCapture).Then(metrics);
 
-var runtime = await AutomatonRuntime<Thermostat, ThermostatState, ThermostatEvent, ThermostatEffect>
-    .Start(combined, interpreter);
+var runtime = await AutomatonRuntime<Thermostat, ThermostatState, ThermostatEvent, ThermostatEffect, Unit>
+    .Start(default, combined, interpreter);
 ```
 
 All three observers run sequentially for each transition. If any returns `Err`, subsequent observers are skipped (short-circuit via `Then`). See [Observer Composition](../guides/observer-composition.md) for `Where`, `Catch`, `Combine`, and other combinators.

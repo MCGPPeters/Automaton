@@ -6,7 +6,7 @@ How to build your own runtime by wiring Observer and Interpreter on top of `Auto
 
 Every runtime in the library follows the same pattern:
 
-1. Create a class that wraps `AutomatonRuntime<TAutomaton, TState, TEvent, TEffect>`
+1. Create a class that wraps `AutomatonRuntime<TAutomaton, TState, TEvent, TEffect, TParameters>`
 2. Choose an Observer — what happens after each transition?
 3. Choose an Interpreter — what do effects produce?
 4. Expose a domain-specific API (`Dispatch`, `Handle`, `Tell`, `Render`, etc.)
@@ -26,24 +26,25 @@ That's it. Thread safety, cancellation, feedback depth, and tracing are inherite
 A minimal runtime that logs every transition to a list:
 
 ```csharp
-public sealed class LoggingRuntime<TAutomaton, TState, TEvent, TEffect>
-    where TAutomaton : Automaton<TState, TEvent, TEffect>
+public sealed class LoggingRuntime<TAutomaton, TState, TEvent, TEffect, TParameters>
+    where TAutomaton : Automaton<TState, TEvent, TEffect, TParameters>
 {
-    private readonly AutomatonRuntime<TAutomaton, TState, TEvent, TEffect> _core;
+    private readonly AutomatonRuntime<TAutomaton, TState, TEvent, TEffect, TParameters> _core;
     private readonly List<string> _log;
 
     public TState State => _core.State;
     public IReadOnlyList<string> Log => _log;
 
     private LoggingRuntime(
-        AutomatonRuntime<TAutomaton, TState, TEvent, TEffect> core,
+        AutomatonRuntime<TAutomaton, TState, TEvent, TEffect, TParameters> core,
         List<string> log)
     {
         _core = core;
         _log = log;
     }
 
-    public static async ValueTask<LoggingRuntime<TAutomaton, TState, TEvent, TEffect>> Start(
+    public static async ValueTask<LoggingRuntime<TAutomaton, TState, TEvent, TEffect, TParameters>> Start(
+        TParameters parameters,
         Interpreter<TEffect, TEvent> interpreter)
     {
         var log = new List<string>();
@@ -54,10 +55,10 @@ public sealed class LoggingRuntime<TAutomaton, TState, TEvent, TEffect>
             return PipelineResult.Ok;
         };
 
-        var core = await AutomatonRuntime<TAutomaton, TState, TEvent, TEffect>
-            .Start(observer, interpreter);
+        var core = await AutomatonRuntime<TAutomaton, TState, TEvent, TEffect, TParameters>
+            .Start(parameters, observer, interpreter);
 
-        return new LoggingRuntime<TAutomaton, TState, TEvent, TEffect>(core, log);
+        return new LoggingRuntime<TAutomaton, TState, TEvent, TEffect, TParameters>(core, log);
     }
 
     public ValueTask<Result<Unit, PipelineError>> Dispatch(TEvent @event, CancellationToken ct = default) =>
@@ -68,8 +69,8 @@ public sealed class LoggingRuntime<TAutomaton, TState, TEvent, TEffect>
 Usage:
 
 ```csharp
-var runtime = await LoggingRuntime<Counter, CounterState, CounterEvent, CounterEffect>
-    .Start(_ => new ValueTask<Result<CounterEvent[], PipelineError>>(
+var runtime = await LoggingRuntime<Counter, CounterState, CounterEvent, CounterEffect, Unit>
+    .Start(default, _ => new ValueTask<Result<CounterEvent[], PipelineError>>(
         Result<CounterEvent[], PipelineError>.Ok([])));
 
 await runtime.Dispatch(new CounterEvent.Increment());
@@ -83,10 +84,10 @@ Console.WriteLine(runtime.Log[0]);
 A runtime that periodically snapshots state:
 
 ```csharp
-public sealed class SnapshotRuntime<TAutomaton, TState, TEvent, TEffect>
-    where TAutomaton : Automaton<TState, TEvent, TEffect>
+public sealed class SnapshotRuntime<TAutomaton, TState, TEvent, TEffect, TParameters>
+    where TAutomaton : Automaton<TState, TEvent, TEffect, TParameters>
 {
-    private readonly AutomatonRuntime<TAutomaton, TState, TEvent, TEffect> _core;
+    private readonly AutomatonRuntime<TAutomaton, TState, TEvent, TEffect, TParameters> _core;
     private readonly List<(long Version, TState State)> _snapshots = [];
     private long _version;
     private readonly int _snapshotInterval;
@@ -95,18 +96,19 @@ public sealed class SnapshotRuntime<TAutomaton, TState, TEvent, TEffect>
     public IReadOnlyList<(long Version, TState State)> Snapshots => _snapshots;
 
     private SnapshotRuntime(
-        AutomatonRuntime<TAutomaton, TState, TEvent, TEffect> core,
+        AutomatonRuntime<TAutomaton, TState, TEvent, TEffect, TParameters> core,
         int snapshotInterval)
     {
         _core = core;
         _snapshotInterval = snapshotInterval;
     }
 
-    public static async ValueTask<SnapshotRuntime<TAutomaton, TState, TEvent, TEffect>> Start(
+    public static async ValueTask<SnapshotRuntime<TAutomaton, TState, TEvent, TEffect, TParameters>> Start(
+        TParameters parameters,
         Interpreter<TEffect, TEvent> interpreter,
         int snapshotInterval = 100)
     {
-        var runtime = new SnapshotRuntime<TAutomaton, TState, TEvent, TEffect>(
+        var runtime = new SnapshotRuntime<TAutomaton, TState, TEvent, TEffect, TParameters>(
             null!, snapshotInterval);
 
         Observer<TState, TEvent, TEffect> observer = (state, _, _) =>
@@ -117,13 +119,13 @@ public sealed class SnapshotRuntime<TAutomaton, TState, TEvent, TEffect>
             return PipelineResult.Ok;
         };
 
-        var (state, effect) = TAutomaton.Init();
-        var core = new AutomatonRuntime<TAutomaton, TState, TEvent, TEffect>(
+        var (state, effect) = TAutomaton.Init(parameters);
+        var core = new AutomatonRuntime<TAutomaton, TState, TEvent, TEffect, TParameters>(
             state, observer, interpreter);
         await core.InterpretEffect(effect);
 
         // Use reflection-free field setting via a factory pattern instead
-        return new SnapshotRuntime<TAutomaton, TState, TEvent, TEffect>(core, snapshotInterval);
+        return new SnapshotRuntime<TAutomaton, TState, TEvent, TEffect, TParameters>(core, snapshotInterval);
     }
 
     public ValueTask<Result<Unit, PipelineError>> Dispatch(TEvent @event, CancellationToken ct = default) =>
@@ -138,12 +140,12 @@ public sealed class SnapshotRuntime<TAutomaton, TState, TEvent, TEffect>
 The `Start` factory method calls `Init()` and interprets the init effect immediately. If you need to do something between initialization and effect interpretation (like the MVU runtime rendering the initial view), use the constructor:
 
 ```csharp
-var (state, effect) = TAutomaton.Init();
+var (state, effect) = TAutomaton.Init(parameters);
 
 // Do something with the initial state first
 initialView = render(state);
 
-var core = new AutomatonRuntime<TAutomaton, TState, TEvent, TEffect>(
+var core = new AutomatonRuntime<TAutomaton, TState, TEvent, TEffect, TParameters>(
     state, observer, interpreter);
 
 // Now interpret init effects

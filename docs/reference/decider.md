@@ -6,11 +6,11 @@ Command validation layer for Automatons.
 
 ---
 
-## Decider&lt;TState, TCommand, TEvent, TEffect, TError&gt;
+## Decider&lt;TState, TCommand, TEvent, TEffect, TError, TParameters&gt;
 
 ```csharp
-public interface Decider<TState, TCommand, TEvent, TEffect, TError>
-    : Automaton<TState, TEvent, TEffect>
+public interface Decider<TState, TCommand, TEvent, TEffect, TError, TParameters>
+    : Automaton<TState, TEvent, TEffect, TParameters>
 {
     static abstract Result<TEvent[], TError> Decide(TState state, TCommand command);
     static virtual bool IsTerminal(TState state) => false;
@@ -28,6 +28,7 @@ A Decider is an Automaton that validates commands before producing events.
 | `TEvent` | Events representing validated facts. |
 | `TEffect` | Effects produced by transitions. |
 | `TError` | Errors produced by invalid commands. |
+| `TParameters` | The parameters required to initialize the automaton. Use `Unit` for parameterless automata. |
 
 ### Methods
 
@@ -62,11 +63,11 @@ public static bool IsTerminal(OrderState state) =>
 
 ---
 
-## DecidingRuntime&lt;TDecider, TState, TCommand, TEvent, TEffect, TError&gt;
+## DecidingRuntime&lt;TDecider, TState, TCommand, TEvent, TEffect, TError, TParameters&gt;
 
 ```csharp
-public sealed class DecidingRuntime<TDecider, TState, TCommand, TEvent, TEffect, TError> : IDisposable
-    where TDecider : Decider<TState, TCommand, TEvent, TEffect, TError>
+public sealed class DecidingRuntime<TDecider, TState, TCommand, TEvent, TEffect, TError, TParameters> : IDisposable
+    where TDecider : Decider<TState, TCommand, TEvent, TEffect, TError, TParameters>
 ```
 
 Runtime that validates commands via Decide before dispatching events through AutomatonRuntime.
@@ -82,7 +83,8 @@ Runtime that validates commands via Decide before dispatching events through Aut
 ### Start
 
 ```csharp
-public static async ValueTask<DecidingRuntime<TDecider, TState, TCommand, TEvent, TEffect, TError>> Start(
+public static async ValueTask<DecidingRuntime<TDecider, TState, TCommand, TEvent, TEffect, TError, TParameters>> Start(
+    TParameters parameters,
     Observer<TState, TEvent, TEffect> observer,
     Interpreter<TEffect, TEvent> interpreter,
     bool threadSafe = true,
@@ -94,6 +96,7 @@ Creates and starts a deciding runtime, interpreting init effects immediately.
 
 | Parameter | Default | Description |
 | --------- | ------- | ----------- |
+| `parameters` | — | Initialization parameters passed to the automaton's Init method. Use `default` for `Unit`. |
 | `observer` | — | Observer called after each transition. |
 | `interpreter` | — | Interpreter that converts effects to feedback events. |
 | `threadSafe` | `true` | When `true`, Handle calls are serialized. |

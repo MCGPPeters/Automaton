@@ -76,8 +76,8 @@ It's all the same fold. The runtime just wires it differently.
 `Start` creates the runtime, calls `Init()`, and interprets the init effect:
 
 ```csharp
-var runtime = await AutomatonRuntime<Counter, CounterState, CounterEvent, CounterEffect>
-    .Start(observer, interpreter);
+var runtime = await AutomatonRuntime<Counter, CounterState, CounterEvent, CounterEffect, Unit>
+    .Start(default, observer, interpreter);
 ```
 
 ### Using the Constructor (advanced)
@@ -85,12 +85,12 @@ var runtime = await AutomatonRuntime<Counter, CounterState, CounterEvent, Counte
 The constructor lets you control initialization order — useful when you need to render an initial view before interpreting effects:
 
 ```csharp
-var (state, effect) = Counter.Init();
+var (state, effect) = Counter.Init(default);
 
 // Render the initial state before any effects run
 views.Add(render(state));
 
-var runtime = new AutomatonRuntime<Counter, CounterState, CounterEvent, CounterEffect>(
+var runtime = new AutomatonRuntime<Counter, CounterState, CounterEvent, CounterEffect, Unit>(
     state, observer, interpreter);
 
 // Now interpret the init effect
@@ -128,8 +128,8 @@ await Task.WhenAll(
 For single-threaded scenarios (actors, UI loops, benchmarks), pass `threadSafe: false` to eliminate semaphore overhead:
 
 ```csharp
-var runtime = await AutomatonRuntime<Counter, CounterState, CounterEvent, CounterEffect>
-    .Start(observer, interpreter, threadSafe: false);
+var runtime = await AutomatonRuntime<Counter, CounterState, CounterEvent, CounterEffect, Unit>
+    .Start(default, observer, interpreter, threadSafe: false);
 ```
 
 ### Cancellation
@@ -154,8 +154,8 @@ Effect → Event → Transition → same Effect → Event → ... → depth 64 �
 By default, all dispatched events (including feedback events) are recorded in `runtime.Events`. Disable for hot paths:
 
 ```csharp
-var runtime = await AutomatonRuntime<Counter, CounterState, CounterEvent, CounterEffect>
-    .Start(observer, interpreter, trackEvents: false);
+var runtime = await AutomatonRuntime<Counter, CounterState, CounterEvent, CounterEffect, Unit>
+    .Start(default, observer, interpreter, trackEvents: false);
 ```
 
 ## Observer Composition

@@ -46,9 +46,9 @@ public interface BenchError
 
 // ── Automaton (pure transitions) ──────────────────────────────
 
-public class BenchAutomaton : Automaton<BenchState, BenchEvent, BenchEffect>
+public class BenchAutomaton : Automaton<BenchState, BenchEvent, BenchEffect, Unit>
 {
-    public static (BenchState State, BenchEffect Effect) Init() =>
+    public static (BenchState State, BenchEffect Effect) Init(Unit _) =>
         (new BenchState(0), new BenchEffect.None());
 
     public static (BenchState State, BenchEffect Effect) Transition(
@@ -68,10 +68,10 @@ public class BenchAutomaton : Automaton<BenchState, BenchEvent, BenchEffect>
 // ── Decider (adds command validation) ─────────────────────────
 
 public class BenchDecider
-    : Decider<BenchState, BenchCommand, BenchEvent, BenchEffect, BenchError>
+    : Decider<BenchState, BenchCommand, BenchEvent, BenchEffect, BenchError, Unit>
 {
-    public static (BenchState State, BenchEffect Effect) Init() =>
-        BenchAutomaton.Init();
+    public static (BenchState State, BenchEffect Effect) Init(Unit _) =>
+        BenchAutomaton.Init(default);
 
     public static (BenchState State, BenchEffect Effect) Transition(
         BenchState state, BenchEvent @event) =>

@@ -44,11 +44,11 @@ Replace `Automaton<...>` with `Decider<...>`:
 
 ```csharp
 // Before
-public class Counter : Automaton<CounterState, CounterEvent, CounterEffect>
+public class Counter : Automaton<CounterState, CounterEvent, CounterEffect, Unit>
 
 // After
 public class Counter
-    : Decider<CounterState, CounterCommand, CounterEvent, CounterEffect, CounterError>
+    : Decider<CounterState, CounterCommand, CounterEvent, CounterEffect, CounterError, Unit>
 ```
 
 Because `Decider<...> : Automaton<...>`, your existing `Init` and `Transition` methods are still valid. Nothing breaks.
@@ -90,7 +90,7 @@ Use `DecidingRuntime` for command-driven workflows:
 
 ```csharp
 var runtime = await DecidingRuntime<Counter, CounterState, CounterCommand,
-    CounterEvent, CounterEffect, CounterError>.Start(observer, interpreter);
+    CounterEvent, CounterEffect, CounterError, Unit>.Start(default, observer, interpreter);
 
 var result = await runtime.Handle(new CounterCommand.Add(5));
 ```
@@ -101,8 +101,8 @@ Since `Decider : Automaton`, you can still use `AutomatonRuntime` and dispatch e
 
 ```csharp
 // Still works — Counter is still an Automaton
-var runtime = await AutomatonRuntime<Counter, CounterState, CounterEvent, CounterEffect>
-    .Start(observer, interpreter);
+var runtime = await AutomatonRuntime<Counter, CounterState, CounterEvent, CounterEffect, Unit>
+    .Start(default, observer, interpreter);
 
 await runtime.Dispatch(new CounterEvent.Increment()); // bypasses Decide
 ```

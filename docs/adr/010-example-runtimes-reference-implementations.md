@@ -78,9 +78,9 @@ The core library is the **kernel** — the minimal set of abstractions needed to
 ┌──────────────────────────────────────────────┐
 │  Automaton Package (core)                    │
 │                                              │
-│  Automaton<S, E, F>          ← interface     │
-│  AutomatonRuntime<A, S, E, F> ← engine      │
-│  Decider<S, C, E, F, Err>   ← validation    │
+│  Automaton<S, E, F, P>       ← interface     │
+│  AutomatonRuntime<A, S, E, F, P> ← engine   │
+│  Decider<S, C, E, F, Err, P> ← validation   │
 │  DecidingRuntime<...>        ← engine        │
 │  Result<T, E>                ← error type    │
 │  AutomatonDiagnostics        ← tracing       │

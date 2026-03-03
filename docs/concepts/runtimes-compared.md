@@ -106,7 +106,7 @@ The same `Counter` domain definition — the same `Init` and `Transition` — dr
 ```csharp
 // All three produce the same final state:
 var events = new CounterEvent[] { new Increment(), new Increment(), new Decrement() };
-var (seed, _) = Counter.Init();
+var (seed, _) = Counter.Init(default);
 
 var state = events.Aggregate(seed, (s, e) => Counter.Transition(s, e).State);
 // state.Count == 1

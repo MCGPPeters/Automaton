@@ -16,7 +16,7 @@ public class EventSourcingTests
     public void Aggregate_InitialState_IsZero()
     {
         var aggregate = AggregateRunner<Counter, CounterState, CounterCommand,
-            CounterEvent, CounterEffect, CounterError>.Create();
+            CounterEvent, CounterEffect, CounterError, Unit>.Create();
 
         Assert.Equal(0, aggregate.State.Count);
     }
@@ -25,7 +25,7 @@ public class EventSourcingTests
     public void Handle_ValidCommand_TransitionsState()
     {
         var aggregate = AggregateRunner<Counter, CounterState, CounterCommand,
-            CounterEvent, CounterEffect, CounterError>.Create();
+            CounterEvent, CounterEffect, CounterError, Unit>.Create();
 
         var result = aggregate.Handle(new CounterCommand.Add(3));
 
@@ -38,7 +38,7 @@ public class EventSourcingTests
     public void Handle_ValidCommand_PersistsEvents()
     {
         var aggregate = AggregateRunner<Counter, CounterState, CounterCommand,
-            CounterEvent, CounterEffect, CounterError>.Create();
+            CounterEvent, CounterEffect, CounterError, Unit>.Create();
 
         aggregate.Handle(new CounterCommand.Add(3));
 
@@ -51,7 +51,7 @@ public class EventSourcingTests
     public void Handle_InvalidCommand_ReturnsError_StateUnchanged()
     {
         var aggregate = AggregateRunner<Counter, CounterState, CounterCommand,
-            CounterEvent, CounterEffect, CounterError>.Create();
+            CounterEvent, CounterEffect, CounterError, Unit>.Create();
 
         var result = aggregate.Handle(new CounterCommand.Add(200));
 
@@ -65,7 +65,7 @@ public class EventSourcingTests
     public void Handle_InvalidCommand_NothingPersisted()
     {
         var aggregate = AggregateRunner<Counter, CounterState, CounterCommand,
-            CounterEvent, CounterEffect, CounterError>.Create();
+            CounterEvent, CounterEffect, CounterError, Unit>.Create();
 
         // Valid command first
         aggregate.Handle(new CounterCommand.Add(5));
@@ -82,7 +82,7 @@ public class EventSourcingTests
     public void Handle_SubtractCommand_ProducesDecrementEvents()
     {
         var aggregate = AggregateRunner<Counter, CounterState, CounterCommand,
-            CounterEvent, CounterEffect, CounterError>.Create();
+            CounterEvent, CounterEffect, CounterError, Unit>.Create();
 
         aggregate.Handle(new CounterCommand.Add(5));
         aggregate.Handle(new CounterCommand.Add(-2));
@@ -97,7 +97,7 @@ public class EventSourcingTests
     public void Handle_ResetCommand_ProducesResetEvent()
     {
         var aggregate = AggregateRunner<Counter, CounterState, CounterCommand,
-            CounterEvent, CounterEffect, CounterError>.Create();
+            CounterEvent, CounterEffect, CounterError, Unit>.Create();
 
         aggregate.Handle(new CounterCommand.Add(3));
         aggregate.Handle(new CounterCommand.Reset());
@@ -111,7 +111,7 @@ public class EventSourcingTests
     public void Handle_ResetAtZero_ReturnsAlreadyAtZeroError()
     {
         var aggregate = AggregateRunner<Counter, CounterState, CounterCommand,
-            CounterEvent, CounterEffect, CounterError>.Create();
+            CounterEvent, CounterEffect, CounterError, Unit>.Create();
 
         var result = aggregate.Handle(new CounterCommand.Reset());
 
@@ -123,7 +123,7 @@ public class EventSourcingTests
     public void Handle_UnderflowCommand_ReturnsUnderflowError()
     {
         var aggregate = AggregateRunner<Counter, CounterState, CounterCommand,
-            CounterEvent, CounterEffect, CounterError>.Create();
+            CounterEvent, CounterEffect, CounterError, Unit>.Create();
 
         var result = aggregate.Handle(new CounterCommand.Add(-1));
 
@@ -135,7 +135,7 @@ public class EventSourcingTests
     public void EventStore_SequenceNumbers_AreMonotonicallyIncreasing()
     {
         var aggregate = AggregateRunner<Counter, CounterState, CounterCommand,
-            CounterEvent, CounterEffect, CounterError>.Create();
+            CounterEvent, CounterEffect, CounterError, Unit>.Create();
 
         aggregate.Handle(new CounterCommand.Add(3));
 
@@ -148,7 +148,7 @@ public class EventSourcingTests
     public void Rebuild_ReconstructsStateFromEventStream()
     {
         var aggregate = AggregateRunner<Counter, CounterState, CounterCommand,
-            CounterEvent, CounterEffect, CounterError>.Create();
+            CounterEvent, CounterEffect, CounterError, Unit>.Create();
 
         aggregate.Handle(new CounterCommand.Add(4));
         aggregate.Handle(new CounterCommand.Add(-1));
@@ -172,7 +172,7 @@ public class EventSourcingTests
 
         // Hydrate a new aggregate from the existing store
         var aggregate = AggregateRunner<Counter, CounterState, CounterCommand,
-            CounterEvent, CounterEffect, CounterError>.FromStore(store);
+            CounterEvent, CounterEffect, CounterError, Unit>.FromStore(store);
 
         Assert.Equal(2, aggregate.State.Count);
     }
@@ -185,7 +185,7 @@ public class EventSourcingTests
         store.Append(new CounterEvent.Increment());
 
         var aggregate = AggregateRunner<Counter, CounterState, CounterCommand,
-            CounterEvent, CounterEffect, CounterError>.FromStore(store);
+            CounterEvent, CounterEffect, CounterError, Unit>.FromStore(store);
 
         aggregate.Handle(new CounterCommand.Add(3));
 
@@ -197,7 +197,7 @@ public class EventSourcingTests
     public void Projection_BuildsReadModel_FromEventStream()
     {
         var aggregate = AggregateRunner<Counter, CounterState, CounterCommand,
-            CounterEvent, CounterEffect, CounterError>.Create();
+            CounterEvent, CounterEffect, CounterError, Unit>.Create();
 
         aggregate.Handle(new CounterCommand.Add(2));
         aggregate.Handle(new CounterCommand.Reset());
@@ -219,7 +219,7 @@ public class EventSourcingTests
     public void Projection_BuildsAuditLog_FromEventStream()
     {
         var aggregate = AggregateRunner<Counter, CounterState, CounterCommand,
-            CounterEvent, CounterEffect, CounterError>.Create();
+            CounterEvent, CounterEffect, CounterError, Unit>.Create();
 
         aggregate.Handle(new CounterCommand.Add(1));
         aggregate.Handle(new CounterCommand.Add(-1));
@@ -244,7 +244,7 @@ public class EventSourcingTests
     public void Effects_AreRecorded()
     {
         var aggregate = AggregateRunner<Counter, CounterState, CounterCommand,
-            CounterEvent, CounterEffect, CounterError>.Create();
+            CounterEvent, CounterEffect, CounterError, Unit>.Create();
 
         aggregate.Handle(new CounterCommand.Add(1));
         aggregate.Handle(new CounterCommand.Reset());
@@ -258,7 +258,7 @@ public class EventSourcingTests
     public void IsTerminal_DefaultsFalse()
     {
         var aggregate = AggregateRunner<Counter, CounterState, CounterCommand,
-            CounterEvent, CounterEffect, CounterError>.Create();
+            CounterEvent, CounterEffect, CounterError, Unit>.Create();
 
         Assert.False(aggregate.IsTerminal);
     }
@@ -269,7 +269,7 @@ public class EventSourcingTests
         // Handle is synchronous — no Task allocation, no async state machine.
         // This is appropriate for ES where Decide and Transition are pure.
         var aggregate = AggregateRunner<Counter, CounterState, CounterCommand,
-            CounterEvent, CounterEffect, CounterError>.Create();
+            CounterEvent, CounterEffect, CounterError, Unit>.Create();
 
         Result<CounterState, CounterError> result = aggregate.Handle(new CounterCommand.Add(5));
 

@@ -83,10 +83,10 @@ Key design decisions:
 ```csharp
 using Automaton;
 
-public sealed class ActorInstance<TAutomaton, TState, TEvent, TEffect>
-    where TAutomaton : Automaton<TState, TEvent, TEffect>
+public sealed class ActorInstance<TAutomaton, TState, TEvent, TEffect, TParameters>
+    where TAutomaton : Automaton<TState, TEvent, TEffect, TParameters>
 {
-    private readonly AutomatonRuntime<TAutomaton, TState, TEvent, TEffect> _core;
+    private readonly AutomatonRuntime<TAutomaton, TState, TEvent, TEffect, TParameters> _core;
     private readonly Channel<TEvent> _mailbox;
     private readonly CancellationTokenSource _cts = new();
     private int _processedCount;
@@ -96,7 +96,7 @@ public sealed class ActorInstance<TAutomaton, TState, TEvent, TEffect>
     public IReadOnlyList<TEvent> ProcessedMessages => _core.Events;
 
     private ActorInstance(
-        AutomatonRuntime<TAutomaton, TState, TEvent, TEffect> core,
+        AutomatonRuntime<TAutomaton, TState, TEvent, TEffect, TParameters> core,
         Channel<TEvent> mailbox,
         ActorRef<TEvent> actorRef)
     {
@@ -105,11 +105,11 @@ public sealed class ActorInstance<TAutomaton, TState, TEvent, TEffect>
         Ref = actorRef;
     }
 
-    public static ActorInstance<TAutomaton, TState, TEvent, TEffect> Spawn(
+    public static ActorInstance<TAutomaton, TState, TEvent, TEffect, TParameters> Spawn(
         string name,
         Func<TEffect, ActorRef<TEvent>, Task>? effectHandler = null)
     {
-        var (state, _) = TAutomaton.Init();
+        var (state, _) = TAutomaton.Init(default!);
         var mailbox = Channel.CreateUnbounded<TEvent>(new UnboundedChannelOptions
         {
             SingleReader = true,
@@ -131,10 +131,10 @@ public sealed class ActorInstance<TAutomaton, TState, TEvent, TEffect>
             : _ => new ValueTask<Result<TEvent[], PipelineError>>(
                 Result<TEvent[], PipelineError>.Ok([]));
 
-        var core = new AutomatonRuntime<TAutomaton, TState, TEvent, TEffect>(
+        var core = new AutomatonRuntime<TAutomaton, TState, TEvent, TEffect, TParameters>(
             state, observer, interpreter);
 
-        var actor = new ActorInstance<TAutomaton, TState, TEvent, TEffect>(
+        var actor = new ActorInstance<TAutomaton, TState, TEvent, TEffect, TParameters>(
             core, mailbox, actorRef);
 
         // Start the processing loop
@@ -187,7 +187,7 @@ Key design decisions:
 ## Step 3: Spawn and Send Messages
 
 ```csharp
-var actor = ActorInstance<Counter, CounterState, CounterEvent, CounterEffect>
+var actor = ActorInstance<Counter, CounterState, CounterEvent, CounterEffect, Unit>
     .Spawn("counter-1");
 
 // Fire-and-forget: messages are queued
@@ -211,7 +211,7 @@ Pass an effect handler to `Spawn`. It receives the effect and a reference to the
 ```csharp
 var logs = new List<string>();
 
-var actor = ActorInstance<Counter, CounterState, CounterEvent, CounterEffect>
+var actor = ActorInstance<Counter, CounterState, CounterEvent, CounterEffect, Unit>
     .Spawn("counter-1", effectHandler: async (effect, self) =>
     {
         if (effect is CounterEffect.Log log)
@@ -237,7 +237,7 @@ await actor.Stop();
 Because messages are processed sequentially from the mailbox, the actor is inherently thread-safe — even when messages arrive from multiple threads:
 
 ```csharp
-var actor = ActorInstance<Counter, CounterState, CounterEvent, CounterEffect>
+var actor = ActorInstance<Counter, CounterState, CounterEvent, CounterEffect, Unit>
     .Spawn("concurrent-counter");
 
 // Send 100 messages from many threads simultaneously

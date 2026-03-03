@@ -176,7 +176,7 @@ public class DeciderTests
         var observed = new List<(ThermostatState State, ThermostatEvent Event, ThermostatEffect Effect)>();
 
         var runtime = await DecidingRuntime<Thermostat, ThermostatState, ThermostatCommand,
-            ThermostatEvent, ThermostatEffect, ThermostatError>.Start(ThermostatObservers.Capture(observed), ThermostatInterpreters.NoOp);
+            ThermostatEvent, ThermostatEffect, ThermostatError, Unit>.Start(default, ThermostatObservers.Capture(observed), ThermostatInterpreters.NoOp);
 
         // RecordReading(18) when target=22, not heating → [TemperatureRecorded(18), HeaterTurnedOn]
         await runtime.Handle(new ThermostatCommand.RecordReading(18m));
@@ -198,7 +198,7 @@ public class DeciderTests
         };
 
         var runtime = await DecidingRuntime<Thermostat, ThermostatState, ThermostatCommand,
-            ThermostatEvent, ThermostatEffect, ThermostatError>.Start(observer, ThermostatInterpreters.NoOp);
+            ThermostatEvent, ThermostatEffect, ThermostatError, Unit>.Start(default, observer, ThermostatInterpreters.NoOp);
 
         // Invalid target — should not trigger observer
         await runtime.Handle(new ThermostatCommand.SetTarget(50m));
@@ -372,10 +372,10 @@ public class DeciderTests
     // =========================================================================
 
     private static async Task<DecidingRuntime<Thermostat, ThermostatState, ThermostatCommand,
-        ThermostatEvent, ThermostatEffect, ThermostatError>> CreateRuntime()
+            ThermostatEvent, ThermostatEffect, ThermostatError, Unit>> CreateRuntime()
     {
         return await DecidingRuntime<Thermostat, ThermostatState, ThermostatCommand,
-            ThermostatEvent, ThermostatEffect, ThermostatError>.Start(ThermostatObservers.NoOp, ThermostatInterpreters.NoOp);
+            ThermostatEvent, ThermostatEffect, ThermostatError, Unit>.Start(default, ThermostatObservers.NoOp, ThermostatInterpreters.NoOp);
     }
 
     // =========================================================================
@@ -438,8 +438,8 @@ public class DeciderTests
     public async Task Handle_Unserialized_AcceptsValidCommand()
     {
         var runtime = await DecidingRuntime<Thermostat, ThermostatState, ThermostatCommand,
-            ThermostatEvent, ThermostatEffect, ThermostatError>
-            .Start(ThermostatObservers.NoOp, ThermostatInterpreters.NoOp, threadSafe: false);
+            ThermostatEvent, ThermostatEffect, ThermostatError, Unit>
+            .Start(default, ThermostatObservers.NoOp, ThermostatInterpreters.NoOp, threadSafe: false);
 
         var result = await runtime.Handle(new ThermostatCommand.RecordReading(18m));
 
@@ -451,8 +451,8 @@ public class DeciderTests
     public async Task Handle_Unserialized_RejectsInvalidCommand()
     {
         var runtime = await DecidingRuntime<Thermostat, ThermostatState, ThermostatCommand,
-            ThermostatEvent, ThermostatEffect, ThermostatError>
-            .Start(ThermostatObservers.NoOp, ThermostatInterpreters.NoOp, threadSafe: false);
+            ThermostatEvent, ThermostatEffect, ThermostatError, Unit>
+            .Start(default, ThermostatObservers.NoOp, ThermostatInterpreters.NoOp, threadSafe: false);
 
         var result = await runtime.Handle(new ThermostatCommand.SetTarget(50m));
 
@@ -468,8 +468,8 @@ public class DeciderTests
     public async Task Handle_LeanMode_WorksCorrectly()
     {
         var runtime = await DecidingRuntime<Thermostat, ThermostatState, ThermostatCommand,
-            ThermostatEvent, ThermostatEffect, ThermostatError>
-            .Start(ThermostatObservers.NoOp, ThermostatInterpreters.NoOp,
+            ThermostatEvent, ThermostatEffect, ThermostatError, Unit>
+            .Start(default, ThermostatObservers.NoOp, ThermostatInterpreters.NoOp,
                 threadSafe: false, trackEvents: false);
 
         var result = await runtime.Handle(new ThermostatCommand.RecordReading(18m));

@@ -26,8 +26,8 @@ We must decide:
 MVU uses the **Automaton constraint** with `Dispatch(event)`. It does **not** use the Decider.
 
 ```csharp
-public sealed class MvuRuntime<TAutomaton, TState, TEvent, TEffect, TView>
-    where TAutomaton : Automaton<TState, TEvent, TEffect>
+public sealed class MvuRuntime<TAutomaton, TState, TEvent, TEffect, TView, TParameters>
+    where TAutomaton : Automaton<TState, TEvent, TEffect, TParameters>
 ```
 
 The MVU runtime wires the shared `AutomatonRuntime` with:

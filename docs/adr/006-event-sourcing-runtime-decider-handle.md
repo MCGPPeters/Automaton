@@ -35,8 +35,8 @@ Accepting raw events would be **architecturally wrong** because:
 The ES runtime uses the **Decider constraint** with `Handle(command)`:
 
 ```csharp
-public sealed class AggregateRunner<TDecider, TState, TCommand, TEvent, TEffect, TError>
-    where TDecider : Decider<TState, TCommand, TEvent, TEffect, TError>
+public sealed class AggregateRunner<TDecider, TState, TCommand, TEvent, TEffect, TError, TParameters>
+    where TDecider : Decider<TState, TCommand, TEvent, TEffect, TError, TParameters>
 ```
 
 The aggregate runner implements the **decide-then-append** pattern:
@@ -146,7 +146,7 @@ var totalIncrements = new Projection<CounterEvent, int>(
 ```csharp
 public TState Rebuild()
 {
-    var (seed, _) = TDecider.Init();
+    var (seed, _) = TDecider.Init(default!);
     _state = _store.Replay(seed, (s, e) => TDecider.Transition(s, e).State);
     return _state;
 }
@@ -165,7 +165,7 @@ Loading an existing aggregate replays without re-validation:
 ```csharp
 public static AggregateRunner<...> FromStore(EventStore<TEvent> store)
 {
-    var (seed, _) = TDecider.Init();
+    var (seed, _) = TDecider.Init(default!);
     var state = store.Replay(seed, (s, e) => TDecider.Transition(s, e).State);
     return new AggregateRunner<...>(state, store);
 }

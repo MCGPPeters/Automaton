@@ -49,9 +49,9 @@ namespace Automaton;
 ///     record struct DeactivateHeater : ThermostatEffect;
 /// }
 ///
-/// public class Thermostat : Automaton&lt;ThermostatState, ThermostatEvent, ThermostatEffect&gt;
+/// public class Thermostat : Automaton&lt;ThermostatState, ThermostatEvent, ThermostatEffect, Unit&gt;
 /// {
-///     public static (ThermostatState, ThermostatEffect) Init() =&gt;
+///     public static (ThermostatState, ThermostatEffect) Init(Unit _) =&gt;
 ///         (new ThermostatState(20.0m, 22.0m, false, true), new ThermostatEffect.None());
 ///
 ///     public static (ThermostatState, ThermostatEffect) Transition(
@@ -73,12 +73,14 @@ namespace Automaton;
 /// <typeparam name="TState">The state of the automaton.</typeparam>
 /// <typeparam name="TEvent">The input events that drive transitions.</typeparam>
 /// <typeparam name="TEffect">The output effects produced by transitions.</typeparam>
-public interface Automaton<TState, TEvent, TEffect>
+/// <typeparam name="TParameters">The parameters required to initialize the automaton. Use <see cref="Unit"/> for parameterless automata.</typeparam>
+public interface Automaton<TState, TEvent, TEffect, TParameters>
 {
     /// <summary>
-    /// Produces the initial state and any startup effects.
+    /// Produces the initial state and any startup effects from the given parameters.
     /// </summary>
-    static abstract (TState State, TEffect Effect) Init();
+    /// <param name="parameters">The initialization parameters. Use <c>default</c> for <see cref="Unit"/>-parameterized automata.</param>
+    static abstract (TState State, TEffect Effect) Init(TParameters parameters);
 
     /// <summary>
     /// Pure transition function: given state and event, produce new state and effect.

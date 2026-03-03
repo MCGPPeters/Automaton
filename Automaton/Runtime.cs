@@ -146,7 +146,7 @@ public static class PipelineResult
 /// <remarks>
 /// <para>
 /// This is the structural core from which MVU, Event Sourcing, and the Actor Model
-/// are derived. Each specialized runtime constructs an <see cref="AutomatonRuntime{TAutomaton,TState,TEvent,TEffect}"/>
+/// are derived. Each specialized runtime constructs an <see cref="AutomatonRuntime{TAutomaton,TState,TEvent,TEffect,TParameters}"/>
 /// with domain-specific Observer and Interpreter implementations.
 /// </para>
 /// <para>
@@ -180,8 +180,8 @@ public static class PipelineResult
 ///     _ =&gt; new ValueTask&lt;Result&lt;ThermostatEvent[], PipelineError&gt;&gt;(
 ///         Result&lt;ThermostatEvent[], PipelineError&gt;.Ok([]));
 ///
-/// var runtime = await AutomatonRuntime&lt;Thermostat, ThermostatState, ThermostatEvent, ThermostatEffect&gt;
-///     .Start(log, noOp);
+/// var runtime = await AutomatonRuntime&lt;Thermostat, ThermostatState, ThermostatEvent, ThermostatEffect, Unit&gt;
+///     .Start(default, log, noOp);
 ///
 /// var result = await runtime.Dispatch(new ThermostatEvent.TemperatureRecorded(18m));
 /// // result.IsOk == true, runtime.State.CurrentTemp == 18
@@ -192,8 +192,9 @@ public static class PipelineResult
 /// <typeparam name="TState">The state of the automaton.</typeparam>
 /// <typeparam name="TEvent">The events that drive transitions.</typeparam>
 /// <typeparam name="TEffect">The effects produced by transitions.</typeparam>
-public sealed class AutomatonRuntime<TAutomaton, TState, TEvent, TEffect> : IDisposable
-    where TAutomaton : Automaton<TState, TEvent, TEffect>
+/// <typeparam name="TParameters">The initialization parameters for the automaton.</typeparam>
+public sealed class AutomatonRuntime<TAutomaton, TState, TEvent, TEffect, TParameters> : IDisposable
+    where TAutomaton : Automaton<TState, TEvent, TEffect, TParameters>
 {
     /// <summary>
     /// Maximum recursion depth for interpreter feedback loops.
@@ -265,6 +266,7 @@ public sealed class AutomatonRuntime<TAutomaton, TState, TEvent, TEffect> : IDis
     /// <summary>
     /// Creates and starts a runtime, interpreting init effects immediately.
     /// </summary>
+    /// <param name="parameters">Initialization parameters passed to the automaton's Init method.</param>
     /// <param name="observer">Observer called after each transition.</param>
     /// <param name="interpreter">Interpreter that converts effects to feedback events.</param>
     /// <param name="threadSafe">
@@ -277,7 +279,8 @@ public sealed class AutomatonRuntime<TAutomaton, TState, TEvent, TEffect> : IDis
     /// </param>
     /// <param name="cancellationToken">Token to cancel the operation.</param>
     [AsyncMethodBuilder(typeof(PoolingAsyncValueTaskMethodBuilder<>))]
-    public static async ValueTask<AutomatonRuntime<TAutomaton, TState, TEvent, TEffect>> Start(
+    public static async ValueTask<AutomatonRuntime<TAutomaton, TState, TEvent, TEffect, TParameters>> Start(
+        TParameters parameters,
         Observer<TState, TEvent, TEffect> observer,
         Interpreter<TEffect, TEvent> interpreter,
         bool threadSafe = true,
@@ -288,8 +291,8 @@ public sealed class AutomatonRuntime<TAutomaton, TState, TEvent, TEffect> : IDis
         activity?.SetTag("automaton.type", _automatonTypeName);
         activity?.SetTag("automaton.state.type", _stateTypeName);
 
-        var (state, effect) = TAutomaton.Init();
-        var runtime = new AutomatonRuntime<TAutomaton, TState, TEvent, TEffect>(state, observer, interpreter, threadSafe, trackEvents);
+        var (state, effect) = TAutomaton.Init(parameters);
+        var runtime = new AutomatonRuntime<TAutomaton, TState, TEvent, TEffect, TParameters>(state, observer, interpreter, threadSafe, trackEvents);
         await runtime.InterpretEffect(effect, cancellationToken).ConfigureAwait(false);
 
         activity?.SetStatus(ActivityStatusCode.Ok);
@@ -642,7 +645,7 @@ public sealed class AutomatonRuntime<TAutomaton, TState, TEvent, TEffect> : IDis
     /// <summary>
     /// Dispatches an event without acquiring the gate.
     /// Must only be called while the gate is held.
-    /// Used by <see cref="DecidingRuntime{TDecider,TState,TCommand,TEvent,TEffect,TError}"/>
+    /// Used by <see cref="DecidingRuntime{TDecider,TState,TCommand,TEvent,TEffect,TError,TParameters}"/>
     /// to dispatch all events from a single Decide call atomically.
     /// </summary>
     internal ValueTask<Result<Unit, PipelineError>> DispatchUnlocked(

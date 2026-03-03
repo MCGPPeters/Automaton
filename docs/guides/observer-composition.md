@@ -169,7 +169,7 @@ var pipeline = Capture(auditLog)             // record for auditing
         }));
 
 var runtime = await AutomatonRuntime<Thermostat, ThermostatState,
-    ThermostatEvent, ThermostatEffect>.Start(pipeline, interpreter);
+    ThermostatEvent, ThermostatEffect, Unit>.Start(default, pipeline, interpreter);
 ```
 
 ## Interpreter Composition

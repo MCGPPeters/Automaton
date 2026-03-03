@@ -29,12 +29,12 @@ public delegate TView Render<in TState, out TView>(TState state);
 /// </summary>
 /// <remarks>
 /// <para>
-/// Internally delegates to <see cref="AutomatonRuntime{TAutomaton,TState,TEvent,TEffect}"/>
+/// Internally delegates to <see cref="AutomatonRuntime{TAutomaton,TState,TEvent,TEffect,TParameters}"/>
 /// with a render observer and the supplied interpreter.
 /// </para>
 /// <example>
 /// <code>
-/// var runtime = await MvuRuntime&lt;Thermostat, ThermostatState, ThermostatEvent, ThermostatEffect, string&gt;
+/// var runtime = await MvuRuntime&lt;Thermostat, ThermostatState, ThermostatEvent, ThermostatEffect, string, Unit&gt;
 ///     .Start(
 ///         render: state =&gt; $"{state.CurrentTemp}°C (target: {state.TargetTemp}°C)",
 ///         interpreter: _ =&gt; Task.FromResult&lt;ThermostatEvent[]&gt;([]));
@@ -45,10 +45,10 @@ public delegate TView Render<in TState, out TView>(TState state);
 /// </code>
 /// </example>
 /// </remarks>
-public sealed class MvuRuntime<TAutomaton, TState, TEvent, TEffect, TView>
-    where TAutomaton : Automaton<TState, TEvent, TEffect>
+public sealed class MvuRuntime<TAutomaton, TState, TEvent, TEffect, TView, TParameters>
+    where TAutomaton : Automaton<TState, TEvent, TEffect, TParameters>
 {
-    private readonly AutomatonRuntime<TAutomaton, TState, TEvent, TEffect> _core;
+    private readonly AutomatonRuntime<TAutomaton, TState, TEvent, TEffect, TParameters> _core;
     private readonly List<TView> _views;
 
     /// <summary>
@@ -67,7 +67,7 @@ public sealed class MvuRuntime<TAutomaton, TState, TEvent, TEffect, TView>
     public IReadOnlyList<TEvent> Events => _core.Events;
 
     private MvuRuntime(
-        AutomatonRuntime<TAutomaton, TState, TEvent, TEffect> core,
+        AutomatonRuntime<TAutomaton, TState, TEvent, TEffect, TParameters> core,
         List<TView> views)
     {
         _core = core;
@@ -77,11 +77,11 @@ public sealed class MvuRuntime<TAutomaton, TState, TEvent, TEffect, TView>
     /// <summary>
     /// Starts the MVU runtime, executing init and rendering the initial view.
     /// </summary>
-    public static async Task<MvuRuntime<TAutomaton, TState, TEvent, TEffect, TView>> Start(
+    public static async Task<MvuRuntime<TAutomaton, TState, TEvent, TEffect, TView, TParameters>> Start(
         Render<TState, TView> render,
         Interpreter<TEffect, TEvent> interpreter)
     {
-        var (state, effect) = TAutomaton.Init();
+        var (state, effect) = TAutomaton.Init(default!);
         var views = new List<TView>();
 
         // Observer: render the new state after each transition
@@ -91,7 +91,7 @@ public sealed class MvuRuntime<TAutomaton, TState, TEvent, TEffect, TView>
             return PipelineResult.Ok;
         };
 
-        var core = new AutomatonRuntime<TAutomaton, TState, TEvent, TEffect>(
+        var core = new AutomatonRuntime<TAutomaton, TState, TEvent, TEffect, TParameters>(
             state, observer, interpreter);
 
         // Render initial view (before effects, so the user sees something immediately)
@@ -100,7 +100,7 @@ public sealed class MvuRuntime<TAutomaton, TState, TEvent, TEffect, TView>
         // Handle init effects (may produce feedback events → more renders)
         await core.InterpretEffect(effect);
 
-        return new MvuRuntime<TAutomaton, TState, TEvent, TEffect, TView>(core, views);
+        return new MvuRuntime<TAutomaton, TState, TEvent, TEffect, TView, TParameters>(core, views);
     }
 
     /// <summary>

@@ -39,8 +39,8 @@ Commands are *requests*. Events are *facts*. The `Decide` function is the gateke
 ## The Interface
 
 ```csharp
-public interface Decider<TState, TCommand, TEvent, TEffect, TError>
-    : Automaton<TState, TEvent, TEffect>
+public interface Decider<TState, TCommand, TEvent, TEffect, TError, TParameters>
+    : Automaton<TState, TEvent, TEffect, TParameters>
 {
     static abstract Result<TEvent[], TError> Decide(TState state, TCommand command);
     static virtual bool IsTerminal(TState state) => false;
@@ -58,7 +58,7 @@ The Decider pattern has seven elements. The Automaton provides four; the Decider
 | 1 | Command type | Type parameter | `TCommand` |
 | 2 | Event type | Type parameter | `TEvent` |
 | 3 | State type | Type parameter | `TState` |
-| 4 | Initial state | Automaton | `Init()` |
+| 4 | Initial state | Automaton | `Init(parameters)` |
 | 5 | Decide | **Decider** | `Decide(state, command)` |
 | 6 | Evolve | Automaton | `Transition(state, event)` |
 | 7 | Is terminal | **Decider** | `IsTerminal(state)` |
@@ -67,11 +67,11 @@ The Decider pattern has seven elements. The Automaton provides four; the Decider
 
 ```csharp
 public class Counter
-    : Decider<CounterState, CounterCommand, CounterEvent, CounterEffect, CounterError>
+    : Decider<CounterState, CounterCommand, CounterEvent, CounterEffect, CounterError, Unit>
 {
     public const int MaxCount = 100;
 
-    public static (CounterState, CounterEffect) Init() =>
+    public static (CounterState, CounterEffect) Init(Unit _) =>
         (new CounterState(0), new CounterEffect.None());
 
     public static Result<CounterEvent[], CounterError> Decide(
@@ -206,7 +206,7 @@ The `DecidingRuntime` wraps `AutomatonRuntime` and adds `Handle(command)`:
 
 ```csharp
 var runtime = await DecidingRuntime<Counter, CounterState, CounterCommand,
-    CounterEvent, CounterEffect, CounterError>.Start(observer, interpreter);
+    CounterEvent, CounterEffect, CounterError, Unit>.Start(default, observer, interpreter);
 
 // Valid command → events dispatched, state updated
 var result = await runtime.Handle(new CounterCommand.Add(5));
