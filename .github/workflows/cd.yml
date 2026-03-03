@@ -49,11 +49,13 @@ jobs:
         run: dotnet build --no-restore
 
       - name: Test
-        run: dotnet test Automaton.Tests/Automaton.Tests.csproj --no-build --verbosity normal
+        run: dotnet test --no-build --verbosity normal
 
       - name: Pack
         if: github.event_name != 'pull_request'
-        run: dotnet pack ./Automaton/Automaton.csproj --configuration Release --output ./nupkg
+        run: |
+          dotnet pack ./Automaton/Automaton.csproj --configuration Release --output ./nupkg
+          dotnet pack ./Automaton.Patterns/Automaton.Patterns.csproj --configuration Release --output ./nupkg
 
       - name: Publish to NuGet
         if: github.event_name != 'pull_request'
