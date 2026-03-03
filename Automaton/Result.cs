@@ -15,6 +15,7 @@
 //     Result<T, E> ≅ T + E    (coproduct / sum type)
 //     Map/Select       : (T → U) → Result<T, E> → Result<U, E>        (functor)
 //     Bind/SelectMany  : (T → Result<U, E>) → Result<T, E> → Result<U, E>  (monad)
+//     Match            : (T → R) × (E → R) → Result<T, E> → R         (catamorphism)
 //
 // LINQ query syntax (monad comprehension):
 //     from x in result
@@ -58,16 +59,23 @@ namespace Automaton;
 /// </para>
 /// <example>
 /// <code>
-/// // Pattern matching
-/// var message = result.IsOk
-///     ? $"Got {result.Value}"
-///     : $"Failed: {result.Error}";
+/// // Exhaustive match (catamorphism) — the recommended approach
+/// var message = result.Match(
+///     ok: value => $"Got {value}",
+///     err: error => $"Failed: {error}");
+///
+/// // Try-pattern extraction
+/// if (result.TryGetValue(out var value))
+///     Console.WriteLine(value);
 ///
 /// // LINQ query syntax (railway-oriented programming)
 /// var final =
 ///     from x in parseInput(raw)
 ///     from y in validate(x)
 ///     select x + y;
+///
+/// // Implicit conversion for concise construction
+/// Result&lt;int, string&gt; ok = 42;
 ///
 /// // Fluent API
 /// result.Map(v =&gt; v * 2)
@@ -215,6 +223,143 @@ public readonly struct Result<TSuccess, TError>
         _isOk
             ? Result<TSuccess, TNew>.Ok(_value)
             : Result<TSuccess, TNew>.Err(f(_error));
+
+    /// <summary>
+    /// Exhaustive fold (catamorphism) over both cases.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Forces the caller to handle both Ok and Err, guaranteeing exhaustiveness
+    /// at compile time. This is the Church encoding elimination form for the
+    /// sum type: <c>Result&lt;T, E&gt; ≅ T + E</c> becomes
+    /// <c>(T → R) × (E → R) → R</c>.
+    /// </para>
+    /// <para>
+    /// The JIT inlines both lambdas in release builds, making this zero-cost
+    /// compared to manual <c>if (IsOk)</c> branching.
+    /// </para>
+    /// <example>
+    /// <code>
+    /// var message = result.Match(
+    ///     ok: value => $"Got {value}",
+    ///     err: error => $"Failed: {error}");
+    /// </code>
+    /// </example>
+    /// </remarks>
+    /// <typeparam name="TOut">The type produced by both branches.</typeparam>
+    /// <param name="ok">Function applied to the success value.</param>
+    /// <param name="err">Function applied to the error value.</param>
+    public TOut Match<TOut>(Func<TSuccess, TOut> ok, Func<TError, TOut> err) =>
+        _isOk ? ok(_value) : err(_error);
+
+    /// <summary>
+    /// Exhaustive side-effecting fold over both cases.
+    /// </summary>
+    /// <remarks>
+    /// The <c>void</c>-returning counterpart of <see cref="Match{TOut}"/>.
+    /// Useful for dispatching side effects without producing a return value.
+    /// <example>
+    /// <code>
+    /// result.Switch(
+    ///     ok: value => Console.WriteLine($"Got {value}"),
+    ///     err: error => logger.LogError("Failed: {Error}", error));
+    /// </code>
+    /// </example>
+    /// </remarks>
+    /// <param name="ok">Action invoked on the success value.</param>
+    /// <param name="err">Action invoked on the error value.</param>
+    public void Switch(Action<TSuccess> ok, Action<TError> err)
+    {
+        if (_isOk)
+            ok(_value);
+        else
+            err(_error);
+    }
+
+    /// <summary>
+    /// Attempts to extract the success value using the Try-pattern.
+    /// </summary>
+    /// <remarks>
+    /// Follows the idiomatic .NET <c>TryGetXxx(out T value)</c> convention.
+    /// The JIT generates efficient branch-free code for this pattern.
+    /// <example>
+    /// <code>
+    /// if (result.TryGetValue(out var value))
+    ///     Console.WriteLine($"Got {value}");
+    /// </code>
+    /// </example>
+    /// </remarks>
+    /// <param name="value">
+    /// When this method returns <see langword="true"/>, contains the success value.
+    /// When this method returns <see langword="false"/>, contains <see langword="default"/>.
+    /// </param>
+    /// <returns><see langword="true"/> if this is an Ok result; otherwise <see langword="false"/>.</returns>
+    public bool TryGetValue(out TSuccess value)
+    {
+        value = _value;
+        return _isOk;
+    }
+
+    /// <summary>
+    /// Attempts to extract the error value using the Try-pattern.
+    /// </summary>
+    /// <remarks>
+    /// The error-side counterpart of <see cref="TryGetValue"/>.
+    /// <example>
+    /// <code>
+    /// if (result.TryGetError(out var error))
+    ///     logger.LogError("Failed: {Error}", error);
+    /// </code>
+    /// </example>
+    /// </remarks>
+    /// <param name="error">
+    /// When this method returns <see langword="true"/>, contains the error value.
+    /// When this method returns <see langword="false"/>, contains <see langword="default"/>.
+    /// </param>
+    /// <returns><see langword="true"/> if this is an Err result; otherwise <see langword="false"/>.</returns>
+    public bool TryGetError(out TError error)
+    {
+        error = _error;
+        return !_isOk;
+    }
+
+    /// <summary>
+    /// Returns the success value if Ok, or the provided fallback if Err.
+    /// </summary>
+    /// <remarks>
+    /// A total extraction function — always returns a <typeparamref name="TSuccess"/>
+    /// without throwing. Equivalent to Haskell's <c>fromMaybe</c> / Rust's <c>unwrap_or</c>.
+    /// <example>
+    /// <code>
+    /// var count = result.DefaultValue(0);
+    /// </code>
+    /// </example>
+    /// </remarks>
+    /// <param name="fallback">The value to return when this is an Err result.</param>
+    public TSuccess DefaultValue(TSuccess fallback) =>
+        _isOk ? _value : fallback;
+
+    /// <summary>
+    /// Returns the error value if Err, or the provided fallback if Ok.
+    /// </summary>
+    /// <remarks>
+    /// The error-side counterpart of <see cref="DefaultValue"/>.
+    /// </remarks>
+    /// <param name="fallback">The value to return when this is an Ok result.</param>
+    public TError DefaultError(TError fallback) =>
+        _isOk ? fallback : _error;
+
+    /// <summary>
+    /// Implicitly converts a success value to an Ok result.
+    /// </summary>
+    /// <remarks>
+    /// Enables concise result construction:
+    /// <code>
+    /// Result&lt;int, string&gt; result = 42;  // equivalent to Result&lt;int, string&gt;.Ok(42)
+    /// </code>
+    /// </remarks>
+    public static implicit operator Result<TSuccess, TError>(TSuccess value) =>
+        Ok(value);
 
     /// <inheritdoc/>
     public override string ToString() =>
