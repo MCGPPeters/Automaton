@@ -77,6 +77,8 @@ public static class Backoff
     /// <returns>The computed delay duration, never exceeding <paramref name="maxDelay"/>.</returns>
     public static TimeSpan Compute(BackoffType type, TimeSpan baseDelay, int attempt, TimeSpan? maxDelay = null)
     {
+        ArgumentOutOfRangeException.ThrowIfLessThan(attempt, 1, nameof(attempt));
+
         var cap = maxDelay ?? MaxDelay;
 
         var delay = type switch

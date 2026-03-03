@@ -223,23 +223,35 @@ public sealed class RateLimiter : IDisposable
                 FailureReason.Cancelled));
         }
 
-        await _gate.WaitAsync(cancellationToken).ConfigureAwait(false);
         bool permitted;
         try
         {
-            if (_tokens > 0)
+            await _gate.WaitAsync(cancellationToken).ConfigureAwait(false);
+            try
             {
-                _tokens--;
-                permitted = true;
+                if (_tokens > 0)
+                {
+                    _tokens--;
+                    permitted = true;
+                }
+                else
+                {
+                    permitted = false;
+                }
             }
-            else
+            finally
             {
-                permitted = false;
+                _gate.Release();
             }
         }
-        finally
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {
-            _gate.Release();
+            activity?.SetStatus(ActivityStatusCode.Error, "Cancelled");
+
+            return Result<T, ResilienceError>.Err(new ResilienceError(
+                "Operation was cancelled.",
+                "RateLimiter",
+                FailureReason.Cancelled));
         }
 
         if (!permitted)

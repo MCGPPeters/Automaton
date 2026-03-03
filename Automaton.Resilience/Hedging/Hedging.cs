@@ -115,6 +115,7 @@ public static class Hedging
                 if (completed is not null)
                 {
                     await linkedCts.CancelAsync().ConfigureAwait(false);
+                    ObserveRemainingTasks(tasks);
                     activity?.SetTag("hedging.winning_attempt", tasks.IndexOf(completed));
                     activity?.SetStatus(ActivityStatusCode.Ok);
 
@@ -131,6 +132,7 @@ public static class Hedging
                 if (completedTask.IsCompletedSuccessfully)
                 {
                     await linkedCts.CancelAsync().ConfigureAwait(false);
+                    ObserveRemainingTasks(tasks);
                     activity?.SetTag("hedging.winning_attempt", tasks.IndexOf(completedTask));
                     activity?.SetStatus(ActivityStatusCode.Ok);
 
@@ -195,5 +197,18 @@ public static class Hedging
         }
 
         return null;
+    }
+
+    /// <summary>
+    /// Observes remaining in-flight tasks to prevent UnobservedTaskException.
+    /// Attaches a continuation that swallows exceptions from cancelled/faulted tasks.
+    /// </summary>
+    private static void ObserveRemainingTasks<T>(List<Task<T>> tasks)
+    {
+        _ = Task.WhenAll(tasks).ContinueWith(
+            static _ => { },
+            CancellationToken.None,
+            TaskContinuationOptions.OnlyOnFaulted,
+            TaskScheduler.Default);
     }
 }

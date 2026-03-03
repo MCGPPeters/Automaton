@@ -272,6 +272,8 @@ public static class Retry
     {
         var opts = options ?? new RetryOptions();
 
+        ArgumentOutOfRangeException.ThrowIfLessThan(opts.MaxAttempts, 1, nameof(opts.MaxAttempts));
+
         using var activity = ResilienceDiagnostics.Source.StartActivity("Retry.Execute");
         activity?.SetTag("retry.max_attempts", opts.MaxAttempts);
         activity?.SetTag("retry.backoff", opts.Backoff.ToString());
@@ -329,7 +331,7 @@ public static class Retry
                     return Result<T, ResilienceError>.Err(new ResilienceError(
                         $"Non-retryable exception on attempt {attempt}: {ex.Message}",
                         "Retry",
-                        FailureReason.RetriesExhausted,
+                        FailureReason.Unknown,
                         ex));
                 }
 
@@ -343,7 +345,21 @@ public static class Retry
                         opts.EffectiveMaxDelay);
 
                     if (delay > TimeSpan.Zero)
-                        await Task.Delay(delay, cancellationToken).ConfigureAwait(false);
+                    {
+                        try
+                        {
+                            await Task.Delay(delay, cancellationToken).ConfigureAwait(false);
+                        }
+                        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+                        {
+                            activity?.SetStatus(ActivityStatusCode.Error, "Cancelled");
+
+                            return Result<T, ResilienceError>.Err(new ResilienceError(
+                                "Operation was cancelled.",
+                                "Retry",
+                                FailureReason.Cancelled));
+                        }
+                    }
                 }
             }
         }

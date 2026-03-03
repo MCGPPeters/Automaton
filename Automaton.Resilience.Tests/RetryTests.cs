@@ -165,7 +165,7 @@ public class RetryTests
         var attempt = 0;
 
         // Start the retry and cancel after the first failure
-        var task = Retry.Retry.Execute(
+        var result = await Retry.Retry.Execute(
             ct =>
             {
                 attempt++;
@@ -181,8 +181,9 @@ public class RetryTests
             new RetryOptions(MaxAttempts: 5, Backoff: BackoffType.Constant, BaseDelay: TimeSpan.FromSeconds(60)),
             cts.Token);
 
-        // The delay should be cancelled
-        await Assert.ThrowsAnyAsync<OperationCanceledException>(async () => await task);
+        // The delay should be cancelled — returned as a Cancelled result, not thrown
+        Assert.True(result.IsErr);
+        Assert.Equal(FailureReason.Cancelled, result.Error.Reason);
     }
 
     // =========================================================================

@@ -42,7 +42,7 @@ public class RetryAutomatonTests
     public void Transition_waiting_succeeded_after_retries()
     {
         var state = new RetryState.Waiting(3, 5);
-        var (newState, effect) = RetryAutomaton.Transition(state, new RetryEvent.AttemptSucceeded());
+        var (newState, _) = RetryAutomaton.Transition(state, new RetryEvent.AttemptSucceeded());
 
         var succeeded = Assert.IsType<RetryState.Succeeded>(newState);
         Assert.Equal(3, succeeded.Attempt);
@@ -171,19 +171,19 @@ public class RetryAutomatonTests
     public void Full_lifecycle_all_attempts_exhausted()
     {
         var opts = new RetryOptions(MaxAttempts: 2);
-        var (state, effect) = RetryAutomaton.Init(opts);
+        var (state, _) = RetryAutomaton.Init(opts);
 
         // Attempt 1 fails
-        (state, effect) = RetryAutomaton.Transition(state, new RetryEvent.AttemptFailed(new Exception("fail 1")));
+        (state, _) = RetryAutomaton.Transition(state, new RetryEvent.AttemptFailed(new Exception("fail 1")));
         Assert.IsType<RetryState.Delaying>(state);
 
         // Delay elapses
-        (state, effect) = RetryAutomaton.Transition(state, new RetryEvent.DelayElapsed());
+        (state, _) = RetryAutomaton.Transition(state, new RetryEvent.DelayElapsed());
         Assert.IsType<RetryState.Waiting>(state);
 
         // Attempt 2 fails — exhausted
         var lastEx = new Exception("fail 2");
-        (state, effect) = RetryAutomaton.Transition(state, new RetryEvent.AttemptFailed(lastEx));
+        (state, var effect) = RetryAutomaton.Transition(state, new RetryEvent.AttemptFailed(lastEx));
         var exhausted = Assert.IsType<RetryState.Exhausted>(state);
         Assert.Equal(2, exhausted.Attempt);
         Assert.Same(lastEx, exhausted.LastException);
