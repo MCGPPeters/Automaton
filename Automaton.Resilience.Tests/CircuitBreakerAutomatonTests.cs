@@ -5,13 +5,13 @@ namespace Automaton.Resilience.Tests;
 public class CircuitBreakerAutomatonTests
 {
     // =========================================================================
-    // Init
+    // Initialize
     // =========================================================================
 
     [Fact]
     public void Init_produces_closed_state_with_zero_failures()
     {
-        var (state, effect) = CircuitBreakerAutomaton.Init(new CircuitBreakerOptions(FailureThreshold: 3));
+        var (state, effect) = CircuitBreakerAutomaton.Initialize(new CircuitBreakerOptions(FailureThreshold: 3));
 
         var closed = Assert.IsType<CircuitBreakerState.Closed>(state);
         Assert.Equal(0, closed.ConsecutiveFailures);
@@ -149,7 +149,7 @@ public class CircuitBreakerAutomatonTests
     public void Full_lifecycle_closed_to_open_to_half_open_to_closed()
     {
         // Start closed
-        var (state, _) = CircuitBreakerAutomaton.Init(new CircuitBreakerOptions(FailureThreshold: 2));
+        var (state, _) = CircuitBreakerAutomaton.Initialize(new CircuitBreakerOptions(FailureThreshold: 2));
         Assert.IsType<CircuitBreakerState.Closed>(state);
 
         // Failure 1

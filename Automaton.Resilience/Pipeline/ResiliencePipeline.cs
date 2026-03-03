@@ -196,7 +196,7 @@ public sealed record PipelineParameters<T>(
 /// The <see cref="ResilienceStrategyExtensions.Execute{T}"/> method is the
 /// specialized runtime for this automaton — it creates and starts an
 /// <see cref="AutomatonRuntime{TAutomaton,TState,TEvent,TEffect,TParameters}"/>,
-/// allowing the <see cref="Init(PipelineParameters{T})"/> effect
+/// allowing the <see cref="Initialize(PipelineParameters{T})"/> effect
 /// <see cref="PipelineEffect{T}.RunPipeline"/> to be interpreted immediately and
 /// the pipeline to begin executing without an explicit
 /// <see cref="PipelineEvent{T}.Execute"/> dispatch. The <c>Execute</c> event
@@ -213,7 +213,7 @@ public sealed class PipelineAutomaton<T>
     /// and immediately emits a <see cref="PipelineEffect{T}.RunPipeline"/> effect
     /// so the interpreter starts execution without an extra dispatch.
     /// </summary>
-    public static (PipelineState<T> State, PipelineEffect<T> Effect) Init(PipelineParameters<T> parameters) =>
+    public static (PipelineState<T> State, PipelineEffect<T> Effect) Initialize(PipelineParameters<T> parameters) =>
         (new PipelineState<T>.Pending(parameters.Strategy, parameters.Operation),
          new PipelineEffect<T>.RunPipeline(parameters.Strategy, parameters.Operation));
 
@@ -228,7 +228,7 @@ public sealed class PipelineAutomaton<T>
             (PipelineState<T>.Succeeded or PipelineState<T>.Failed, _) =>
                 (state, new PipelineEffect<T>.None()),
 
-            // Pending → Execute triggers the pipeline (fallback if Init effect wasn't interpreted)
+            // Pending → Execute triggers the pipeline (fallback if Initialize effect wasn't interpreted)
             (PipelineState<T>.Pending { Strategy: not null, Operation: not null } p, PipelineEvent<T>.Execute) =>
                 (new PipelineState<T>.Executing(),
                  new PipelineEffect<T>.RunPipeline(p.Strategy, p.Operation)),
@@ -453,7 +453,7 @@ public static class ResilienceStrategyExtensions
     /// <list type="number">
     ///     <item><description>Creates an <see cref="AutomatonRuntime{TAutomaton,TState,TEvent,TEffect,TParameters}"/>
     ///     with an Observer (OTel tracing) and an Interpreter (strategy execution).</description></item>
-    ///     <item><description>Init emits <see cref="PipelineEffect{T}.RunPipeline"/> — the interpreter
+    ///     <item><description>Initialize emits <see cref="PipelineEffect{T}.RunPipeline"/> — the interpreter
     ///     runs the composed strategy and dispatches the result back as
     ///     <see cref="PipelineEvent{T}.OperationCompleted"/> or
     ///     <see cref="PipelineEvent{T}.OperationFailed"/>.</description></item>
@@ -506,7 +506,7 @@ public static class ResilienceStrategyExtensions
 
         try
         {
-            // Create and start the pipeline automaton runtime — Init interprets immediately
+            // Create and start the pipeline automaton runtime — Initialize interprets immediately
             var parameters = new PipelineParameters<T>(strategy, operation);
             using var runtime = await AutomatonRuntime<
                 PipelineAutomaton<T>,

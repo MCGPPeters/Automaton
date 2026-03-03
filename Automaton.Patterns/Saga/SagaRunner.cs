@@ -75,11 +75,11 @@ public static class SagaDiagnostics
 /// </code>
 /// </example>
 /// </remarks>
-/// <typeparam name="TSaga">The Saga type providing Init, Transition, and IsTerminal.</typeparam>
+/// <typeparam name="TSaga">The Saga type providing Initialize, Transition, and IsTerminal.</typeparam>
 /// <typeparam name="TState">The saga's progress state.</typeparam>
 /// <typeparam name="TEvent">Domain events the saga reacts to.</typeparam>
 /// <typeparam name="TEffect">Effects (commands) the saga produces.</typeparam>
-/// <typeparam name="TParameters">The type of parameters passed to <see cref="Automaton{TState,TEvent,TEffect,TParameters}.Init"/>.</typeparam>
+/// <typeparam name="TParameters">The type of parameters passed to <see cref="Automaton{TState,TEvent,TEffect,TParameters}.Initialize"/>.</typeparam>
 public sealed class SagaRunner<TSaga, TState, TEvent, TEffect, TParameters> : IDisposable
     where TSaga : Saga<TState, TEvent, TEffect, TParameters>
 {
@@ -143,7 +143,7 @@ public sealed class SagaRunner<TSaga, TState, TEvent, TEffect, TParameters> : ID
     /// The stream identifier for this saga instance.
     /// Convention: <c>"SagaType-{correlationId}"</c> (e.g., <c>"OrderFulfillment-order-42"</c>).
     /// </param>
-    /// <param name="parameters">Initialization parameters passed to <see cref="Automaton{TState,TEvent,TEffect,TParameters}.Init"/>.</param>
+    /// <param name="parameters">Initialization parameters passed to <see cref="Automaton{TState,TEvent,TEffect,TParameters}.Initialize"/>.</param>
     /// <param name="threadSafe">
     /// When <c>true</c> (default), Handle calls are serialized via a semaphore.
     /// </param>
@@ -157,7 +157,7 @@ public sealed class SagaRunner<TSaga, TState, TEvent, TEffect, TParameters> : ID
         activity?.SetTag("saga.type", _sagaTypeName);
         activity?.SetTag("saga.stream.id", streamId);
 
-        var (state, _) = TSaga.Init(parameters);
+        var (state, _) = TSaga.Initialize(parameters);
 
         activity?.SetStatus(ActivityStatusCode.Ok);
         return new SagaRunner<TSaga, TState, TEvent, TEffect, TParameters>(
@@ -169,7 +169,7 @@ public sealed class SagaRunner<TSaga, TState, TEvent, TEffect, TParameters> : ID
     /// </summary>
     /// <param name="store">The event store to load events from.</param>
     /// <param name="streamId">The stream identifier for this saga instance.</param>
-    /// <param name="parameters">Initialization parameters passed to <see cref="Automaton{TState,TEvent,TEffect,TParameters}.Init"/>.</param>
+    /// <param name="parameters">Initialization parameters passed to <see cref="Automaton{TState,TEvent,TEffect,TParameters}.Initialize"/>.</param>
     /// <param name="threadSafe">
     /// When <c>true</c> (default), Handle calls are serialized via a semaphore.
     /// </param>
@@ -187,7 +187,7 @@ public sealed class SagaRunner<TSaga, TState, TEvent, TEffect, TParameters> : ID
         activity?.SetTag("saga.stream.id", streamId);
 
         var storedEvents = await store.LoadAsync(streamId, cancellationToken).ConfigureAwait(false);
-        var (seed, _) = TSaga.Init(parameters);
+        var (seed, _) = TSaga.Initialize(parameters);
 
         var state = seed;
         for (var i = 0; i < storedEvents.Count; i++)
@@ -214,7 +214,7 @@ public sealed class SagaRunner<TSaga, TState, TEvent, TEffect, TParameters> : ID
     /// </para>
     /// <para>
     /// If the saga has reached a terminal state, the event is ignored and the
-    /// init effect is returned (typically a no-op).
+    /// initial effects is returned (typically a no-op).
     /// </para>
     /// </remarks>
     /// <param name="event">The domain event to handle.</param>
@@ -301,7 +301,7 @@ public sealed class SagaRunner<TSaga, TState, TEvent, TEffect, TParameters> : ID
             {
                 activity?.SetTag("saga.result", "terminal");
                 activity?.SetStatus(ActivityStatusCode.Ok);
-                var (_, initEffect) = TSaga.Init(_parameters);
+                var (_, initEffect) = TSaga.Initialize(_parameters);
                 return initEffect;
             }
 

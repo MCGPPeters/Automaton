@@ -20,14 +20,14 @@ The entire library is built on one interface:
 ```csharp
 public interface Automaton<TState, TEvent, TEffect, TParameters>
 {
-    static abstract (TState State, TEffect Effect) Init(TParameters parameters);
+    static abstract (TState State, TEffect Effect) Initialize(TParameters parameters);
     static abstract (TState State, TEffect Effect) Transition(TState state, TEvent @event);
 }
 ```
 
 That's it. Two methods:
 
-- **`Init(parameters)`** — returns the initial state and any startup effect. Use `Unit` as `TParameters` for automata that need no initialization parameters.
+- **`Initialize(parameters)`** — returns the initial state and any startup effect. Use `Unit` as `TParameters` for automata that need no initialization parameters.
 - **`Transition(state, event)`** — given the current state and an event, returns the new state and an effect.
 
 This is a [Mealy machine](https://en.wikipedia.org/wiki/Mealy_machine) — a finite-state transducer where outputs depend on both state and input:
@@ -93,7 +93,7 @@ public class Thermostat
 {
     public const decimal AlertThreshold = 35.0m;
 
-    public static (ThermostatState, ThermostatEffect) Init(Unit _) =>
+    public static (ThermostatState, ThermostatEffect) Initialize(Unit _) =>
         (new ThermostatState(
             CurrentTemp: 20.0m,
             TargetTemp: 22.0m,
@@ -336,7 +336,7 @@ Assert.IsType<ThermostatEffect.TurnOnHeater>(effect);   // Effect says "turn on 
 
 ## What's Next
 
-You now have a running automaton with real effects and a feedback loop. The same `Thermostat` definition — the same `Init` and `Transition` — can drive completely different runtimes:
+You now have a running automaton with real effects and a feedback loop. The same `Thermostat` definition — the same `Initialize` and `Transition` — can drive completely different runtimes:
 
 - **[MVU Runtime](02-mvu-runtime.md)** — Add a view function and render a thermostat UI
 - **[Event-Sourced Aggregate](03-event-sourced-aggregate.md)** — Persist temperature events and rebuild state

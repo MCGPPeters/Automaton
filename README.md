@@ -21,7 +21,7 @@ dotnet add package Automaton
 ```csharp
 public interface Automaton<TState, TEvent, TEffect>
 {
-    static abstract (TState State, TEffect Effect) Init();
+    static abstract (TState State, TEffect Effect) Initialize();
     static abstract (TState State, TEffect Effect) Transition(TState state, TEvent @event);
 }
 ```
@@ -47,7 +47,7 @@ public interface CounterEffect
 
 public class Counter : Automaton<CounterState, CounterEvent, CounterEffect>
 {
-    public static (CounterState, CounterEffect) Init() =>
+    public static (CounterState, CounterEffect) Initialize() =>
         (new CounterState(0), new CounterEffect.None());
 
     public static (CounterState, CounterEffect) Transition(CounterState state, CounterEvent @event) =>
@@ -142,14 +142,14 @@ public interface Decider<TState, TCommand, TEvent, TEffect, TError>
 }
 ```
 
-Together with the Automaton's `Init` and `Transition`, this gives the seven elements of the Decider pattern:
+Together with the Automaton's `Initialize` and `Transition`, this gives the seven elements of the Decider pattern:
 
 | Element | Provided by | Method |
 | ------- | ----------- | ------ |
 | Command type | Type parameter | `TCommand` |
 | Event type | Type parameter | `TEvent` |
 | State type | Type parameter | `TState` |
-| Initial state | Automaton | `Init()` |
+| Initial state | Automaton | `Initialize()` |
 | Decide | Decider | `Decide(state, command)` |
 | Evolve | Automaton | `Transition(state, event)` |
 | Is terminal | Decider | `IsTerminal(state)` |
@@ -175,7 +175,7 @@ public class Counter
                     .Ok(Enumerable.Repeat<CounterEvent>(
                         new CounterEvent.Increment(), n).ToArray()),
 
-            // ... Init and Transition remain unchanged
+            // ... Initialize and Transition remain unchanged
         };
 }
 ```
@@ -256,7 +256,7 @@ Command rejections set `automaton.result = "error"` but use `ActivityStatusCode.
 
 ```csharp
 var events = new CounterEvent[] { new Increment(), new Increment(), new Decrement() };
-var (seed, _) = Counter.Init();
+var (seed, _) = Counter.Initialize();
 
 var finalState = events.Aggregate(seed, (state, @event) =>
     Counter.Transition(state, @event).State);
@@ -281,7 +281,7 @@ MVU, Event Sourcing, and the Actor Model are all left folds over an event stream
 ```text
 ┌───────────────────────────────────────────────┐
 │             Automaton<S, E, F>                 │
-│     Init() + Transition(state, event)          │
+│     Initialize() + Transition(state, event)          │
 └───────────────────────┬───────────────────────┘
                         │
          ┌──────────────┴──────────────┐
@@ -306,7 +306,7 @@ MVU, Event Sourcing, and the Actor Model are all left folds over an event stream
 
 | Type | Purpose |
 | ---- | ------- |
-| `Automaton<TState, TEvent, TEffect>` | Mealy machine interface (Init + Transition) |
+| `Automaton<TState, TEvent, TEffect>` | Mealy machine interface (Initialize + Transition) |
 | `AutomatonRuntime<TAutomaton, TState, TEvent, TEffect>` | Thread-safe async runtime (dispatch → transition → observe → interpret) |
 | `Observer<TState, TEvent, TEffect>` | Transition observer delegate |
 | `Interpreter<TEffect, TEvent>` | Effect interpreter delegate |

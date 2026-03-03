@@ -66,7 +66,7 @@ namespace Automaton.Patterns.Saga;
 /// public class OrderFulfillment
 ///     : Saga&lt;OrderSagaState, OrderDomainEvent, FulfillmentCommand, Unit&gt;
 /// {
-///     public static (OrderSagaState, FulfillmentCommand) Init(Unit _) =&gt;
+///     public static (OrderSagaState, FulfillmentCommand) Initialize(Unit _) =&gt;
 ///         (OrderSagaState.AwaitingPayment, new FulfillmentCommand.None());
 ///
 ///     public static (OrderSagaState, FulfillmentCommand) Transition(
@@ -89,7 +89,7 @@ namespace Automaton.Patterns.Saga;
 /// <typeparam name="TState">The saga's progress state.</typeparam>
 /// <typeparam name="TEvent">Domain events the saga reacts to.</typeparam>
 /// <typeparam name="TEffect">Effects (commands) the saga produces.</typeparam>
-/// <typeparam name="TParameters">The type of parameters passed to <see cref="Automaton{TState,TEvent,TEffect,TParameters}.Init"/>.</typeparam>
+/// <typeparam name="TParameters">The type of parameters passed to <see cref="Automaton{TState,TEvent,TEffect,TParameters}.Initialize"/>.</typeparam>
 public interface Saga<TState, TEvent, TEffect, TParameters>
     : Automaton<TState, TEvent, TEffect, TParameters>
 {

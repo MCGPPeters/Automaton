@@ -80,7 +80,7 @@ public sealed class MvuRuntime<TAutomaton, TState, TEvent, TEffect, TView, TPara
         Render<TState, TView> render,
         Interpreter<TEffect, TEvent> interpreter)
     {
-        var (state, effect) = TAutomaton.Init(parameters);
+        var (state, effect) = TAutomaton.Initialize(parameters);
         var views = new List<TView>();
 
         // Observer: render the new state after each transition
@@ -96,7 +96,7 @@ public sealed class MvuRuntime<TAutomaton, TState, TEvent, TEffect, TView, TPara
         // Render initial view before effects
         views.Add(render(state));
 
-        // Interpret init effects (may produce feedback → more renders)
+        // Interpret initial effects (may produce feedback → more renders)
         await core.InterpretEffect(effect);
 
         return new MvuRuntime<TAutomaton, TState, TEvent, TEffect, TView, TParameters>(core, views);
@@ -109,7 +109,7 @@ public sealed class MvuRuntime<TAutomaton, TState, TEvent, TEffect, TView, TPara
 
 Key design decisions:
 
-1. **Render before effects** — The user sees the initial view immediately, before any async init effects complete.
+1. **Render before effects** — The user sees the initial view immediately, before any async initial effects complete.
 2. **Observer = render** — Each transition renders a new view and appends it to the history.
 3. **Delegate to `AutomatonRuntime`** — Thread safety, cancellation, and feedback depth are inherited for free.
 
@@ -247,7 +247,7 @@ await runtime.Dispatch(new CounterEvent.Increment());
 await runtime.Dispatch(new CounterEvent.Decrement());
 
 Assert.Equal(1, runtime.State.Count);
-Assert.Equal(4, runtime.Views.Count); // init + 3 dispatches
+Assert.Equal(4, runtime.Views.Count); // initialization + 3 dispatches
 Assert.Equal("Count: 0", runtime.Views[0]);
 Assert.Equal("Count: 1", runtime.Views[1]);
 Assert.Equal("Count: 2", runtime.Views[2]);

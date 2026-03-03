@@ -73,7 +73,7 @@ namespace Automaton.Patterns.EventSourcing;
 /// <typeparam name="TEvent">Events representing validated facts.</typeparam>
 /// <typeparam name="TEffect">Effects produced by transitions.</typeparam>
 /// <typeparam name="TError">Errors produced by invalid commands.</typeparam>
-/// <typeparam name="TParameters">The type of parameters passed to <see cref="Automaton{TState,TEvent,TEffect,TParameters}.Init"/>.</typeparam>
+/// <typeparam name="TParameters">The type of parameters passed to <see cref="Automaton{TState,TEvent,TEffect,TParameters}.Initialize"/>.</typeparam>
 public sealed class ResolvingAggregateRunner<TDecider, TState, TCommand, TEvent, TEffect, TError, TParameters> : IDisposable
     where TDecider : ConflictResolver<TState, TCommand, TEvent, TEffect, TError, TParameters>
 {
@@ -142,7 +142,7 @@ public sealed class ResolvingAggregateRunner<TDecider, TState, TCommand, TEvent,
     /// The stream identifier for this aggregate instance.
     /// Convention: <c>"AggregateType-{id}"</c> (e.g., <c>"Order-42"</c>).
     /// </param>
-    /// <param name="parameters">Initialization parameters passed to <see cref="Automaton{TState,TEvent,TEffect,TParameters}.Init"/>.</param>
+    /// <param name="parameters">Initialization parameters passed to <see cref="Automaton{TState,TEvent,TEffect,TParameters}.Initialize"/>.</param>
     /// <param name="threadSafe">
     /// When <c>true</c> (default), Handle calls are serialized via a semaphore.
     /// Set to <c>false</c> for single-threaded scenarios.
@@ -157,7 +157,7 @@ public sealed class ResolvingAggregateRunner<TDecider, TState, TCommand, TEvent,
         activity?.SetTag("es.aggregate.type", _deciderTypeName);
         activity?.SetTag("es.stream.id", streamId);
 
-        var (state, _) = TDecider.Init(parameters);
+        var (state, _) = TDecider.Initialize(parameters);
 
         activity?.SetStatus(ActivityStatusCode.Ok);
         return new ResolvingAggregateRunner<TDecider, TState, TCommand, TEvent, TEffect, TError, TParameters>(
@@ -173,7 +173,7 @@ public sealed class ResolvingAggregateRunner<TDecider, TState, TCommand, TEvent,
     /// </remarks>
     /// <param name="store">The event store to load events from.</param>
     /// <param name="streamId">The stream identifier for this aggregate instance.</param>
-    /// <param name="parameters">Initialization parameters passed to <see cref="Automaton{TState,TEvent,TEffect,TParameters}.Init"/>.</param>
+    /// <param name="parameters">Initialization parameters passed to <see cref="Automaton{TState,TEvent,TEffect,TParameters}.Initialize"/>.</param>
     /// <param name="threadSafe">
     /// When <c>true</c> (default), Handle calls are serialized via a semaphore.
     /// </param>
@@ -191,7 +191,7 @@ public sealed class ResolvingAggregateRunner<TDecider, TState, TCommand, TEvent,
         activity?.SetTag("es.stream.id", streamId);
 
         var storedEvents = await store.LoadAsync(streamId, cancellationToken).ConfigureAwait(false);
-        var (seed, _) = TDecider.Init(parameters);
+        var (seed, _) = TDecider.Initialize(parameters);
 
         var state = seed;
         for (var i = 0; i < storedEvents.Count; i++)
@@ -467,7 +467,7 @@ public sealed class ResolvingAggregateRunner<TDecider, TState, TCommand, TEvent,
         activity?.SetTag("es.stream.id", _streamId);
 
         var storedEvents = await _store.LoadAsync(_streamId, cancellationToken).ConfigureAwait(false);
-        var (seed, _) = TDecider.Init(_parameters);
+        var (seed, _) = TDecider.Initialize(_parameters);
 
         var state = seed;
         for (var i = 0; i < storedEvents.Count; i++)

@@ -109,7 +109,7 @@ public sealed class ActorInstance<TAutomaton, TState, TEvent, TEffect, TParamete
         string name,
         Func<TEffect, ActorRef<TEvent>, Task>? effectHandler = null)
     {
-        var (state, _) = TAutomaton.Init(default!);
+        var (state, _) = TAutomaton.Initialize(default!);
         var mailbox = Channel.CreateUnbounded<TEvent>(new UnboundedChannelOptions
         {
             SingleReader = true,

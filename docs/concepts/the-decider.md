@@ -58,7 +58,7 @@ The Decider pattern has seven elements. The Automaton provides four; the Decider
 | 1 | Command type | Type parameter | `TCommand` |
 | 2 | Event type | Type parameter | `TEvent` |
 | 3 | State type | Type parameter | `TState` |
-| 4 | Initial state | Automaton | `Init(parameters)` |
+| 4 | Initial state | Automaton | `Initialize(parameters)` |
 | 5 | Decide | **Decider** | `Decide(state, command)` |
 | 6 | Evolve | Automaton | `Transition(state, event)` |
 | 7 | Is terminal | **Decider** | `IsTerminal(state)` |
@@ -71,7 +71,7 @@ public class Counter
 {
     public const int MaxCount = 100;
 
-    public static (CounterState, CounterEffect) Init(Unit _) =>
+    public static (CounterState, CounterEffect) Initialize(Unit _) =>
         (new CounterState(0), new CounterEffect.None());
 
     public static Result<CounterEvent[], CounterError> Decide(

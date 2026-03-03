@@ -150,7 +150,7 @@ public class RuntimeTests
         var runtime = await AutomatonRuntime<Thermostat, ThermostatState, ThermostatEvent, ThermostatEffect, Unit>
             .Start(default, ThermostatObservers.NoOp, ThermostatInterpreters.NoOp);
 
-        // Thermostat.Init() produces (CurrentTemp=20, TargetTemp=22, Heating=false, Active=true), None
+        // Thermostat.Initialize() produces (CurrentTemp=20, TargetTemp=22, Heating=false, Active=true), None
         Assert.Equal(20m, runtime.State.CurrentTemp);
         Assert.Equal(22m, runtime.State.TargetTemp);
         Assert.False(runtime.State.Heating);

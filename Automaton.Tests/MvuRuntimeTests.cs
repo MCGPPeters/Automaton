@@ -57,7 +57,7 @@ public class MvuRuntimeTests
 
         Assert.Equal(23m, runtime.State.CurrentTemp);
         Assert.False(runtime.State.Heating);
-        Assert.Equal(5, runtime.Views.Count); // init + 4 dispatches
+        Assert.Equal(5, runtime.Views.Count); // initialization + 4 dispatches
         Assert.Equal("20.0°C (target: 22.0°C, heating: False)", runtime.Views[0]);
         Assert.Equal("18°C (target: 22.0°C, heating: False)", runtime.Views[1]);
         Assert.Equal("18°C (target: 22.0°C, heating: True)", runtime.Views[2]);

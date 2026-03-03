@@ -148,9 +148,9 @@ public static async ValueTask<AutomatonRuntime<TAutomaton, TState, TEvent, TEffe
     CancellationToken cancellationToken = default)
 ```
 
-Creates and starts a runtime, interpreting init effects immediately. This is the recommended way to create a runtime.
+Creates and starts a runtime, interpreting initial effects immediately. This is the recommended way to create a runtime.
 
-Calls `TAutomaton.Init(parameters)`, then interprets the init effect (which may produce feedback events and additional transitions).
+Calls `TAutomaton.Initialize(parameters)`, then interprets the initial effects (which may produce feedback events and additional transitions).
 
 ### Dispatch
 

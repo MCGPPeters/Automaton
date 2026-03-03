@@ -188,7 +188,7 @@ public static class PipelineResult
 /// </code>
 /// </example>
 /// </remarks>
-/// <typeparam name="TAutomaton">The automaton type providing Init and Transition.</typeparam>
+/// <typeparam name="TAutomaton">The automaton type providing Initialize and Transition.</typeparam>
 /// <typeparam name="TState">The state of the automaton.</typeparam>
 /// <typeparam name="TEvent">The events that drive transitions.</typeparam>
 /// <typeparam name="TEffect">The effects produced by transitions.</typeparam>
@@ -233,8 +233,8 @@ public sealed class AutomatonRuntime<TAutomaton, TState, TEvent, TEffect, TParam
     /// </summary>
     /// <remarks>
     /// Use the constructor when you need to control initialization yourself
-    /// (e.g., rendering an initial view before interpreting init effects).
-    /// Use <see cref="Start"/> for the common case where init effects should
+    /// (e.g., rendering an initial view before interpreting initial effects).
+    /// Use <see cref="Start"/> for the common case where initial effects should
     /// be interpreted immediately.
     /// </remarks>
     /// <param name="initialState">Initial state for the automaton.</param>
@@ -264,9 +264,9 @@ public sealed class AutomatonRuntime<TAutomaton, TState, TEvent, TEffect, TParam
     }
 
     /// <summary>
-    /// Creates and starts a runtime, interpreting init effects immediately.
+    /// Creates and starts a runtime, interpreting initial effects immediately.
     /// </summary>
-    /// <param name="parameters">Initialization parameters passed to the automaton's Init method.</param>
+    /// <param name="parameters">Initialization parameters passed to the automaton's Initialize method.</param>
     /// <param name="observer">Observer called after each transition.</param>
     /// <param name="interpreter">Interpreter that converts effects to feedback events.</param>
     /// <param name="threadSafe">
@@ -291,7 +291,7 @@ public sealed class AutomatonRuntime<TAutomaton, TState, TEvent, TEffect, TParam
         activity?.SetTag("automaton.type", _automatonTypeName);
         activity?.SetTag("automaton.state.type", _stateTypeName);
 
-        var (state, effect) = TAutomaton.Init(parameters);
+        var (state, effect) = TAutomaton.Initialize(parameters);
         var runtime = new AutomatonRuntime<TAutomaton, TState, TEvent, TEffect, TParameters>(state, observer, interpreter, threadSafe, trackEvents);
         await runtime.InterpretEffect(effect, cancellationToken).ConfigureAwait(false);
 
@@ -470,7 +470,7 @@ public sealed class AutomatonRuntime<TAutomaton, TState, TEvent, TEffect, TParam
     /// <para>
     /// This is an advanced API for building custom runtimes that need to control
     /// initialization order (e.g., rendering an initial view before interpreting
-    /// init effects). For normal usage, prefer <see cref="Dispatch"/> or
+    /// initial effects). For normal usage, prefer <see cref="Dispatch"/> or
     /// <see cref="Start"/>.
     /// </para>
     /// <para>
@@ -775,7 +775,7 @@ public sealed class AutomatonRuntime<TAutomaton, TState, TEvent, TEffect, TParam
     /// Delegates to the Result-returning version and throws on pipeline errors.
     /// </summary>
     /// <remarks>
-    /// This is called from <see cref="Start"/> for init effects and from the public
+    /// This is called from <see cref="Start"/> for initial effects and from the public
     /// <see cref="InterpretEffect"/>. Pipeline errors surface as exceptions because
     /// these callers have no Result return channel.
     /// </remarks>

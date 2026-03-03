@@ -117,7 +117,7 @@ public class Thermostat
     public const decimal MaxTarget = 40.0m;
     public const decimal AlertThreshold = 35.0m;
 
-    public static (ThermostatState State, ThermostatEffect Effect) Init(Unit _) =>
+    public static (ThermostatState State, ThermostatEffect Effect) Initialize(Unit _) =>
         (new ThermostatState(
             CurrentTemp: 20.0m,
             TargetTemp: 22.0m,
@@ -269,7 +269,7 @@ public static class ThermostatObservers
     /// <code>
     /// var log = new List&lt;(ThermostatState, ThermostatEvent, ThermostatEffect)&gt;();
     /// var runtime = new AutomatonRuntime&lt;Thermostat, ThermostatState, ThermostatEvent, ThermostatEffect, Unit&gt;(
-    ///     Thermostat.Init().State, ThermostatObservers.Capture(log), ThermostatInterpreters.NoOp);
+    ///     Thermostat.Initialize().State, ThermostatObservers.Capture(log), ThermostatInterpreters.NoOp);
     ///
     /// await runtime.Dispatch(new ThermostatEvent.TemperatureRecorded(18m));
     /// // log[0] == (ThermostatState { CurrentTemp = 18 }, TemperatureRecorded(18), None)
@@ -320,7 +320,7 @@ public static class ThermostatInterpreters
     /// <code>
     /// var effects = new List&lt;ThermostatEffect&gt;();
     /// var runtime = new AutomatonRuntime&lt;Thermostat, ThermostatState, ThermostatEvent, ThermostatEffect, Unit&gt;(
-    ///     Thermostat.Init().State, ThermostatObservers.NoOp, ThermostatInterpreters.Capture(effects));
+    ///     Thermostat.Initialize().State, ThermostatObservers.NoOp, ThermostatInterpreters.Capture(effects));
     ///
     /// await runtime.Dispatch(new ThermostatEvent.HeaterTurnedOn());
     /// // effects[0] is ThermostatEffect.ActivateHeater

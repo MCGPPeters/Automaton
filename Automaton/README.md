@@ -21,7 +21,7 @@ dotnet add package Automaton
 ```csharp
 public interface Automaton<TState, TEvent, TEffect>
 {
-    static abstract (TState State, TEffect Effect) Init();
+    static abstract (TState State, TEffect Effect) Initialize();
     static abstract (TState State, TEffect Effect) Transition(TState state, TEvent @event);
 }
 ```
@@ -46,7 +46,7 @@ public interface CounterEffect
 
 public class Counter : Automaton<CounterState, CounterEvent, CounterEffect>
 {
-    public static (CounterState, CounterEffect) Init() =>
+    public static (CounterState, CounterEffect) Initialize() =>
         (new CounterState(0), new CounterEffect.None());
 
     public static (CounterState, CounterEffect) Transition(CounterState state, CounterEvent @event) =>
@@ -147,7 +147,7 @@ When no listener is registered, instrumentation has near-zero overhead.
 
 | Type | Purpose |
 | ---- | ------- |
-| `Automaton<TState, TEvent, TEffect>` | Mealy machine interface (Init + Transition) |
+| `Automaton<TState, TEvent, TEffect>` | Mealy machine interface (Initialize + Transition) |
 | `AutomatonRuntime<TAutomaton, TState, TEvent, TEffect>` | Thread-safe async runtime |
 | `Observer<TState, TEvent, TEffect>` | Transition observer delegate |
 | `Interpreter<TEffect, TEvent>` | Effect interpreter delegate |

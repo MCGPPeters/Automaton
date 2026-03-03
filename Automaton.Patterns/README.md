@@ -7,7 +7,7 @@ Production-ready **Event Sourcing** and **Saga** (Process Manager) runtimes buil
 Event Sourcing persists every state change as an immutable event. The current state is reconstructed by replaying the event stream through the automaton's transition function — a left fold:
 
 ```
-state = events.Aggregate(init, transition)
+state = events.Aggregate(initial, transition)
 ```
 
 ### Components
@@ -61,7 +61,7 @@ transition : (SagaState × DomainEvent) → (SagaState × SagaEffect)
 public class OrderFulfillment
     : Saga<OrderSagaState, OrderEvent, OrderCommand, Unit>
 {
-    public static (OrderSagaState, OrderCommand) Init(Unit _) => ...;
+    public static (OrderSagaState, OrderCommand) Initialize(Unit _) => ...;
     public static (OrderSagaState, OrderCommand) Transition(
         OrderSagaState state, OrderEvent @event) => ...;
     public static bool IsTerminal(OrderSagaState state) =>

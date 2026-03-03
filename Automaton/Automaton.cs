@@ -51,7 +51,7 @@ namespace Automaton;
 ///
 /// public class Thermostat : Automaton&lt;ThermostatState, ThermostatEvent, ThermostatEffect, Unit&gt;
 /// {
-///     public static (ThermostatState, ThermostatEffect) Init(Unit _) =&gt;
+///     public static (ThermostatState, ThermostatEffect) Initialize(Unit _) =&gt;
 ///         (new ThermostatState(20.0m, 22.0m, false, true), new ThermostatEffect.None());
 ///
 ///     public static (ThermostatState, ThermostatEffect) Transition(
@@ -80,7 +80,7 @@ public interface Automaton<TState, TEvent, TEffect, TParameters>
     /// Produces the initial state and any startup effects from the given parameters.
     /// </summary>
     /// <param name="parameters">The initialization parameters. Use <c>default</c> for <see cref="Unit"/>-parameterized automata.</param>
-    static abstract (TState State, TEffect Effect) Init(TParameters parameters);
+    static abstract (TState State, TEffect Effect) Initialize(TParameters parameters);
 
     /// <summary>
     /// Pure transition function: given state and event, produce new state and effect.

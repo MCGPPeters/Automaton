@@ -101,12 +101,12 @@ These patterns aren't mutually exclusive. You can combine them:
 
 ## The Proof: Same Transition Function
 
-The same `Counter` domain definition — the same `Init` and `Transition` — drives all three patterns. Here's the proof:
+The same `Counter` domain definition — the same `Initialize` and `Transition` — drives all three patterns. Here's the proof:
 
 ```csharp
 // All three produce the same final state:
 var events = new CounterEvent[] { new Increment(), new Increment(), new Decrement() };
-var (seed, _) = Counter.Init(default);
+var (seed, _) = Counter.Initialize(default);
 
 var state = events.Aggregate(seed, (s, e) => Counter.Transition(s, e).State);
 // state.Count == 1

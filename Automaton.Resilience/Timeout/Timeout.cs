@@ -110,7 +110,7 @@ public class TimeoutAutomaton : Automaton<TimeoutState, TimeoutEvent, TimeoutEff
     /// <summary>
     /// Initializes the timeout automaton in the Running state.
     /// </summary>
-    public static (TimeoutState State, TimeoutEffect Effect) Init(TimeoutOptions parameters) =>
+    public static (TimeoutState State, TimeoutEffect Effect) Initialize(TimeoutOptions parameters) =>
         (new TimeoutState.Running(parameters.EffectiveDuration),
          new TimeoutEffect.StartTimer(parameters.EffectiveDuration));
 

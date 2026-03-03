@@ -143,9 +143,9 @@ public class CrossRuntimeTests
     [Fact]
     public void AutomatonTransition_IsALeftFold()
     {
-        // state = events.Aggregate(init, transition)
+        // state = events.Aggregate(initial, transition)
         // This IS event sourcing. This IS MVU. This IS actor state.
-        var (seed, _) = Thermostat.Init(default);
+        var (seed, _) = Thermostat.Initialize(default);
 
         var finalState = _eventScenario.Aggregate(seed, (state, @event) =>
             Thermostat.Transition(state, @event).State);

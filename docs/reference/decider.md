@@ -92,11 +92,11 @@ public static async ValueTask<DecidingRuntime<TDecider, TState, TCommand, TEvent
     CancellationToken cancellationToken = default)
 ```
 
-Creates and starts a deciding runtime, interpreting init effects immediately.
+Creates and starts a deciding runtime, interpreting initial effects immediately.
 
 | Parameter | Default | Description |
 | --------- | ------- | ----------- |
-| `parameters` | — | Initialization parameters passed to the automaton's Init method. Use `default` for `Unit`. |
+| `parameters` | — | Initialization parameters passed to the automaton's Initialize method. Use `default` for `Unit`. |
 | `observer` | — | Observer called after each transition. |
 | `interpreter` | — | Interpreter that converts effects to feedback events. |
 | `threadSafe` | `true` | When `true`, Handle calls are serialized. |

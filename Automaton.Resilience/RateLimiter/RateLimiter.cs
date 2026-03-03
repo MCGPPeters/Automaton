@@ -112,7 +112,7 @@ public class RateLimiterAutomaton : Automaton<RateLimiterState, RateLimiterEvent
     /// <summary>
     /// Initializes the rate limiter with a full token bucket.
     /// </summary>
-    public static (RateLimiterState State, RateLimiterEffect Effect) Init(RateLimiterOptions parameters) =>
+    public static (RateLimiterState State, RateLimiterEffect Effect) Initialize(RateLimiterOptions parameters) =>
         (new RateLimiterState.Available(parameters.PermitLimit, parameters.PermitLimit),
          new RateLimiterEffect.None());
 

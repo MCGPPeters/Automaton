@@ -95,7 +95,7 @@ public class Counter
     /// <summary>
     /// Initial state: count is zero, no startup effects.
     /// </summary>
-    public static (CounterState State, CounterEffect Effect) Init(Unit _) =>
+    public static (CounterState State, CounterEffect Effect) Initialize(Unit _) =>
         (new CounterState(0), new CounterEffect.None());
 
     /// <summary>

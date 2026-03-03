@@ -51,7 +51,7 @@ public interface FulfillmentCommand
 public class OrderFulfillment
     : Saga<OrderSagaState, OrderDomainEvent, FulfillmentCommand, Unit>
 {
-    public static (OrderSagaState State, FulfillmentCommand Effect) Init(Unit _) =>
+    public static (OrderSagaState State, FulfillmentCommand Effect) Initialize(Unit _) =>
         (OrderSagaState.AwaitingPayment, new FulfillmentCommand.None());
 
     public static (OrderSagaState State, FulfillmentCommand Effect) Transition(

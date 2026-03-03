@@ -135,7 +135,7 @@ public class CircuitBreakerAutomaton : Automaton<CircuitBreakerState, CircuitBre
     /// <summary>
     /// Initializes the circuit breaker in the Closed state with zero failures.
     /// </summary>
-    public static (CircuitBreakerState State, CircuitBreakerEffect Effect) Init(CircuitBreakerOptions parameters) =>
+    public static (CircuitBreakerState State, CircuitBreakerEffect Effect) Initialize(CircuitBreakerOptions parameters) =>
         (new CircuitBreakerState.Closed(0, parameters.FailureThreshold, parameters.EffectiveBreakDuration),
          new CircuitBreakerEffect.AllowCall());
 

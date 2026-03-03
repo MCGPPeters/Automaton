@@ -23,7 +23,7 @@ The runtime creates the following `Activity` spans:
 
 | Span name | Created by | Description |
 | --------- | ---------- | ----------- |
-| `Automaton.Start` | `AutomatonRuntime.Start` | Covers runtime initialization (Init + first effect interpretation). |
+| `Automaton.Start` | `AutomatonRuntime.Start` | Covers runtime initialization (Initialize + first effect interpretation). |
 | `Automaton.Dispatch` | `AutomatonRuntime.Dispatch` | Covers the full Transition → Observe → Interpret → Feedback cycle. |
 | `Automaton.InterpretEffect` | `AutomatonRuntime.InterpretEffect` | Covers interpretation of one effect. |
 | `Automaton.Decider.Start` | `DecidingRuntime.Start` | Covers Decider runtime initialization. |

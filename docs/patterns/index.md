@@ -202,7 +202,7 @@ var reloaded = await AggregateRunner<CounterDecider, CounterState,
 
 | Method | Use case |
 |--------|----------|
-| `Create(store, streamId, parameters)` | New aggregate — starts from `Init(parameters)` with version 0 |
+| `Create(store, streamId, parameters)` | New aggregate — starts from `Initialize(parameters)` with version 0 |
 | `Load(store, streamId, parameters)` | Existing aggregate — replays all stored events through `Transition` |
 
 ### Properties
@@ -281,7 +281,7 @@ public class CounterDecider
 {
     public const int MaxCount = 100;
 
-    public static (CounterState, CounterEffect) Init(Unit _) =>
+    public static (CounterState, CounterEffect) Initialize(Unit _) =>
         (new CounterState(0), new CounterEffect.None());
 
     public static Result<CounterEvent[], CounterError> Decide(
@@ -487,7 +487,7 @@ public interface FulfillmentCommand
 public class OrderFulfillment
     : Saga<OrderSagaState, OrderDomainEvent, FulfillmentCommand, Unit>
 {
-    public static (OrderSagaState, FulfillmentCommand) Init(Unit _) =>
+    public static (OrderSagaState, FulfillmentCommand) Initialize(Unit _) =>
         (OrderSagaState.AwaitingPayment, new FulfillmentCommand.None());
 
     public static (OrderSagaState, FulfillmentCommand) Transition(
@@ -548,7 +548,7 @@ var cmd2 = await saga.Handle(
 
 | Method | Description |
 |--------|-------------|
-| `Create(store, streamId, parameters)` | New saga from `Init(parameters)` |
+| `Create(store, streamId, parameters)` | New saga from `Initialize(parameters)` |
 | `Load(store, streamId, parameters)` | Reload saga by replaying its event stream |
 | `Handle(event)` | Transition + persist + return effect |
 

@@ -179,7 +179,7 @@ The self-reference is the actor model's equivalent of the **Y combinator** — i
 | `handle_cast/2` | `Transition` (fire-and-forget) |
 | `!` (send) | `Tell` |
 | Mailbox | `Channel<TEvent>` |
-| `init/1` | `Automaton.Init(parameters)` |
+| `init/1` | `Automaton.Initialize(parameters)` |
 | Supervision tree | Not yet implemented (future work) |
 
 The key difference: Erlang actors are dynamically typed (any message), while Automaton actors are statically typed (`TEvent`). This provides compile-time safety at the cost of flexibility.

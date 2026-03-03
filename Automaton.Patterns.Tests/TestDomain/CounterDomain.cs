@@ -47,7 +47,7 @@ public class CounterDecider
 {
     public const int MaxCount = 100;
 
-    public static (CounterState State, CounterEffect Effect) Init(Unit _) =>
+    public static (CounterState State, CounterEffect Effect) Initialize(Unit _) =>
         (new CounterState(0), new CounterEffect.None());
 
     public static Result<CounterEvent[], CounterError> Decide(

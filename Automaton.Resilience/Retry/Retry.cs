@@ -167,7 +167,7 @@ public class RetryAutomaton : Automaton<RetryState, RetryEvent, RetryEffect, Ret
     /// <summary>
     /// Initializes the retry automaton in the Waiting state, ready for the first attempt.
     /// </summary>
-    public static (RetryState State, RetryEffect Effect) Init(RetryOptions parameters) =>
+    public static (RetryState State, RetryEffect Effect) Initialize(RetryOptions parameters) =>
         (new RetryState.Waiting(1, parameters.MaxAttempts),
          new RetryEffect.ExecuteAttempt(1));
 
