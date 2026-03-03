@@ -27,7 +27,7 @@ public class CircuitBreakerAutomatonTests
     [Fact]
     public void Closed_success_resets_failure_counter()
     {
-        var state = new CircuitBreakerState.Closed(2, 5);
+        var state = new CircuitBreakerState.Closed(2, 5, TimeSpan.FromSeconds(30));
         var (newState, _) = CircuitBreakerAutomaton.Transition(state, new CircuitBreakerEvent.CallSucceeded());
 
         var closed = Assert.IsType<CircuitBreakerState.Closed>(newState);
@@ -41,7 +41,7 @@ public class CircuitBreakerAutomatonTests
     [Fact]
     public void Closed_failure_increments_counter()
     {
-        var state = new CircuitBreakerState.Closed(1, 5);
+        var state = new CircuitBreakerState.Closed(1, 5, TimeSpan.FromSeconds(30));
         var (newState, effect) = CircuitBreakerAutomaton.Transition(
             state, new CircuitBreakerEvent.CallFailed(new Exception("fail")));
 
@@ -57,7 +57,7 @@ public class CircuitBreakerAutomatonTests
     [Fact]
     public void Closed_failure_at_threshold_trips_to_open()
     {
-        var state = new CircuitBreakerState.Closed(2, 3);
+        var state = new CircuitBreakerState.Closed(2, 3, TimeSpan.FromSeconds(30));
         var (newState, effect) = CircuitBreakerAutomaton.Transition(
             state, new CircuitBreakerEvent.CallFailed(new Exception("fail")));
 

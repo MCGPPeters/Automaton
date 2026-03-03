@@ -69,8 +69,15 @@ public interface PipelineState<T>
 {
     /// <summary>
     /// Initial state — the pipeline has not yet started executing.
+    /// Carries the strategy and operation so that the <see cref="PipelineEvent{T}.Execute"/>
+    /// event can produce a <see cref="PipelineEffect{T}.RunPipeline"/> effect as a fallback
+    /// when the initial effect from <c>Initialize</c> was not interpreted.
     /// </summary>
-    sealed record Pending : PipelineState<T>;
+    /// <param name="Strategy">The composed resilience strategy delegate.</param>
+    /// <param name="Operation">The user's operation to protect.</param>
+    sealed record Pending(
+        ResilienceStrategy<T>? Strategy = null,
+        Func<CancellationToken, ValueTask<T>>? Operation = null) : PipelineState<T>;
 
     /// <summary>
     /// The composed strategy is running the operation.
@@ -187,10 +194,14 @@ public sealed record PipelineParameters<T>(
 /// </para>
 /// <para>
 /// The <see cref="ResilienceStrategyExtensions.Execute{T}"/> method is the
-/// specialized runtime for this automaton — it creates the
+/// specialized runtime for this automaton — it creates and starts an
 /// <see cref="AutomatonRuntime{TAutomaton,TState,TEvent,TEffect,TParameters}"/>,
-/// dispatches the <see cref="PipelineEvent{T}.Execute"/> event, and extracts the
-/// terminal state.
+/// allowing the <see cref="Init(PipelineParameters{T})"/> effect
+/// <see cref="PipelineEffect{T}.RunPipeline"/> to be interpreted immediately and
+/// the pipeline to begin executing without an explicit
+/// <see cref="PipelineEvent{T}.Execute"/> dispatch. The <c>Execute</c> event
+/// remains available as a fallback trigger if an interpreter chooses not to
+/// interpret the initial effect.
 /// </para>
 /// </remarks>
 /// <typeparam name="T">The return type of the operation.</typeparam>
@@ -203,7 +214,7 @@ public sealed class PipelineAutomaton<T>
     /// so the interpreter starts execution without an extra dispatch.
     /// </summary>
     public static (PipelineState<T> State, PipelineEffect<T> Effect) Init(PipelineParameters<T> parameters) =>
-        (new PipelineState<T>.Pending(),
+        (new PipelineState<T>.Pending(parameters.Strategy, parameters.Operation),
          new PipelineEffect<T>.RunPipeline(parameters.Strategy, parameters.Operation));
 
     /// <summary>
@@ -218,6 +229,10 @@ public sealed class PipelineAutomaton<T>
                 (state, new PipelineEffect<T>.None()),
 
             // Pending → Execute triggers the pipeline (fallback if Init effect wasn't interpreted)
+            (PipelineState<T>.Pending { Strategy: not null, Operation: not null } p, PipelineEvent<T>.Execute) =>
+                (new PipelineState<T>.Executing(),
+                 new PipelineEffect<T>.RunPipeline(p.Strategy, p.Operation)),
+
             (PipelineState<T>.Pending, PipelineEvent<T>.Execute) =>
                 (new PipelineState<T>.Executing(), new PipelineEffect<T>.None()),
 

@@ -27,8 +27,8 @@ public static class RetryInterpreterExtensions
     /// the retry boundary.
     /// </para>
     /// <para>
-    /// Only <see cref="PipelineError"/>s with a non-null <see cref="PipelineError.Exception"/>
-    /// are considered retryable by default. Override this via <see cref="RetryOptions.ShouldRetry"/>.
+    /// By default, all exceptions trigger retries. To limit retries to specific
+    /// exception types, provide a <see cref="RetryOptions.ShouldRetry"/> predicate.
     /// </para>
     /// </remarks>
     /// <example>
@@ -64,7 +64,7 @@ public static class RetryInterpreterExtensions
                         Result<TEvent[], PipelineError>.Ok(r.Value))
                     : new ValueTask<Result<TEvent[], PipelineError>>(
                         Result<TEvent[], PipelineError>.Err(
-                            new PipelineError(r.Error.Message, "Retry", r.Error.Exception)));
+                            UnwrapPipelineError(r.Error)));
             }
 
             return AwaitRetryResult(result);
@@ -79,8 +79,18 @@ public static class RetryInterpreterExtensions
         return r.IsOk
             ? Result<TEvent[], PipelineError>.Ok(r.Value)
             : Result<TEvent[], PipelineError>.Err(
-                new PipelineError(r.Error.Message, "Retry", r.Error.Exception));
+                UnwrapPipelineError(r.Error));
     }
+
+    /// <summary>
+    /// Unwraps a <see cref="PipelineErrorException"/> if present in the
+    /// <see cref="ResilienceError.Exception"/>, preserving the original
+    /// <see cref="PipelineError"/> source and inner exception.
+    /// </summary>
+    private static PipelineError UnwrapPipelineError(ResilienceError error) =>
+        error.Exception is PipelineErrorException pex
+            ? pex.PipelineError
+            : new PipelineError(error.Message, "Retry", error.Exception);
 }
 
 /// <summary>

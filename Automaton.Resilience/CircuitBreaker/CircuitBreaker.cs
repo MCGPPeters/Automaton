@@ -45,7 +45,7 @@ namespace Automaton.Resilience.CircuitBreaker;
 public interface CircuitBreakerState
 {
     /// <summary>Circuit is closed — normal operation. Tracks consecutive failures.</summary>
-    record Closed(int ConsecutiveFailures, int FailureThreshold) : CircuitBreakerState;
+    record Closed(int ConsecutiveFailures, int FailureThreshold, TimeSpan BreakDuration) : CircuitBreakerState;
 
     /// <summary>Circuit is open — calls are rejected. Break timer is running.</summary>
     record Open(int FailureThreshold, TimeSpan BreakDuration, DateTimeOffset OpenedAt) : CircuitBreakerState;
@@ -136,7 +136,7 @@ public class CircuitBreakerAutomaton : Automaton<CircuitBreakerState, CircuitBre
     /// Initializes the circuit breaker in the Closed state with zero failures.
     /// </summary>
     public static (CircuitBreakerState State, CircuitBreakerEffect Effect) Init(CircuitBreakerOptions parameters) =>
-        (new CircuitBreakerState.Closed(0, parameters.FailureThreshold),
+        (new CircuitBreakerState.Closed(0, parameters.FailureThreshold, parameters.EffectiveBreakDuration),
          new CircuitBreakerEffect.AllowCall());
 
     /// <summary>
@@ -150,17 +150,17 @@ public class CircuitBreakerAutomaton : Automaton<CircuitBreakerState, CircuitBre
 
             // Success resets the failure counter
             (CircuitBreakerState.Closed s, CircuitBreakerEvent.CallSucceeded) =>
-                (new CircuitBreakerState.Closed(0, s.FailureThreshold),
+                (new CircuitBreakerState.Closed(0, s.FailureThreshold, s.BreakDuration),
                  new CircuitBreakerEffect.None()),
 
             // Failure increments counter — trip if threshold reached
             (CircuitBreakerState.Closed s, CircuitBreakerEvent.CallFailed) when s.ConsecutiveFailures + 1 >= s.FailureThreshold =>
-                (new CircuitBreakerState.Open(s.FailureThreshold, TimeSpan.FromSeconds(30), DateTimeOffset.UtcNow),
-                 new CircuitBreakerEffect.TripCircuit(TimeSpan.FromSeconds(30))),
+                (new CircuitBreakerState.Open(s.FailureThreshold, s.BreakDuration, DateTimeOffset.UtcNow),
+                 new CircuitBreakerEffect.TripCircuit(s.BreakDuration)),
 
             // Failure below threshold — increment and continue
             (CircuitBreakerState.Closed s, CircuitBreakerEvent.CallFailed) =>
-                (new CircuitBreakerState.Closed(s.ConsecutiveFailures + 1, s.FailureThreshold),
+                (new CircuitBreakerState.Closed(s.ConsecutiveFailures + 1, s.FailureThreshold, s.BreakDuration),
                  new CircuitBreakerEffect.None()),
 
             // ── Open state ──
@@ -178,7 +178,7 @@ public class CircuitBreakerAutomaton : Automaton<CircuitBreakerState, CircuitBre
 
             // Probe succeeded — reset to closed
             (CircuitBreakerState.HalfOpen s, CircuitBreakerEvent.CallSucceeded) =>
-                (new CircuitBreakerState.Closed(0, s.FailureThreshold),
+                (new CircuitBreakerState.Closed(0, s.FailureThreshold, s.BreakDuration),
                  new CircuitBreakerEffect.ResetCircuit()),
 
             // Probe failed — back to open
@@ -230,7 +230,7 @@ public sealed class CircuitBreaker : IDisposable
     public CircuitBreaker(CircuitBreakerOptions? options = null)
     {
         _options = options ?? new CircuitBreakerOptions();
-        _state = new CircuitBreakerState.Closed(0, _options.FailureThreshold);
+        _state = new CircuitBreakerState.Closed(0, _options.FailureThreshold, _options.EffectiveBreakDuration);
     }
 
     /// <summary>
@@ -251,7 +251,20 @@ public sealed class CircuitBreaker : IDisposable
     {
         using var activity = ResilienceDiagnostics.Source.StartActivity("CircuitBreaker.Execute");
 
-        await _gate.WaitAsync(cancellationToken).ConfigureAwait(false);
+        try
+        {
+            await _gate.WaitAsync(cancellationToken).ConfigureAwait(false);
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            activity?.SetStatus(ActivityStatusCode.Error, "Cancelled");
+
+            return Result<T, ResilienceError>.Err(new ResilienceError(
+                "The operation was cancelled while waiting to enter the circuit breaker.",
+                "CircuitBreaker",
+                FailureReason.Cancelled));
+        }
+
         try
         {
             // Check if circuit is open
@@ -301,7 +314,7 @@ public sealed class CircuitBreaker : IDisposable
             await _gate.WaitAsync(cancellationToken).ConfigureAwait(false);
             try
             {
-                _state = new CircuitBreakerState.Closed(0, _options.FailureThreshold);
+                _state = new CircuitBreakerState.Closed(0, _options.FailureThreshold, _options.EffectiveBreakDuration);
             }
             finally
             {
@@ -346,7 +359,7 @@ public sealed class CircuitBreaker : IDisposable
                         Trip(),
 
                     CircuitBreakerState.Closed closed =>
-                        new CircuitBreakerState.Closed(closed.ConsecutiveFailures + 1, _options.FailureThreshold),
+                        new CircuitBreakerState.Closed(closed.ConsecutiveFailures + 1, _options.FailureThreshold, _options.EffectiveBreakDuration),
 
                     CircuitBreakerState.HalfOpen =>
                         Trip(),
@@ -378,7 +391,7 @@ public sealed class CircuitBreaker : IDisposable
         await _gate.WaitAsync(cancellationToken).ConfigureAwait(false);
         try
         {
-            _state = new CircuitBreakerState.Closed(0, _options.FailureThreshold);
+            _state = new CircuitBreakerState.Closed(0, _options.FailureThreshold, _options.EffectiveBreakDuration);
         }
         finally
         {
