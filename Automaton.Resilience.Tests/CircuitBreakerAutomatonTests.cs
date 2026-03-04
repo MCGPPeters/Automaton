@@ -9,7 +9,7 @@ public class CircuitBreakerAutomatonTests
     // =========================================================================
 
     [Fact]
-    public void Init_produces_closed_state_with_zero_failures()
+    public void Initialize_produces_closed_state_with_zero_failures()
     {
         var (state, effect) = CircuitBreakerAutomaton.Initialize(new CircuitBreakerOptions(FailureThreshold: 3));
 

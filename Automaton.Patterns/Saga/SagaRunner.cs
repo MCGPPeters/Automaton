@@ -214,7 +214,7 @@ public sealed class SagaRunner<TSaga, TState, TEvent, TEffect, TParameters> : ID
     /// </para>
     /// <para>
     /// If the saga has reached a terminal state, the event is ignored and the
-    /// initial effects is returned (typically a no-op).
+    /// initial effect is returned (typically a no-op).
     /// </para>
     /// </remarks>
     /// <param name="event">The domain event to handle.</param>

@@ -33,7 +33,7 @@ static abstract (TState State, TEffect Effect) Initialize(TParameters parameters
 
 Produces the initial state and any startup effect from the given parameters.
 
-Called once when the runtime starts. The initial effects is interpreted immediately by the runtime's Interpreter, which may produce feedback events that trigger additional transitions. Use `Unit` as `TParameters` for automata that require no initialization parameters.
+Called once when the runtime starts. The initial effect is interpreted immediately by the runtime's Interpreter, which may produce feedback events that trigger additional transitions. Use `Unit` as `TParameters` for automata that require no initialization parameters.
 
 **Parameters:**
 

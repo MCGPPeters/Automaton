@@ -9,7 +9,7 @@ namespace Automaton.Resilience.Tests;
 public class PipelineAutomatonTests
 {
     [Fact]
-    public void Init_returns_pending_state_with_run_pipeline_effect()
+    public void Initialize_returns_pending_state_with_run_pipeline_effect()
     {
         ResilienceStrategy<int> strategy = (op, ct) => throw new NotImplementedException();
         Func<CancellationToken, ValueTask<int>> operation = _ => ValueTask.FromResult(42);
