@@ -9,7 +9,7 @@ public class RetryAutomatonTests
     // =========================================================================
 
     [Fact]
-    public void Init_produces_waiting_state_and_execute_effect()
+    public void Initialize_produces_waiting_state_and_execute_effect()
     {
         var (state, effect) = RetryAutomaton.Initialize(new RetryOptions(MaxAttempts: 3));
 

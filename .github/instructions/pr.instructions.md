@@ -115,7 +115,7 @@ Fixes #33
 When creating a pull request, it's important to label it appropriately. Labels help categorize the PR and make it easier for reviewers to understand its purpose. Here are some common labels to consider:
 
 - **Type**: Indicates the nature of the changes (e.g., `bug`, `feature`, `documentation`)
-- **Performance**: Indicates changes that improve performance OR could effect performance (e.g., `performance`, `optimization`)
+- **Performance**: Indicates changes that improve performance OR could affect performance (e.g., `performance`, `optimization`)
 
 ## PR Title Guidelines
 

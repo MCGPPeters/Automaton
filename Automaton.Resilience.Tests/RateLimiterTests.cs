@@ -121,7 +121,7 @@ public sealed class RateLimiterTests : IDisposable
 public class RateLimiterAutomatonTests
 {
     [Fact]
-    public void Init_starts_with_full_bucket()
+    public void Initialize_starts_with_full_bucket()
     {
         var (state, effect) = RateLimiterAutomaton.Initialize(new RateLimiterOptions(PermitLimit: 10));
 

@@ -8,7 +8,7 @@ The Conduit application is a real-world example of a web application built to sh
 
 ## Specification
 
-All specifications for the Conduit application can be found at the web stie : https://docs.realworld.show/ . The implementation of the showcase app MUST follow these specifications. 
+All specifications for the Conduit application can be found at the website: https://docs.realworld.show/ . The implementation of the showcase app MUST follow these specifications. 
 
 ## Testing
 

@@ -9,7 +9,7 @@ public class TimeoutAutomatonTests
     // =========================================================================
 
     [Fact]
-    public void Init_produces_running_state_and_start_timer_effect()
+    public void Initialize_produces_running_state_and_start_timer_effect()
     {
         var (state, effect) = TimeoutAutomaton.Initialize(new TimeoutOptions(Duration: TimeSpan.FromSeconds(5)));
 
