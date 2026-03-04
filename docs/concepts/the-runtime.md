@@ -240,10 +240,11 @@ Every specialized runtime in the library is just `AutomatonRuntime` with specifi
 | **Event Sourcing** | Append event to store | No-op (empty) |
 | **Actor** | No-op (state is internal) | Execute effect with self-reference |
 
-See [Runtimes Compared](runtimes-compared.md) for a detailed comparison, or [Building Custom Runtimes](../guides/building-custom-runtimes.md) to create your own.
+See [Runtimes Compared](runtimes-compared.md) for a detailed comparison, [Building Custom Runtimes](../guides/building-custom-runtimes.md) to create your own, or [Composition](composition.md) to combine multiple automata into a single runtime.
 
 ## Next
 
 - [**The Decider**](the-decider.md) — adding command validation before transitions
+- [**Composition**](composition.md) — combining multiple automata into one runtime
 - [**Runtimes Compared**](runtimes-compared.md) — choosing the right runtime pattern
 - [**API Reference: Runtime**](../reference/runtime.md) — complete method documentation

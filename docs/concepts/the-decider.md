@@ -251,5 +251,6 @@ The Kleisli composition lets you chain multiple Decide-like operations while aut
 ## Next
 
 - [**Runtimes Compared**](runtimes-compared.md) — when to use each pattern
+- [**Composition**](composition.md) — combining Deciders with UI or Actor automata
 - [**Tutorial 05**](../tutorials/05-command-validation.md) — full walkthrough of command validation
 - [**API Reference: Decider**](../reference/decider.md) — complete method documentation

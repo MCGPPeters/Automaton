@@ -12,6 +12,14 @@ A deterministic state machine with effects. Given a current state and an event, 
 
 A request representing user intent — "I want to add 5 to the counter." Commands are validated by the [Decider](#decider) before producing events. Commands can be rejected; events cannot.
 
+### Composed Automaton
+
+An automaton whose `Transition` function delegates to multiple sub-automata. Its state is a [product type](#product-state) of the sub-automaton states, and its events are a sum type encompassing all sub-automaton events. The composed automaton is the behavioral composition root — analogous to `static void Main` for the object graph. See [Composition](composition.md).
+
+### Composition
+
+The technique of combining multiple automata into a single automaton that runs in one runtime. Uses product state (Cartesian product of sub-states) and sum events (union of sub-event types). The composed `Transition` function routes events to the appropriate sub-automaton. See [Composition](composition.md).
+
 ### Decide
 
 A pure function that validates a command against the current state. Returns either a list of events (accepted) or an error (rejected). The core of the [Decider pattern](#decider-pattern).
@@ -27,6 +35,10 @@ A pattern for command validation in event-driven systems, formalized by Jérémi
 ### DecidingRuntime
 
 A runtime wrapper that adds `Handle(command)` on top of `AutomatonRuntime`. It calls `Decide` first, then dispatches the resulting events atomically. See [API Reference: Decider](../reference/decider.md).
+
+### Delegation Pattern
+
+In [composition](#composition), the technique where a composed automaton's `Transition` function pattern-matches on event type and forwards each event to the appropriate sub-automaton's transition function. The result is a new [product state](#product-state) with only the targeted slice updated. See [Composition](composition.md).
 
 ### Dispatch
 
@@ -100,6 +112,10 @@ Combining multiple observers into one using monadic combinators. `Then` runs seq
 
 A static class with a pre-allocated `Ok` value: `PipelineResult.Ok` returns `ValueTask<Result<Unit, PipelineError>>` wrapping `Result.Ok(Unit.Value)`. Use this in observer implementations instead of constructing a new Result — it's the zero-alloc fast path.
 
+### Product State
+
+The state of a [composed automaton](#composed-automaton), formed as the Cartesian product of each sub-automaton's state: `AppState = (UiModel × DomainState)`. Each sub-automaton reads and writes its own slice of the product; the composed `Transition` coordinates both. Preserves separation of concerns at the data level. See [Composition](composition.md).
+
 ### Projection
 
 A read model built by folding events through a different accumulator than the aggregate state. Projections answer questions the aggregate state can't — e.g., "how many times has the heater cycled on and off?" while the state only knows the current heating status.
@@ -123,6 +139,10 @@ The component that executes the automaton's transition function in a loop. Handl
 ### State
 
 What the automaton remembers between transitions. Represented as an immutable record. The `with` expression creates modified copies. State is the first element of the tuple returned by `Initialize()` and `Transition()`.
+
+### Sum Events
+
+In a [composed automaton](#composed-automaton), events from different sub-automata flow through the same dispatch channel. All sub-event types implement a common event interface (the sum type), and the composed `Transition` pattern-matches on event type to route to the correct sub-automaton. See [Composition](composition.md).
 
 ### Tell
 

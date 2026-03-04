@@ -52,6 +52,7 @@ Getting Started (01)
 | If you want to… | Read |
 | ---------------- | ---- |
 | Understand the theory | [Concepts](../concepts/index.md) |
+| Combine multiple automata | [Composition](../concepts/composition.md) |
 | Solve a specific problem | [How-To Guides](../guides/index.md) |
 | Look up an API | [Reference](../reference/index.md) |
 | See design rationale | [Architecture Decision Records](../adr/) |

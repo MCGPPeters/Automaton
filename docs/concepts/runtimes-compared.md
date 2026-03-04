@@ -99,6 +99,8 @@ These patterns aren't mutually exclusive. You can combine them:
 
 - **Event Sourcing + Projections** — The aggregate handles commands and stores events. Projections (read models) build optimized query views from the same event stream.
 
+For a formal approach to combining multiple automata — product state, sum events, and delegation — see [Composition](composition.md).
+
 ## The Proof: Same Transition Function
 
 The same `Counter` domain definition — the same `Initialize` and `Transition` — drives all three patterns. Here's the proof:
@@ -130,6 +132,7 @@ The transition function doesn't know or care. It's the same fold.
 
 ## Next
 
+- [**Composition**](composition.md) — combining multiple automata into one
 - [**Tutorial 01**](../tutorials/01-getting-started.md) — build a thermostat with the core runtime
 - [**Tutorial 02**](../tutorials/02-mvu-runtime.md) — build an MVU runtime
 - [**Tutorial 03**](../tutorials/03-event-sourced-aggregate.md) — build an event-sourced aggregate

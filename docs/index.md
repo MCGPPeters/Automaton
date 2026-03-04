@@ -32,6 +32,7 @@ Understand the ideas behind the library.
 - [**The Runtime**](concepts/the-runtime.md) — Observer, Interpreter, and the monadic fold
 - [**The Decider**](concepts/the-decider.md) — Command validation with Result
 - [**Runtimes Compared**](concepts/runtimes-compared.md) — MVU vs ES vs Actor
+- [**Composition**](concepts/composition.md) — Combining multiple automata
 - [**Glossary**](concepts/glossary.md) — Key terms defined
 
 </td>
