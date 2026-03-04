@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1772521847832,
+  "lastUpdate": 1772608922351,
   "repoUrl": "https://github.com/MCGPPeters/Automaton",
   "entries": {
     "Automaton Benchmarks": [
@@ -114,6 +114,120 @@ window.BENCHMARK_DATA = {
             "value": 3267.269230769231,
             "unit": "ns",
             "range": "± 56.70266578999886"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "me@mauricepeters.dev",
+            "name": "MCGPPeters",
+            "username": "MCGPPeters"
+          },
+          "committer": {
+            "email": "MCGPPeters@users.noreply.github.com",
+            "name": "Maurice CGP Peters",
+            "username": "MCGPPeters"
+          },
+          "distinct": true,
+          "id": "10e50fb402565a0bc9d60718596d610f7e7e417f",
+          "message": "fix: resolve Copilot review comments on PR #12\n\n- Replace unused 'effect' variables with discards in RetryAutomatonTests\n- Add MaxAttempts validation (ArgumentOutOfRangeException) in Retry\n- Use FailureReason.Unknown for non-retryable exceptions instead of RetriesExhausted\n- Catch OperationCanceledException during backoff delay, return Cancelled result\n- Make CircuitBreaker BreakDuration configurable via Closed state (remove hardcoded 30s)\n- Catch OperationCanceledException on CircuitBreaker gate wait\n- Catch OperationCanceledException on RateLimiter gate wait\n- Observe remaining tasks in Hedging to prevent UnobservedTaskException\n- Add attempt validation in Backoff.Compute\n- Update Pipeline docs to reflect Init-based startup\n- Make Pending state carry Strategy/Operation for correct Execute dispatch\n- Update WithRetry docs to reflect actual default ShouldRetry behavior\n- Add UnwrapPipelineError helper in RetryInterpreterExtensions\n- Update tests for new Closed(BreakDuration) parameter and cancellation behavior",
+          "timestamp": "2026-03-04T08:21:21+01:00",
+          "tree_id": "85368fd0266d1a49ba626ec6832cd5f7327a2922",
+          "url": "https://github.com/MCGPPeters/Automaton/commit/10e50fb402565a0bc9d60718596d610f7e7e417f"
+        },
+        "date": 1772608922105,
+        "tool": "benchmarkdotnet",
+        "benches": [
+          {
+            "name": "Automaton.Benchmarks.AutomatonBenchmarks.Dispatch_Single",
+            "value": 5834.111111111111,
+            "unit": "ns",
+            "range": "± 146.11937515220833"
+          },
+          {
+            "name": "Automaton.Benchmarks.AutomatonBenchmarks.Dispatch_WithObserver",
+            "value": 6156.931818181818,
+            "unit": "ns",
+            "range": "± 403.2434818352719"
+          },
+          {
+            "name": "Automaton.Benchmarks.AutomatonBenchmarks.Dispatch_Batch_100",
+            "value": 34079.07142857143,
+            "unit": "ns",
+            "range": "± 399.5598471175143"
+          },
+          {
+            "name": "Automaton.Benchmarks.AutomatonBenchmarks.Dispatch_WithFeedback",
+            "value": 8052.9,
+            "unit": "ns",
+            "range": "± 351.5791676295841"
+          },
+          {
+            "name": "Automaton.Benchmarks.AutomatonBenchmarks.Dispatch_ComposedObserver",
+            "value": 6176.5625,
+            "unit": "ns",
+            "range": "± 197.52499841792178"
+          },
+          {
+            "name": "Automaton.Benchmarks.AutomatonBenchmarks.Handle_Accept",
+            "value": 6774.780821917808,
+            "unit": "ns",
+            "range": "± 338.33950103472426"
+          },
+          {
+            "name": "Automaton.Benchmarks.AutomatonBenchmarks.Handle_Reject",
+            "value": 3772.8133333333335,
+            "unit": "ns",
+            "range": "± 200.3214102071653"
+          },
+          {
+            "name": "Automaton.Benchmarks.AutomatonBenchmarks.Safe_NoTrack_Dispatch_Single",
+            "value": 4853.579545454545,
+            "unit": "ns",
+            "range": "± 279.7760895188467"
+          },
+          {
+            "name": "Automaton.Benchmarks.AutomatonBenchmarks.Safe_NoTrack_Dispatch_WithFeedback",
+            "value": 6695.617647058823,
+            "unit": "ns",
+            "range": "± 219.1942565474443"
+          },
+          {
+            "name": "Automaton.Benchmarks.AutomatonBenchmarks.Safe_NoTrack_Handle_Accept",
+            "value": 5937.673469387755,
+            "unit": "ns",
+            "range": "± 244.0429767270427"
+          },
+          {
+            "name": "Automaton.Benchmarks.AutomatonBenchmarks.Safe_NoTrack_Handle_Reject",
+            "value": 3697.6475409836066,
+            "unit": "ns",
+            "range": "± 177.33948949830415"
+          },
+          {
+            "name": "Automaton.Benchmarks.AutomatonBenchmarks.Lean_Dispatch_Single",
+            "value": 4325.576271186441,
+            "unit": "ns",
+            "range": "± 199.1947758792393"
+          },
+          {
+            "name": "Automaton.Benchmarks.AutomatonBenchmarks.Lean_Dispatch_WithFeedback",
+            "value": 6238.895833333333,
+            "unit": "ns",
+            "range": "± 252.12313266501883"
+          },
+          {
+            "name": "Automaton.Benchmarks.AutomatonBenchmarks.Lean_Handle_Accept",
+            "value": 5545.757575757576,
+            "unit": "ns",
+            "range": "± 268.67641736746685"
+          },
+          {
+            "name": "Automaton.Benchmarks.AutomatonBenchmarks.Lean_Handle_Reject",
+            "value": 3206.16,
+            "unit": "ns",
+            "range": "± 138.34493419105206"
           }
         ]
       }
