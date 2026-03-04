@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1772608922351,
+  "lastUpdate": 1772622955783,
   "repoUrl": "https://github.com/MCGPPeters/Automaton",
   "entries": {
     "Automaton Benchmarks": [
@@ -228,6 +228,120 @@ window.BENCHMARK_DATA = {
             "value": 3206.16,
             "unit": "ns",
             "range": "± 138.34493419105206"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "me@mauricepeters.dev",
+            "name": "MCGPPeters",
+            "username": "MCGPPeters"
+          },
+          "committer": {
+            "email": "MCGPPeters@users.noreply.github.com",
+            "name": "Maurice CGP Peters",
+            "username": "MCGPPeters"
+          },
+          "distinct": true,
+          "id": "e164d8cc498aad53251d0743cc14d8aa1502f215",
+          "message": "fix: resolve Copilot review comments on PR #13\n\n- Fix grammar: 'initial effects is' → 'initial effect is' (automaton.md, SagaRunner.cs)\n- Fix typo: 'web stie' → 'website' (conduit.instructions.md)\n- Fix typo: 'could effect' → 'could affect' (pr.instructions.md)\n- Rename test methods: Init_ → Initialize_ (5 resilience test files)",
+          "timestamp": "2026-03-04T12:15:11+01:00",
+          "tree_id": "9b5288536f5dad0b43b28d8efd8647ace39bd7f0",
+          "url": "https://github.com/MCGPPeters/Automaton/commit/e164d8cc498aad53251d0743cc14d8aa1502f215"
+        },
+        "date": 1772622955310,
+        "tool": "benchmarkdotnet",
+        "benches": [
+          {
+            "name": "Automaton.Benchmarks.AutomatonBenchmarks.Dispatch_Single",
+            "value": 6210.2307692307695,
+            "unit": "ns",
+            "range": "± 174.41847555630287"
+          },
+          {
+            "name": "Automaton.Benchmarks.AutomatonBenchmarks.Dispatch_WithObserver",
+            "value": 6167.340909090909,
+            "unit": "ns",
+            "range": "± 237.3145242158716"
+          },
+          {
+            "name": "Automaton.Benchmarks.AutomatonBenchmarks.Dispatch_Batch_100",
+            "value": 38458.5,
+            "unit": "ns",
+            "range": "± 668.5585815192838"
+          },
+          {
+            "name": "Automaton.Benchmarks.AutomatonBenchmarks.Dispatch_WithFeedback",
+            "value": 9232.75,
+            "unit": "ns",
+            "range": "± 245.9298680518493"
+          },
+          {
+            "name": "Automaton.Benchmarks.AutomatonBenchmarks.Dispatch_ComposedObserver",
+            "value": 7168.784946236559,
+            "unit": "ns",
+            "range": "± 504.08090813363884"
+          },
+          {
+            "name": "Automaton.Benchmarks.AutomatonBenchmarks.Handle_Accept",
+            "value": 6630.777777777777,
+            "unit": "ns",
+            "range": "± 143.59237877349227"
+          },
+          {
+            "name": "Automaton.Benchmarks.AutomatonBenchmarks.Handle_Reject",
+            "value": 4662.789855072464,
+            "unit": "ns",
+            "range": "± 237.04331333232523"
+          },
+          {
+            "name": "Automaton.Benchmarks.AutomatonBenchmarks.Safe_NoTrack_Dispatch_Single",
+            "value": 4744.474358974359,
+            "unit": "ns",
+            "range": "± 175.13776339596618"
+          },
+          {
+            "name": "Automaton.Benchmarks.AutomatonBenchmarks.Safe_NoTrack_Dispatch_WithFeedback",
+            "value": 6856.428571428572,
+            "unit": "ns",
+            "range": "± 77.02693263819059"
+          },
+          {
+            "name": "Automaton.Benchmarks.AutomatonBenchmarks.Safe_NoTrack_Handle_Accept",
+            "value": 6618.40625,
+            "unit": "ns",
+            "range": "± 717.9936970567067"
+          },
+          {
+            "name": "Automaton.Benchmarks.AutomatonBenchmarks.Safe_NoTrack_Handle_Reject",
+            "value": 3817.189189189189,
+            "unit": "ns",
+            "range": "± 133.92697799709896"
+          },
+          {
+            "name": "Automaton.Benchmarks.AutomatonBenchmarks.Lean_Dispatch_Single",
+            "value": 4347.868421052632,
+            "unit": "ns",
+            "range": "± 185.79247558758237"
+          },
+          {
+            "name": "Automaton.Benchmarks.AutomatonBenchmarks.Lean_Dispatch_WithFeedback",
+            "value": 7280.833333333333,
+            "unit": "ns",
+            "range": "± 345.47641947064403"
+          },
+          {
+            "name": "Automaton.Benchmarks.AutomatonBenchmarks.Lean_Handle_Accept",
+            "value": 5796.938144329897,
+            "unit": "ns",
+            "range": "± 560.1265819443739"
+          },
+          {
+            "name": "Automaton.Benchmarks.AutomatonBenchmarks.Lean_Handle_Reject",
+            "value": 3401.4848484848485,
+            "unit": "ns",
+            "range": "± 387.97294676452674"
           }
         ]
       }
