@@ -57,7 +57,7 @@ Run each automaton in its own `AutomatonRuntime` and bridge them:
 ```
 
 **Problems:**
-- Two runtimes to manage, coordinate, and lifecycle
+- Two runtimes to manage, coordinate, and handle lifecycle
 - State synchronization between runtimes (operational complexity)
 - Event ordering across runtimes is non-trivial
 - Two sets of semaphores, two dispatch loops
@@ -146,20 +146,25 @@ The composed `Transition` pattern-matches on event type to route to the correct 
 Inside the composed `Transition`, the domain Decider is called as a **pure function** — not through a runtime, not through a message bus, just a direct function call:
 
 ```csharp
-public static (AppState, AppEffect) Transition(AppState state, AppEvent @event) =>
-    @event switch
+public static (AppState, AppEffect) Transition(AppState state, AppEvent @event)
+{
+    switch (@event)
     {
         // Domain event: delegate to Decider.Transition, then update UI
-        UserAuthenticated(var user) =>
-            let (domain', effect) = DomainDecider.Transition(state.Domain, @event)
-            in (state with { Domain = domain', Ui = SetUser(state.Ui, user) }, effect),
+        case UserAuthenticated(var user):
+        {
+            var (domainPrime, effect) = DomainDecider.Transition(state.Domain, @event);
+            return (state with { Domain = domainPrime, Ui = SetUser(state.Ui, user) }, effect);
+        }
 
         // UI-only event: only update UI state
-        UrlChanged(var url) =>
-            (state with { Ui = Navigate(state.Ui, url) }, new AppEffect.None()),
+        case UrlChanged(var url):
+            return (state with { Ui = Navigate(state.Ui, url) }, new AppEffect.None());
 
-        _ => (state, new AppEffect.None())
-    };
+        default:
+            return (state, new AppEffect.None());
+    }
+}
 ```
 
 The Decider doesn't know it's being composed. It doesn't know about the UI. It's just a pure function being called from within another pure function. This is what makes it portable across runtimes.
@@ -169,17 +174,27 @@ The Decider doesn't know it's being composed. It doesn't know about the UI. It's
 Commands from the UI (e.g., "user clicked login") need to reach the domain Decider. The composed automaton's **interpreter** handles this:
 
 ```csharp
-Interpreter = async (effect) =>
+// Interpreter<AppEffect, AppEvent> : AppEffect → ValueTask<Result<AppEvent[], PipelineError>>
+Interpreter = async effect =>
 {
     if (effect is Execute(var command))
     {
         var result = DomainDecider.Decide(currentState.Domain, command);
         if (result.IsOk)
-            return result.Value;  // events fed back through Transition
+        {
+            // Domain produced events; feed them back through Transition
+            return Result<AppEvent[], PipelineError>.Ok(result.Value);
+        }
         else
-            return [new CommandRejected(result.Error)];
+        {
+            // Command rejected — surface as a UI event, not a pipeline error
+            return Result<AppEvent[], PipelineError>.Ok(
+                [new CommandRejected(result.Error)]);
+        }
     }
+
     // ... other effects (navigation, HTTP, etc.)
+    return Result<AppEvent[], PipelineError>.Ok([]);
 };
 ```
 

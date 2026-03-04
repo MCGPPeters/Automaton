@@ -1,8 +1,8 @@
 # Automaton
 
-**Write once, run everywhere.**
+**Write your domain logic once. Run it everywhere.**
 
-A minimal, production-hardened Mealy machine kernel for building state machines, MVU runtimes, event-sourced aggregates, and actor systems — based on the observation that all three are instances of the same mathematical structure: a **Mealy machine** (finite-state transducer with effects).
+A minimal, production-hardened Mealy machine kernel for building state machines, MVU runtimes, event-sourced aggregates, and actor systems in .NET — based on the observation that all three are instances of the same mathematical structure: a **Mealy machine** (finite-state transducer with effects).
 
 ```text
 transition : (State × Event) → (State × Effect)
@@ -19,14 +19,14 @@ dotnet add package Automaton
 ## The Kernel
 
 ```csharp
-public interface Automaton<TState, TEvent, TEffect>
+public interface Automaton<TState, TEvent, TEffect, TParameters>
 {
-    static abstract (TState State, TEffect Effect) Initialize();
+    static abstract (TState State, TEffect Effect) Initialize(TParameters parameters);
     static abstract (TState State, TEffect Effect) Transition(TState state, TEvent @event);
 }
 ```
 
-Two methods. Zero dependencies. The rest is runtime.
+Two methods. Zero dependencies. The rest is runtime. Use `Unit` as `TParameters` for automata that require no initialization parameters.
 
 ## Example: Counter
 
@@ -45,9 +45,9 @@ public interface CounterEffect
     record struct None : CounterEffect;
 }
 
-public class Counter : Automaton<CounterState, CounterEvent, CounterEffect>
+public class Counter : Automaton<CounterState, CounterEvent, CounterEffect, Unit>
 {
-    public static (CounterState, CounterEffect) Initialize() =>
+    public static (CounterState, CounterEffect) Initialize(Unit _) =>
         (new CounterState(0), new CounterEffect.None());
 
     public static (CounterState, CounterEffect) Transition(CounterState state, CounterEvent @event) =>
@@ -68,27 +68,31 @@ The `AutomatonRuntime` executes the loop: **dispatch → transition → observe 
 
 | Extension Point | Signature | Purpose |
 | --------------- | --------- | ------- |
-| **Observer** | `(State, Event, Effect) → Task` | See each transition triple (render, persist, log) |
-| **Interpreter** | `Effect → ValueTask<Event[]>` | Convert effects to feedback events |
+| **Observer** | `(State, Event, Effect) → ValueTask<Result<Unit, PipelineError>>` | See each transition triple (render, persist, log) |
+| **Interpreter** | `Effect → ValueTask<Result<Event[], PipelineError>>` | Convert effects to feedback events |
 
 ```csharp
 // Observer: sees each (state, event, effect) triple after transition
-public delegate ValueTask Observer<in TState, in TEvent, in TEffect>(
+public delegate ValueTask<Result<Unit, PipelineError>> Observer<in TState, in TEvent, in TEffect>(
     TState state, TEvent @event, TEffect effect);
 
 // Interpreter: converts effects to feedback events
-public delegate ValueTask<TEvent[]> Interpreter<in TEffect, TEvent>(TEffect effect);
+public delegate ValueTask<Result<TEvent[], PipelineError>> Interpreter<in TEffect, TEvent>(TEffect effect);
 ```
 
+Errors propagate as `Result` values through the pipeline — not as exceptions.
+
 ```csharp
-var runtime = await AutomatonRuntime<Counter, CounterState, CounterEvent, CounterEffect>
+var runtime = await AutomatonRuntime<Counter, CounterState, CounterEvent, CounterEffect, Unit>
     .Start(
+        default,
         observer: (state, @event, effect) =>
         {
             Console.WriteLine($"{@event} → {state}");
-            return ValueTask.CompletedTask;
+            return PipelineResult.Ok;
         },
-        interpreter: _ => new ValueTask<CounterEvent[]>([]));
+        interpreter: _ => new ValueTask<Result<CounterEvent[], PipelineError>>(
+            Result<CounterEvent[], PipelineError>.Ok([])));
 
 await runtime.Dispatch(new CounterEvent.Increment());
 // Prints: Increment → CounterState { Count = 1 }
@@ -98,17 +102,27 @@ await runtime.Dispatch(new CounterEvent.Increment());
 
 | Property | Guarantee |
 | -------- | --------- |
-| **Thread safety** | All public mutating methods are serialized via `SemaphoreSlim`. Concurrent callers are queued, never interleaved. |
+| **Thread safety** | All public mutating methods are serialized via `SemaphoreSlim`. Concurrent callers are queued, never interleaved. Pass `threadSafe: false` for single-threaded scenarios (actors, UI loops). |
 | **Cancellation** | All async methods accept `CancellationToken`. |
 | **Feedback depth** | Interpreter feedback loops are bounded (max 64 depth). Runaway cycles throw `InvalidOperationException`. |
-| **Null safety** | Observer and Interpreter are validated at construction. |
+| **Error propagation** | Observer and Interpreter return `Result<T, PipelineError>` — errors are values, not exceptions. |
 
 ### Observer Composition
 
-Observers compose sequentially with `Then`:
+Observers compose with monadic combinators:
 
 ```csharp
-var combined = renderObserver.Then(logObserver).Then(metricsObserver);
+// Sequential (short-circuits on error)
+var pipeline = persistObserver.Then(logObserver).Then(metricsObserver);
+
+// Conditional
+var heaterOnly = logObserver.Where((_, e, _) => e is HeaterTurnedOn or HeaterTurnedOff);
+
+// Error recovery
+var resilient = persistObserver.Catch(err => Result<Unit, PipelineError>.Ok(Unit.Value));
+
+// Both run regardless of individual failures
+var both = persistObserver.Combine(notifier);
 ```
 
 ### Building Custom Runtimes
@@ -118,24 +132,24 @@ The `AutomatonRuntime` is the building block for specialized runtimes. Each runt
 | Runtime Pattern | Observer | Interpreter |
 | --------------- | -------- | ----------- |
 | **MVU** | Render the new state | Execute effects, return feedback events |
-| **Event Sourcing** | Append event to store + record effect | No-op (empty) |
+| **Event Sourcing** | Append event to store | No-op (empty) |
 | **Actor** | No-op (state is internal) | Execute effect with self-reference |
 
-See the [test project](Automaton.Tests/) for complete MVU, Event Sourcing, and Actor runtime implementations built on the kernel.
+For combining multiple automata into a single runtime, see [Composition](docs/concepts/composition.md).
 
 ## The Decider — Command Validation
 
 The **Decider pattern** ([Chassaing, 2021](https://thinkbeforecoding.com/post/2021/12/17/functional-event-sourcing-decider)) adds a command validation layer to the Automaton. It separates *intent* (commands) from *facts* (events):
 
 ```text
-Command → Decide(state) → Result<Events, Error> → Transition(state, event) → (State', Effect)
+Command → Decide(state, command) → Result<Events, Error> → Transition(state, event) → (State', Effect)
 ```
 
 A Decider is an Automaton that also validates commands:
 
 ```csharp
-public interface Decider<TState, TCommand, TEvent, TEffect, TError>
-    : Automaton<TState, TEvent, TEffect>
+public interface Decider<TState, TCommand, TEvent, TEffect, TError, TParameters>
+    : Automaton<TState, TEvent, TEffect, TParameters>
 {
     static abstract Result<TEvent[], TError> Decide(TState state, TCommand command);
     static virtual bool IsTerminal(TState state) => false;
@@ -149,7 +163,7 @@ Together with the Automaton's `Initialize` and `Transition`, this gives the seve
 | Command type | Type parameter | `TCommand` |
 | Event type | Type parameter | `TEvent` |
 | State type | Type parameter | `TState` |
-| Initial state | Automaton | `Initialize()` |
+| Initial state | Automaton | `Initialize(parameters)` |
 | Decide | Decider | `Decide(state, command)` |
 | Evolve | Automaton | `Transition(state, event)` |
 | Is terminal | Decider | `IsTerminal(state)` |
@@ -158,9 +172,12 @@ Together with the Automaton's `Initialize` and `Transition`, this gives the seve
 
 ```csharp
 public class Counter
-    : Decider<CounterState, CounterCommand, CounterEvent, CounterEffect, CounterError>
+    : Decider<CounterState, CounterCommand, CounterEvent, CounterEffect, CounterError, Unit>
 {
     public const int MaxCount = 100;
+
+    public static (CounterState, CounterEffect) Initialize(Unit _) =>
+        (new CounterState(0), new CounterEffect.None());
 
     public static Result<CounterEvent[], CounterError> Decide(
         CounterState state, CounterCommand command) =>
@@ -175,7 +192,16 @@ public class Counter
                     .Ok(Enumerable.Repeat<CounterEvent>(
                         new CounterEvent.Increment(), n).ToArray()),
 
-            // ... Initialize and Transition remain unchanged
+            // ... Transition remains unchanged
+        };
+
+    public static (CounterState, CounterEffect) Transition(
+        CounterState state, CounterEvent @event) =>
+        @event switch
+        {
+            CounterEvent.Increment => (state with { Count = state.Count + 1 }, new CounterEffect.None()),
+            CounterEvent.Decrement => (state with { Count = state.Count - 1 }, new CounterEffect.None()),
+            _ => throw new UnreachableException()
         };
 }
 ```
@@ -186,7 +212,7 @@ The `DecidingRuntime` wraps `AutomatonRuntime` and adds `Handle(command)`:
 
 ```csharp
 var runtime = await DecidingRuntime<Counter, CounterState, CounterCommand,
-    CounterEvent, CounterEffect, CounterError>.Start(observer, interpreter);
+    CounterEvent, CounterEffect, CounterError, Unit>.Start(default, observer, interpreter);
 
 // Valid command → events dispatched, state updated
 var result = await runtime.Handle(new CounterCommand.Add(5));
@@ -198,11 +224,13 @@ var overflow = await runtime.Handle(new CounterCommand.Add(200));
 // runtime.State.Count is still 5
 ```
 
+The entire `Handle` operation — Decide + all Dispatches — executes under a single lock acquisition, preventing [TOCTOU](https://en.wikipedia.org/wiki/Time-of-check_to_time-of-use) races.
+
 Since `Decider<...> : Automaton<...>`, upgrading is **non-breaking** — all existing runtimes continue to work.
 
 ### Result Type
 
-`Result<TSuccess, TError>` is the standard functional error handling type — a sum type that is either `Ok(value)` or `Err(error)`:
+`Result<TSuccess, TError>` is a `readonly struct` discriminated union — either `Ok(value)` or `Err(error)`. Zero heap allocation per result.
 
 ```csharp
 var result = Counter.Decide(state, command);
@@ -211,6 +239,11 @@ var result = Counter.Decide(state, command);
 var message = result.IsOk
     ? $"Produced {result.Value.Length} events"
     : $"Rejected: {result.Error}";
+
+// Exhaustive fold (catamorphism)
+var text = result.Match(
+    ok: events => $"Produced {events.Length} events",
+    err: error => $"Rejected: {error}");
 
 // LINQ query syntax (railway-oriented programming)
 var final =
@@ -256,7 +289,7 @@ Command rejections set `automaton.result = "error"` but use `ActivityStatusCode.
 
 ```csharp
 var events = new CounterEvent[] { new Increment(), new Increment(), new Decrement() };
-var (seed, _) = Counter.Initialize();
+var (seed, _) = Counter.Initialize(default);
 
 var finalState = events.Aggregate(seed, (state, @event) =>
     Counter.Transition(state, @event).State);
@@ -279,42 +312,55 @@ MVU, Event Sourcing, and the Actor Model are all left folds over an event stream
 ## Architecture
 
 ```text
-┌───────────────────────────────────────────────┐
-│             Automaton<S, E, F>                 │
-│     Initialize() + Transition(state, event)          │
-└───────────────────────┬───────────────────────┘
-                        │
-         ┌──────────────┴──────────────┐
-         │  Decider<S, C, E, F, Err>   │
-         │  Decide(state, command)      │
-         │  IsTerminal(state)           │
-         └──────────────┬──────────────┘
-                        │
-          ┌─────────────┴─────────────┐
-          │  AutomatonRuntime<A,S,E,F> │
-          │  Observer + Interpreter    │
-          │  AutomatonDiagnostics      │
-          └─────┬─────────────┬───────┘
-                │             │
-          ┌─────┴──────┐ ┌───┴──────────┐
-          │  Your MVU  │ │ Your ES /    │
-          │  Runtime   │ │ Actor / ...  │
-          └────────────┘ └──────────────┘
+┌─────────────────────────────────────────────────────┐
+│           Automaton<S, E, F, P>                      │
+│  Initialize(parameters) + Transition(state, event)   │
+└──────────────────────────┬──────────────────────────┘
+                           │
+            ┌──────────────┴──────────────┐
+            │  Decider<S, C, E, F, Err, P> │
+            │  Decide(state, command)       │
+            │  IsTerminal(state)            │
+            └──────────────┬──────────────┘
+                           │
+           ┌───────────────┴───────────────┐
+           │  AutomatonRuntime<A,S,E,F,P>   │
+           │  Observer + Interpreter        │
+           │  AutomatonDiagnostics          │
+           └─────┬──────────────────┬──────┘
+                 │                  │
+           ┌─────┴──────┐  ┌───────┴────────┐
+           │  Your MVU   │  │  Your ES /     │
+           │  Runtime    │  │  Actor / ...   │
+           └─────────────┘  └────────────────┘
 ```
+
+Multiple automata can be [composed](docs/concepts/composition.md) into a single automaton via product state and sum events — the automata-theoretic product construction.
 
 ## What's in the Box
 
 | Type | Purpose |
 | ---- | ------- |
-| `Automaton<TState, TEvent, TEffect>` | Mealy machine interface (Initialize + Transition) |
-| `AutomatonRuntime<TAutomaton, TState, TEvent, TEffect>` | Thread-safe async runtime (dispatch → transition → observe → interpret) |
-| `Observer<TState, TEvent, TEffect>` | Transition observer delegate |
-| `Interpreter<TEffect, TEvent>` | Effect interpreter delegate |
-| `ObserverExtensions.Then` | Sequential observer composition |
-| `Decider<TState, TCommand, TEvent, TEffect, TError>` | Command validation interface (Decide + IsTerminal) |
-| `DecidingRuntime<...>` | Command-validating runtime wrapper |
-| `Result<TSuccess, TError>` | Discriminated union with Match, Map, Bind, MapError |
+| `Automaton<TState, TEvent, TEffect, TParameters>` | Mealy machine interface (Initialize + Transition) |
+| `AutomatonRuntime<TAutomaton, TState, TEvent, TEffect, TParameters>` | Thread-safe async runtime (dispatch → transition → observe → interpret) |
+| `Observer<TState, TEvent, TEffect>` | Transition observer delegate (`→ Result<Unit, PipelineError>`) |
+| `Interpreter<TEffect, TEvent>` | Effect interpreter delegate (`→ Result<Event[], PipelineError>`) |
+| `ObserverExtensions` | Monadic combinators: `Then`, `Where`, `Select`, `Catch`, `Combine` |
+| `InterpreterExtensions` | Monadic combinators: `Then`, `Where`, `Select`, `Catch` |
+| `Decider<TState, TCommand, TEvent, TEffect, TError, TParameters>` | Command validation interface (Decide + IsTerminal) |
+| `DecidingRuntime<...>` | Command-validating runtime wrapper with atomic Handle |
+| `Result<TSuccess, TError>` | `readonly struct` discriminated union with Match, Map, Bind, MapError, LINQ syntax |
+| `PipelineError` | Structured error for Observer/Interpreter pipelines |
+| `PipelineResult` | Pre-allocated `Ok` value for zero-alloc observer fast path |
 | `AutomatonDiagnostics` | OpenTelemetry-compatible tracing (ActivitySource) |
+
+## Packages
+
+| Package | Description | Status |
+| ------- | ----------- | ------ |
+| [`Automaton`](https://www.nuget.org/packages/Automaton) | Core kernel, runtime, Decider, Result, diagnostics | ✅ Stable |
+| `Automaton.Patterns` | Production Event Sourcing, Saga, ConflictResolver | ✅ Stable |
+| `Automaton.Resilience` | Retry, Timeout, Circuit Breaker, Fallback, Rate Limiter, Hedging — all as Mealy machines | ✅ Stable |
 
 ## Benchmarks
 
@@ -324,8 +370,13 @@ Continuous benchmarks run on every push to `main` via [BenchmarkDotNet](https://
 
 ## Documentation
 
-- [Tutorials](docs/tutorials/) — step-by-step guides for building systems with the kernel
-- [Architecture Decision Records](docs/adr/) — design rationale with mathematical grounding
+Full documentation with concepts, tutorials, how-to guides, and API reference:
+
+- [**Concepts**](docs/concepts/) — The Kernel, The Runtime, The Decider, Composition, Glossary
+- [**Tutorials**](docs/tutorials/) — step-by-step guides for building systems with the kernel
+- [**How-To Guides**](docs/guides/) — Observer composition, testing, error handling, custom runtimes
+- [**API Reference**](docs/reference/) — complete type and method documentation
+- [**Architecture Decision Records**](docs/adr/) — design rationale with mathematical grounding
 
 ## License
 

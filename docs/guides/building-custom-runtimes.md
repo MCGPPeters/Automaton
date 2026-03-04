@@ -163,6 +163,8 @@ await core.InterpretEffect(effect);
 
 If you need logging + metrics + persistence, compose them into one observer with `Then` rather than building separate runtimes. One runtime, one transition, multiple observers.
 
+If you need to combine multiple *automata* — each with its own state and event types — into a single runtime, see [Composition](../concepts/composition.md).
+
 ## See Also
 
 - [The Runtime](../concepts/the-runtime.md) — how Observer and Interpreter fit together

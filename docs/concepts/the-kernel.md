@@ -179,6 +179,7 @@ The kernel is deliberately minimal. It does **not** provide:
 - **Persistence** — use an [event store](../tutorials/03-event-sourced-aggregate.md) or the upcoming `Automaton.Patterns` package
 - **Threading** — the [runtime](the-runtime.md) handles thread safety
 - **Command validation** — the [Decider](the-decider.md) adds this layer
+- **Composition** — combining multiple automata into one is handled at a higher level; see [Composition](composition.md)
 - **Tracing** — the runtime adds [OpenTelemetry spans](../tutorials/06-observability.md)
 - **Effect execution** — the [Interpreter](the-runtime.md) handles this
 
@@ -188,4 +189,5 @@ The kernel's only job is to define the shape of a pure transition function. Ever
 
 - [**The Runtime**](the-runtime.md) — how the transition function gets executed
 - [**The Decider**](the-decider.md) — adding command validation
+- [**Composition**](composition.md) — combining multiple automata into one
 - [**Quick Start**](../getting-started/index.md) — build one yourself
