@@ -9,6 +9,7 @@ This section explains the ideas behind Automaton. Read these pages to understand
 | The Kernel | [the-kernel.md](the-kernel.md) | Everything is a Mealy machine: `(State × Event) → (State × Effect)` |
 | The Runtime | [the-runtime.md](the-runtime.md) | Observer + Interpreter = a monadic left fold over events |
 | The Decider | [the-decider.md](the-decider.md) | Commands validated before events exist — Result type as the error channel |
+| Composition | [composition.md](composition.md) | Combining multiple automata into one — the behavioral composition root |
 | Runtimes Compared | [runtimes-compared.md](runtimes-compared.md) | When to use MVU, Event Sourcing, or Actors |
 | Glossary | [glossary.md](glossary.md) | All key terms defined in plain English |
 
@@ -34,7 +35,8 @@ If you're new to the library:
 2. Then [**The Runtime**](the-runtime.md) — understand how the loop works
 3. Then [**Runtimes Compared**](runtimes-compared.md) — pick the right pattern for your problem
 4. Read [**The Decider**](the-decider.md) when you need command validation
-5. Use the [**Glossary**](glossary.md) whenever you encounter an unfamiliar term
+5. Read [**Composition**](composition.md) when your application has multiple concerns
+6. Use the [**Glossary**](glossary.md) whenever you encounter an unfamiliar term
 
 ## See Also
 
