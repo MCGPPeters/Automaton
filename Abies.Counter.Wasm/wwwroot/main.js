@@ -1,32 +1,34 @@
 // =============================================================================
 // WASM Bootstrap — main.js
 // =============================================================================
-// Loads the .NET WebAssembly runtime and starts the Abies Counter application.
-// This is the entry point referenced by index.html.
+// Loads the .NET WebAssembly runtime, wires the Abies event dispatch callback,
+// and starts the Counter application.
 //
-// The dotnet.js runtime is produced by the `dotnet publish` build and handles:
-//   - Downloading and initializing the .NET WASM runtime
-//   - Loading assemblies
-//   - Providing the JS↔.NET interop bridge
+// The dispatch bridge connects two module instances:
+//   - abies.js (the Abies framework's browser runtime)
+//   - Abies.dll (the .NET assembly with [JSExport] DispatchDomEvent)
 //
-// The Abies framework registers a global dispatch function so that the
-// event delegation in abies.js can call back into .NET.
+// ES modules are cached by URL, so the `import` here and .NET's
+// `JSHost.ImportAsync("Abies", "/abies.js")` share the same module instance.
 // =============================================================================
 
 import { dotnet } from "./_framework/dotnet.js";
+import { setDispatchCallback, setupEventDelegation } from "./abies.js";
 
-const { setModuleImports, getAssemblyExports, getConfig } = await dotnet
+const { getAssemblyExports } = await dotnet
     .withDiagnosticTracing(false)
     .create();
 
-// The [JSExport] DispatchDomEvent lives in the Abies assembly, not the main assembly.
-// We need to get exports from Abies.dll specifically.
+// Get [JSExport] methods from the Abies assembly.
 const abiesExports = await getAssemblyExports("Abies");
 
-// Register the dispatch bridge globally so abies.js can find it.
-globalThis.__abies_dispatch = (pathJson, eventName, eventData) => {
-    abiesExports.Abies.Interop.DispatchDomEvent(pathJson, eventName, eventData);
-};
+// Wire the dispatch bridge: abies.js event delegation → .NET DispatchDomEvent.
+setDispatchCallback((commandId, eventName, eventData) =>
+    abiesExports.Abies.Interop.DispatchDomEvent(commandId, eventName, eventData)
+);
 
-// Start the .NET application.
+// Register document-level event listeners for event delegation.
+setupEventDelegation();
+
+// Start the .NET application (calls Program.Main).
 await dotnet.run();

@@ -1,453 +1,598 @@
 // =============================================================================
-// Abies Browser Runtime — JavaScript Module
+// abies.js — Browser-Side Runtime for Abies
 // =============================================================================
 // This module is loaded by .NET WASM via JSHost.ImportAsync("Abies", "/abies.js").
 //
-// Responsibilities:
-//   1. renderInitial(rootId, html)     — sets innerHTML for the first render
-//   2. applyPatches(patchData)         — decodes binary patches, applies DOM mutations
-//   3. setupEventDelegation(rootId)    — captures common events at the root
-//   4. setTitle(title)                 — sets document.title
-//   5. navigateTo(url)                 — history.pushState for client-side routing
+// Architecture:
+//   .NET produces binary patch batches (RenderBatchWriter.cs)
+//   → transferred via MemoryView (zero-copy) to JS
+//   → this module reads the binary format and applies DOM mutations
 //
 // Binary Protocol:
-//   Header: int32 patchCount
-//   Per patch:
-//     uint8  opCode
-//     uint16 pathLength + uint16[] path
-//     ...op-specific fields (strings = uint16 byteLength + UTF-8 bytes)
+//   Header (8 bytes):
+//     int32 patchCount
+//     int32 stringTableOffset
 //
-//   OpCodes:
-//     0 = InsertChild(path, index, html)
-//     1 = RemoveChild(path, index)
-//     2 = ReplaceNode(path, html)
-//     3 = SetAttribute(path, name, value)
-//     4 = RemoveAttribute(path, name)
-//     5 = SetText(path, value)
+//   Patches (16 bytes each):
+//     int32 type (BinaryPatchType enum)
+//     int32 field1 (string table index, -1 = null)
+//     int32 field2 (string table index, -1 = null)
+//     int32 field3 (string table index, -1 = null)
+//
+//   String Table:
+//     Sequence of LEB128-prefixed UTF-8 strings
 //
 // Event Delegation:
-//   A single listener per event type on the app root captures all events.
-//   The handler computes the DOM path (child indices from root to target),
-//   then calls the [JSExport] DispatchDomEvent(pathJson, eventName, eventData)
-//   to feed the event back into the .NET automaton loop.
+//   Single listener per event type at document level.
+//   Target elements carry data-event-{type}="{commandId}" attributes.
+//   When an event fires, walk up from target looking for the attribute,
+//   extract commandId, serialize relevant event data, call DispatchDomEvent.
+//
+// See also:
+//   - Interop.cs — JSImport/JSExport declarations
+//   - RenderBatchWriter.cs — binary serialization (.NET side)
+//   - DOM/Patch.cs — patch type definitions
 // =============================================================================
 
-/** @type {HTMLElement | null} */
-let appRoot = null;
+// =============================================================================
+// Patch Type Opcodes — must match BinaryPatchType enum in RenderBatchWriter.cs
+// =============================================================================
+const OP_ADD_ROOT         = 0;
+const OP_REPLACE_CHILD    = 1;
+const OP_ADD_CHILD        = 2;
+const OP_REMOVE_CHILD     = 3;
+const OP_CLEAR_CHILDREN   = 4;
+const OP_SET_CHILDREN_HTML = 5;
+const OP_MOVE_CHILD       = 6;
+const OP_UPDATE_ATTRIBUTE = 7;
+const OP_ADD_ATTRIBUTE    = 8;
+const OP_REMOVE_ATTRIBUTE = 9;
+const OP_ADD_HANDLER      = 10;
+const OP_REMOVE_HANDLER   = 11;
+const OP_UPDATE_HANDLER   = 12;
+const OP_UPDATE_TEXT      = 13;
+const OP_ADD_TEXT         = 14;
+const OP_REMOVE_TEXT      = 15;
+const OP_ADD_RAW          = 16;
+const OP_REMOVE_RAW       = 17;
+const OP_REPLACE_RAW      = 18;
+const OP_UPDATE_RAW       = 19;
 
-/** @type {TextDecoder} */
+// =============================================================================
+// Event types to register for delegation
+// =============================================================================
+const COMMON_EVENT_TYPES = [
+    "click", "dblclick", "input", "change", "submit",
+    "keydown", "keyup", "keypress",
+    "focus", "blur", "focusin", "focusout",
+    "mousedown", "mouseup", "mousemove",
+    "mouseenter", "mouseleave", "mouseover", "mouseout",
+    "wheel", "scroll",
+    "touchstart", "touchmove", "touchend",
+    "pointerdown", "pointerup", "pointermove",
+    "contextmenu",
+    "drag", "dragstart", "dragend", "dragover",
+    "drop", "dragenter", "dragleave",
+    "copy", "cut", "paste",
+    "animationstart", "animationend", "transitionend",
+    "load", "error", "resize",
+    "select", "reset", "toggle"
+];
+
+// =============================================================================
+// UTF-8 text decoder (reused)
+// =============================================================================
 const utf8Decoder = new TextDecoder("utf-8");
 
-// ── Exported Functions (called from .NET via [JSImport]) ──
+// =============================================================================
+// DispatchDomEvent callback — set by .NET during initialization
+// =============================================================================
+let dispatchDomEvent = null;
+
+// =============================================================================
+// HTML fragment parser helper — reusable container
+// =============================================================================
+const _fragmentContainer = document.createElement("div");
 
 /**
- * Sets the innerHTML of the app root for the initial render.
- * @param {string} rootId - The DOM element ID.
- * @param {string} html - The full HTML string.
+ * Parses an HTML string into a DOM element.
+ * @param {string} html - The HTML to parse.
+ * @returns {Element} The parsed DOM element.
+ */
+function parseHtmlFragment(html) {
+    _fragmentContainer.innerHTML = html;
+    return _fragmentContainer.firstElementChild;
+}
+
+// =============================================================================
+// Binary Reader
+// =============================================================================
+
+/**
+ * Reads a LEB128-encoded unsigned integer from the data view.
+ * @param {Uint8Array} bytes - The binary data.
+ * @param {{ offset: number }} state - Mutable offset tracker.
+ * @returns {number} The decoded integer.
+ */
+function readLeb128(bytes, state) {
+    let result = 0;
+    let shift = 0;
+    let b;
+    do {
+        b = bytes[state.offset++];
+        result |= (b & 0x7F) << shift;
+        shift += 7;
+    } while (b & 0x80);
+    return result;
+}
+
+/**
+ * Reads the string table from binary data.
+ * @param {Uint8Array} bytes - The full binary data.
+ * @param {number} offset - Byte offset where string table starts.
+ * @param {number} totalLength - Total byte length of the data.
+ * @returns {string[]} Array of decoded strings.
+ */
+function readStringTable(bytes, offset, totalLength) {
+    const strings = [];
+    const state = { offset };
+
+    while (state.offset < totalLength) {
+        const byteLen = readLeb128(bytes, state);
+        const str = utf8Decoder.decode(bytes.subarray(state.offset, state.offset + byteLen));
+        strings.push(str);
+        state.offset += byteLen;
+    }
+
+    return strings;
+}
+
+// =============================================================================
+// Event Data Extraction
+// =============================================================================
+
+/**
+ * Extracts relevant data from a DOM event for serialization to .NET.
+ * @param {Event} event - The DOM event.
+ * @returns {string} JSON-serialized event data.
+ */
+function extractEventData(event) {
+    const data = {};
+
+    // Input/textarea value
+    if (event.target && "value" in event.target) {
+        data.value = event.target.value;
+    }
+
+    // Checkbox checked state
+    if (event.target && "checked" in event.target) {
+        data.checked = event.target.checked;
+    }
+
+    // Keyboard events
+    if (event instanceof KeyboardEvent) {
+        data.key = event.key;
+        data.code = event.code;
+        data.altKey = event.altKey;
+        data.ctrlKey = event.ctrlKey;
+        data.shiftKey = event.shiftKey;
+        data.metaKey = event.metaKey;
+    }
+
+    // Mouse events
+    if (event instanceof MouseEvent) {
+        data.clientX = event.clientX;
+        data.clientY = event.clientY;
+        data.button = event.button;
+        data.altKey = event.altKey;
+        data.ctrlKey = event.ctrlKey;
+        data.shiftKey = event.shiftKey;
+        data.metaKey = event.metaKey;
+    }
+
+    // Pointer events
+    if (typeof PointerEvent !== "undefined" && event instanceof PointerEvent) {
+        data.pointerId = event.pointerId;
+        data.pointerType = event.pointerType;
+        data.pressure = event.pressure;
+    }
+
+    // Touch events
+    if (typeof TouchEvent !== "undefined" && event instanceof TouchEvent) {
+        data.touches = Array.from(event.touches).map(t => ({
+            clientX: t.clientX,
+            clientY: t.clientY,
+            identifier: t.identifier
+        }));
+    }
+
+    // Drag events
+    if (event instanceof DragEvent && event.dataTransfer) {
+        data.types = event.dataTransfer.types;
+    }
+
+    // Wheel events
+    if (event instanceof WheelEvent) {
+        data.deltaX = event.deltaX;
+        data.deltaY = event.deltaY;
+        data.deltaZ = event.deltaZ;
+        data.deltaMode = event.deltaMode;
+    }
+
+    return JSON.stringify(data);
+}
+
+// =============================================================================
+// Event Delegation
+// =============================================================================
+
+/**
+ * Registered event type set (avoid duplicate listeners).
+ */
+const registeredEventTypes = new Set();
+
+/**
+ * Registers a single event type for delegation at the document level.
+ * @param {string} eventType - The DOM event name (e.g., "click").
+ */
+function registerEventType(eventType) {
+    if (registeredEventTypes.has(eventType)) return;
+    registeredEventTypes.add(eventType);
+
+    // Use capture for focus/blur (they don't bubble)
+    const useCapture = eventType === "focus" || eventType === "blur"
+        || eventType === "focusin" || eventType === "focusout";
+
+    document.addEventListener(eventType, (event) => {
+        if (!dispatchDomEvent) return;
+
+        const attrName = `data-event-${eventType}`;
+
+        // Walk up from target to find the handler attribute
+        let el = event.target;
+        while (el && el !== document) {
+            if (el.hasAttribute && el.hasAttribute(attrName)) {
+                const commandId = el.getAttribute(attrName);
+                const eventData = extractEventData(event);
+                dispatchDomEvent(commandId, eventType, eventData);
+
+                // Prevent default for form submissions
+                if (eventType === "submit") {
+                    event.preventDefault();
+                }
+                return;
+            }
+            el = el.parentElement;
+        }
+    }, useCapture);
+}
+
+// =============================================================================
+// DOM Mutation Handlers
+// =============================================================================
+
+/**
+ * Applies a single patch to the DOM.
+ * @param {number} type - The BinaryPatchType opcode.
+ * @param {string|null} f1 - Field 1 (string from string table, or null).
+ * @param {string|null} f2 - Field 2.
+ * @param {string|null} f3 - Field 3.
+ */
+function applyPatch(type, f1, f2, f3) {
+    switch (type) {
+        // =====================================================================
+        // Tree Mutations
+        // =====================================================================
+
+        case OP_ADD_ROOT: {
+            // f1 = rootId (unused — we set innerHTML on the app root)
+            // f2 = html
+            const appRoot = document.getElementById("app");
+            if (appRoot) {
+                appRoot.innerHTML = f2;
+            }
+            break;
+        }
+
+        case OP_REPLACE_CHILD: {
+            // f1 = oldElementId, f2 = newElementId (unused), f3 = html
+            const oldEl = document.getElementById(f1);
+            if (oldEl) {
+                const newEl = parseHtmlFragment(f3);
+                if (newEl) {
+                    oldEl.replaceWith(newEl);
+                }
+            }
+            break;
+        }
+
+        case OP_ADD_CHILD: {
+            // f1 = parentId, f2 = childId (unused), f3 = html
+            const parent = document.getElementById(f1);
+            if (parent) {
+                const child = parseHtmlFragment(f3);
+                if (child) {
+                    parent.appendChild(child);
+                }
+            }
+            break;
+        }
+
+        case OP_REMOVE_CHILD: {
+            // f1 = parentId (unused), f2 = childId
+            const child = document.getElementById(f2);
+            if (child) {
+                child.remove();
+            }
+            break;
+        }
+
+        case OP_CLEAR_CHILDREN: {
+            // f1 = parentId
+            const parent = document.getElementById(f1);
+            if (parent) {
+                parent.innerHTML = "";
+            }
+            break;
+        }
+
+        case OP_SET_CHILDREN_HTML: {
+            // f1 = parentId, f2 = concatenated children html
+            const parent = document.getElementById(f1);
+            if (parent) {
+                parent.innerHTML = f2;
+            }
+            break;
+        }
+
+        case OP_MOVE_CHILD: {
+            // f1 = parentId, f2 = childId, f3 = beforeId (null = append)
+            const parent = document.getElementById(f1);
+            const child = document.getElementById(f2);
+            if (parent && child) {
+                if (f3) {
+                    const before = document.getElementById(f3);
+                    if (before) {
+                        parent.insertBefore(child, before);
+                    }
+                } else {
+                    parent.appendChild(child);
+                }
+            }
+            break;
+        }
+
+        // =====================================================================
+        // Attribute Mutations
+        // =====================================================================
+
+        case OP_UPDATE_ATTRIBUTE:
+        case OP_ADD_ATTRIBUTE: {
+            // f1 = elementId, f2 = attrName, f3 = attrValue
+            const el = document.getElementById(f1);
+            if (el) {
+                el.setAttribute(f2, f3);
+            }
+            break;
+        }
+
+        case OP_REMOVE_ATTRIBUTE: {
+            // f1 = elementId, f2 = attrName
+            const el = document.getElementById(f1);
+            if (el) {
+                el.removeAttribute(f2);
+            }
+            break;
+        }
+
+        // =====================================================================
+        // Handler Mutations — render as data-event-{name}="{commandId}"
+        // =====================================================================
+
+        case OP_ADD_HANDLER: {
+            // f1 = elementId, f2 = eventName, f3 = commandId
+            const el = document.getElementById(f1);
+            if (el) {
+                el.setAttribute(`data-event-${f2}`, f3);
+            }
+            break;
+        }
+
+        case OP_REMOVE_HANDLER: {
+            // f1 = elementId, f2 = eventName, f3 = commandId (unused for removal)
+            const el = document.getElementById(f1);
+            if (el) {
+                el.removeAttribute(`data-event-${f2}`);
+            }
+            break;
+        }
+
+        case OP_UPDATE_HANDLER: {
+            // f1 = elementId, f2 = eventName, f3 = newCommandId
+            const el = document.getElementById(f1);
+            if (el) {
+                el.setAttribute(`data-event-${f2}`, f3);
+            }
+            break;
+        }
+
+        // =====================================================================
+        // Text Mutations
+        // =====================================================================
+
+        case OP_UPDATE_TEXT: {
+            // f1 = parentId, f2 = newText, f3 = newId (unused in DOM)
+            const parent = document.getElementById(f1);
+            if (parent) {
+                // Find the text node child and update it
+                for (const child of parent.childNodes) {
+                    if (child.nodeType === Node.TEXT_NODE) {
+                        child.textContent = f2;
+                        break;
+                    }
+                }
+            }
+            break;
+        }
+
+        case OP_ADD_TEXT: {
+            // f1 = parentId, f2 = text content, f3 = textId (unused in DOM)
+            const parent = document.getElementById(f1);
+            if (parent) {
+                parent.appendChild(document.createTextNode(f2));
+            }
+            break;
+        }
+
+        case OP_REMOVE_TEXT: {
+            // f1 = parentId, f2 = textId (unused — remove first text node)
+            const parent = document.getElementById(f1);
+            if (parent) {
+                for (const child of parent.childNodes) {
+                    if (child.nodeType === Node.TEXT_NODE) {
+                        child.remove();
+                        break;
+                    }
+                }
+            }
+            break;
+        }
+
+        // =====================================================================
+        // Raw HTML Mutations
+        // =====================================================================
+
+        case OP_ADD_RAW: {
+            // f1 = parentId, f2 = html, f3 = rawId
+            const parent = document.getElementById(f1);
+            if (parent) {
+                const wrapper = document.createElement("span");
+                wrapper.id = f3;
+                wrapper.innerHTML = f2;
+                parent.appendChild(wrapper);
+            }
+            break;
+        }
+
+        case OP_REMOVE_RAW: {
+            // f1 = parentId (unused), f2 = rawId
+            const el = document.getElementById(f2);
+            if (el) {
+                el.remove();
+            }
+            break;
+        }
+
+        case OP_REPLACE_RAW: {
+            // f1 = oldId, f2 = newId, f3 = newHtml
+            const oldEl = document.getElementById(f1);
+            if (oldEl) {
+                const wrapper = document.createElement("span");
+                wrapper.id = f2;
+                wrapper.innerHTML = f3;
+                oldEl.replaceWith(wrapper);
+            }
+            break;
+        }
+
+        case OP_UPDATE_RAW: {
+            // f1 = nodeId, f2 = newHtml, f3 = newId (unused — same node)
+            const el = document.getElementById(f1);
+            if (el) {
+                el.innerHTML = f2;
+            }
+            break;
+        }
+    }
+}
+
+// =============================================================================
+// Exports — called by .NET via JSImport
+// =============================================================================
+
+/**
+ * Sets innerHTML on the app root for the initial render.
+ * @param {string} rootId - The root element ID (e.g., "app").
+ * @param {string} html - The full HTML to set.
  */
 export function renderInitial(rootId, html) {
-    appRoot = document.getElementById(rootId);
-    if (!appRoot) {
-        throw new Error(`Abies: element #${rootId} not found`);
+    const root = document.getElementById(rootId);
+    if (root) {
+        root.innerHTML = html;
     }
-    appRoot.innerHTML = html;
 }
 
 /**
  * Applies a binary-encoded batch of DOM patches.
- * The input is a MemoryView (Span<byte>) from .NET — we must .slice() it
- * to get a stable Uint8Array before the interop call returns.
- * @param {ArrayBufferView} patchData - Binary patch data from .NET.
+ *
+ * The data is received as a MemoryView (Span<byte> from .NET).
+ * We must call .slice() to get a stable Uint8Array before
+ * the interop call returns (the Span is stack-allocated).
+ *
+ * @param {MemoryView} batchData - The binary patch data from .NET.
  */
-export function applyPatches(patchData) {
-    // MemoryView from .NET — slice() to get a stable copy.
-    const bytes = patchData.slice();
+export function applyBinaryBatch(batchData) {
+    // MemoryView → stable Uint8Array (must copy before interop returns)
+    const bytes = batchData.slice();
     const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
-    let offset = 0;
 
-    const patchCount = view.getInt32(offset, true);
-    offset += 4;
+    // Read header
+    const patchCount = view.getInt32(0, true);        // little-endian
+    const stringTableOffset = view.getInt32(4, true);
+
+    // Read string table
+    const strings = readStringTable(bytes, stringTableOffset, bytes.byteLength);
+
+    // Apply each patch
+    const headerSize = 8;
+    const entrySize = 16;
 
     for (let i = 0; i < patchCount; i++) {
-        offset = applyPatch(view, bytes, offset);
-    }
-}
+        const offset = headerSize + (i * entrySize);
+        const type = view.getInt32(offset, true);
+        const f1Idx = view.getInt32(offset + 4, true);
+        const f2Idx = view.getInt32(offset + 8, true);
+        const f3Idx = view.getInt32(offset + 12, true);
 
-/**
- * Sets up event delegation on the app root element.
- * Captures common DOM events and routes them to .NET.
- * @param {string} rootId - The DOM element ID.
- */
-export function setupEventDelegation(rootId) {
-    appRoot = appRoot || document.getElementById(rootId);
-    if (!appRoot) {
-        throw new Error(`Abies: element #${rootId} not found`);
-    }
+        const f1 = f1Idx >= 0 ? strings[f1Idx] : null;
+        const f2 = f2Idx >= 0 ? strings[f2Idx] : null;
+        const f3 = f3Idx >= 0 ? strings[f3Idx] : null;
 
-    const eventTypes = [
-        "click", "dblclick", "mousedown", "mouseup",
-        "input", "change", "submit",
-        "keydown", "keyup", "keypress",
-        "focus", "blur",
-        "touchstart", "touchend", "touchmove"
-    ];
-
-    for (const eventType of eventTypes) {
-        appRoot.addEventListener(eventType, (e) => {
-            handleDelegatedEvent(e, eventType);
-        }, true); // Use capture phase to catch all events.
+        applyPatch(type, f1, f2, f3);
     }
 }
 
 /**
  * Sets the document title.
- * @param {string} title - The new title.
+ * @param {string} title - The new page title.
  */
 export function setTitle(title) {
     document.title = title;
 }
 
 /**
- * Navigates to a URL via history.pushState.
+ * Navigates via history.pushState and dispatches a popstate event.
  * @param {string} url - The target URL.
  */
 export function navigateTo(url) {
     history.pushState(null, "", url);
-    // Dispatch a popstate event so the app can react.
+    // Trigger popstate so the .NET side picks up the URL change
     window.dispatchEvent(new PopStateEvent("popstate"));
 }
 
-// ── Binary Patch Decoder ──
-
 /**
- * Reads a uint16 (little-endian) from the DataView.
- * @param {DataView} view
- * @param {number} offset
- * @returns {{ value: number, offset: number }}
+ * Sets up event delegation for all common event types.
+ * Called once during initialization.
  */
-function readUInt16(view, offset) {
-    return { value: view.getUint16(offset, true), offset: offset + 2 };
+export function setupEventDelegation() {
+    COMMON_EVENT_TYPES.forEach(registerEventType);
 }
 
 /**
- * Reads a path (uint16 length + uint16[] indices).
- * @param {DataView} view
- * @param {number} offset
- * @returns {{ path: number[], offset: number }}
+ * Sets the .NET callback for dispatching DOM events.
+ * Called from main.js after getting assembly exports.
+ * @param {Function} callback - The DispatchDomEvent function from .NET.
  */
-function readPath(view, offset) {
-    let r = readUInt16(view, offset);
-    const length = r.value;
-    offset = r.offset;
-
-    const path = [];
-    for (let i = 0; i < length; i++) {
-        r = readUInt16(view, offset);
-        path.push(r.value);
-        offset = r.offset;
-    }
-    return { path, offset };
-}
-
-/**
- * Reads a length-prefixed UTF-8 string.
- * @param {DataView} view
- * @param {Uint8Array} bytes
- * @param {number} offset
- * @returns {{ value: string, offset: number }}
- */
-function readString(view, bytes, offset) {
-    const r = readUInt16(view, offset);
-    const byteLength = r.value;
-    offset = r.offset;
-    const value = utf8Decoder.decode(bytes.subarray(offset, offset + byteLength));
-    return { value, offset: offset + byteLength };
-}
-
-/**
- * Navigates the real DOM from the view root to the element at the given path.
- * The view root is appRoot's first child (the node produced by innerHTML).
- * An empty path returns the view root itself.
- * @param {number[]} path - Child indices from view root.
- * @returns {Node | null}
- */
-function navigateToNode(path) {
-    // Start at the view root — the first child of the app mount point.
-    /** @type {Node} */
-    let current = appRoot?.firstChild;
-    if (!current) {
-        console.warn("Abies: no view root found in appRoot");
-        return null;
-    }
-    for (const index of path) {
-        if (!current || !current.childNodes || index >= current.childNodes.length) {
-            console.warn("Abies: path navigation failed", path);
-            return null;
-        }
-        current = current.childNodes[index];
-    }
-    return current;
-}
-
-/**
- * Parses an HTML string into a single DOM element or text node.
- * @param {string} html
- * @returns {Node}
- */
-function parseHtmlFragment(html) {
-    const template = document.createElement("template");
-    template.innerHTML = html;
-    return template.content.firstChild;
-}
-
-/**
- * Applies a single patch from the binary stream.
- * @param {DataView} view
- * @param {Uint8Array} bytes
- * @param {number} offset
- * @returns {number} The new offset after reading this patch.
- */
-function applyPatch(view, bytes, offset) {
-    const opCode = view.getUint8(offset);
-    offset += 1;
-
-    switch (opCode) {
-        case 0: // InsertChild
-            return applyInsertChild(view, bytes, offset);
-        case 1: // RemoveChild
-            return applyRemoveChild(view, bytes, offset);
-        case 2: // ReplaceNode
-            return applyReplaceNode(view, bytes, offset);
-        case 3: // SetAttribute
-            return applySetAttribute(view, bytes, offset);
-        case 4: // RemoveAttribute
-            return applyRemoveAttribute(view, bytes, offset);
-        case 5: // SetText
-            return applySetText(view, bytes, offset);
-        default:
-            throw new Error(`Abies: unknown patch op code ${opCode}`);
-    }
-}
-
-function applyInsertChild(view, bytes, offset) {
-    const p = readPath(view, offset);
-    offset = p.offset;
-
-    const idx = readUInt16(view, offset);
-    offset = idx.offset;
-
-    const html = readString(view, bytes, offset);
-    offset = html.offset;
-
-    const parent = navigateToNode(p.path);
-    if (parent) {
-        const child = parseHtmlFragment(html.value);
-        if (idx.value >= parent.childNodes.length) {
-            parent.appendChild(child);
-        } else {
-            parent.insertBefore(child, parent.childNodes[idx.value]);
-        }
-    }
-    return offset;
-}
-
-function applyRemoveChild(view, bytes, offset) {
-    const p = readPath(view, offset);
-    offset = p.offset;
-
-    const idx = readUInt16(view, offset);
-    offset = idx.offset;
-
-    const parent = navigateToNode(p.path);
-    if (parent && idx.value < parent.childNodes.length) {
-        parent.removeChild(parent.childNodes[idx.value]);
-    }
-    return offset;
-}
-
-function applyReplaceNode(view, bytes, offset) {
-    const p = readPath(view, offset);
-    offset = p.offset;
-
-    const html = readString(view, bytes, offset);
-    offset = html.offset;
-
-    const target = navigateToNode(p.path);
-    if (target && target.parentNode) {
-        const replacement = parseHtmlFragment(html.value);
-        target.parentNode.replaceChild(replacement, target);
-    }
-    return offset;
-}
-
-function applySetAttribute(view, bytes, offset) {
-    const p = readPath(view, offset);
-    offset = p.offset;
-
-    const name = readString(view, bytes, offset);
-    offset = name.offset;
-
-    const value = readString(view, bytes, offset);
-    offset = value.offset;
-
-    const target = navigateToNode(p.path);
-    if (target && target instanceof Element) {
-        target.setAttribute(name.value, value.value);
-    }
-    return offset;
-}
-
-function applyRemoveAttribute(view, bytes, offset) {
-    const p = readPath(view, offset);
-    offset = p.offset;
-
-    const name = readString(view, bytes, offset);
-    offset = name.offset;
-
-    const target = navigateToNode(p.path);
-    if (target && target instanceof Element) {
-        target.removeAttribute(name.value);
-    }
-    return offset;
-}
-
-function applySetText(view, bytes, offset) {
-    const p = readPath(view, offset);
-    offset = p.offset;
-
-    const value = readString(view, bytes, offset);
-    offset = value.offset;
-
-    const target = navigateToNode(p.path);
-    if (target) {
-        // If it's a text node, set textContent directly.
-        // If it's an element, set its textContent (replacing all children).
-        target.textContent = value.value;
-    }
-    return offset;
-}
-
-// ── Event Delegation ──
-
-/**
- * Handles a delegated DOM event by computing the path and dispatching to .NET.
- * @param {Event} event
- * @param {string} eventType
- */
-function handleDelegatedEvent(event, eventType) {
-    if (!appRoot) return;
-
-    let target = event.target;
-    if (!target || !(target instanceof Node)) return;
-
-    // Walk up from text nodes to the nearest Element — event handlers
-    // in the virtual DOM are always on Element nodes, not text nodes.
-    while (target && !(target instanceof Element) && target !== appRoot) {
-        target = target.parentNode;
-    }
-    if (!target || target === appRoot) return;
-
-    // Compute the path from the view root (appRoot's first child) to the
-    // event target. The virtual DOM tree starts at the view root, which maps
-    // to appRoot.firstChild in the real DOM. We skip appRoot itself so the
-    // path indices align with the virtual tree's NavigateToNode.
-    const viewRoot = appRoot.firstElementChild || appRoot.firstChild;
-    if (!viewRoot) return;
-
-    const path = computePathFrom(viewRoot, target);
-    if (path === null) return;
-
-    // Extract event data based on event type.
-    const eventData = extractEventData(event, eventType);
-
-    // Prevent default for submit events to avoid page reload.
-    if (eventType === "submit") {
-        event.preventDefault();
-    }
-
-    // Call the [JSExport] dispatch bridge in .NET.
-    const pathJson = JSON.stringify(path);
-
-    try {
-        if (globalThis.__abies_dispatch) {
-            globalThis.__abies_dispatch(pathJson, eventType, eventData);
-        } else {
-            console.warn("[Abies] __abies_dispatch not registered");
-        }
-    } catch (err) {
-        console.error("Abies: dispatch error", err);
-    }
-}
-
-/**
- * Computes the child-index path from the app root to the given node.
- * @param {Node} target
- * @returns {number[] | null}
- */
-function computePath(target) {
-    return computePathFrom(appRoot, target);
-}
-
-/**
- * Computes the child-index path from a given root to the given target node.
- * Walks up from target, counting sibling positions at each level.
- * @param {Node} root - The root node to compute the path from.
- * @param {Node} target - The target node.
- * @returns {number[] | null} - The path as child indices, or null if target is not within root.
- */
-function computePathFrom(root, target) {
-    if (target === root) return [];
-
-    const indices = [];
-    let current = target;
-
-    while (current && current !== root) {
-        const parent = current.parentNode;
-        if (!parent) return null;
-
-        // Count only Element siblings — text nodes in the DOM correspond to
-        // virtual DOM children, but we navigate by Element child index to
-        // match how NavigateToNode walks Node.Element.Children.
-        let index = 0;
-        let sibling = parent.firstChild;
-        while (sibling && sibling !== current) {
-            // Count all childNodes (including text nodes) since the virtual DOM
-            // tree also includes Text nodes as children.
-            index++;
-            sibling = sibling.nextSibling;
-        }
-        indices.unshift(index);
-        current = parent;
-    }
-
-    // If we didn't reach root, the target is outside our tree.
-    if (current !== root) return null;
-
-    return indices;
-}
-
-/**
- * Extracts relevant event data based on the event type.
- * @param {Event} event
- * @param {string} eventType
- * @returns {string}
- */
-function extractEventData(event, eventType) {
-    switch (eventType) {
-        case "input":
-        case "change":
-            return event.target?.value ?? "";
-
-        case "keydown":
-        case "keyup":
-        case "keypress":
-            return event.key ?? "";
-
-        case "submit":
-            return "";
-
-        default:
-            // For click, mousedown, etc. — no specific data needed.
-            return "";
-    }
+export function setDispatchCallback(callback) {
+    dispatchDomEvent = callback;
 }
