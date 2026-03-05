@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1772622955783,
+  "lastUpdate": 1772700623827,
   "repoUrl": "https://github.com/MCGPPeters/Automaton",
   "entries": {
     "Automaton Benchmarks": [
@@ -342,6 +342,120 @@ window.BENCHMARK_DATA = {
             "value": 3401.4848484848485,
             "unit": "ns",
             "range": "± 387.97294676452674"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "me@mauricepeters.dev",
+            "name": "MCGPPeters",
+            "username": "MCGPPeters"
+          },
+          "committer": {
+            "email": "MCGPPeters@users.noreply.github.com",
+            "name": "Maurice CGP Peters",
+            "username": "MCGPPeters"
+          },
+          "distinct": true,
+          "id": "df4743cb07567d1a41713ed511e13c69f47bd75b",
+          "message": "docs: address copilot review comments on composition.md\n\n- Fix grammar: 'manage, coordinate, and lifecycle' → 'manage, coordinate, and handle lifecycle'\n- Replace invalid 'let ... in ...' syntax with standard C# switch statement in Delegation Pattern\n- Update Interpreter Bridge to use Result<TEvent[], PipelineError> return type matching the actual API",
+          "timestamp": "2026-03-05T09:49:40+01:00",
+          "tree_id": "159d933551fc4c426cd97f0e94127e1848f5c259",
+          "url": "https://github.com/MCGPPeters/Automaton/commit/df4743cb07567d1a41713ed511e13c69f47bd75b"
+        },
+        "date": 1772700623396,
+        "tool": "benchmarkdotnet",
+        "benches": [
+          {
+            "name": "Automaton.Benchmarks.AutomatonBenchmarks.Dispatch_Single",
+            "value": 6707.441176470588,
+            "unit": "ns",
+            "range": "± 123.36048323320321"
+          },
+          {
+            "name": "Automaton.Benchmarks.AutomatonBenchmarks.Dispatch_WithObserver",
+            "value": 5787.7692307692305,
+            "unit": "ns",
+            "range": "± 68.89140469627283"
+          },
+          {
+            "name": "Automaton.Benchmarks.AutomatonBenchmarks.Dispatch_Batch_100",
+            "value": 56084.70618556701,
+            "unit": "ns",
+            "range": "± 5397.888217353586"
+          },
+          {
+            "name": "Automaton.Benchmarks.AutomatonBenchmarks.Dispatch_WithFeedback",
+            "value": 8470.84375,
+            "unit": "ns",
+            "range": "± 921.6191510268619"
+          },
+          {
+            "name": "Automaton.Benchmarks.AutomatonBenchmarks.Dispatch_ComposedObserver",
+            "value": 6100.568965517241,
+            "unit": "ns",
+            "range": "± 165.32261340319738"
+          },
+          {
+            "name": "Automaton.Benchmarks.AutomatonBenchmarks.Handle_Accept",
+            "value": 6432.068965517241,
+            "unit": "ns",
+            "range": "± 180.93940008318546"
+          },
+          {
+            "name": "Automaton.Benchmarks.AutomatonBenchmarks.Handle_Reject",
+            "value": 3686.8035714285716,
+            "unit": "ns",
+            "range": "± 168.23591872917433"
+          },
+          {
+            "name": "Automaton.Benchmarks.AutomatonBenchmarks.Safe_NoTrack_Dispatch_Single",
+            "value": 4875.976190476191,
+            "unit": "ns",
+            "range": "± 120.84768059322404"
+          },
+          {
+            "name": "Automaton.Benchmarks.AutomatonBenchmarks.Safe_NoTrack_Dispatch_WithFeedback",
+            "value": 6787.285714285715,
+            "unit": "ns",
+            "range": "± 199.67090649233526"
+          },
+          {
+            "name": "Automaton.Benchmarks.AutomatonBenchmarks.Safe_NoTrack_Handle_Accept",
+            "value": 6813.630434782609,
+            "unit": "ns",
+            "range": "± 164.46837340292018"
+          },
+          {
+            "name": "Automaton.Benchmarks.AutomatonBenchmarks.Safe_NoTrack_Handle_Reject",
+            "value": 3879.065934065934,
+            "unit": "ns",
+            "range": "± 342.8452129589095"
+          },
+          {
+            "name": "Automaton.Benchmarks.AutomatonBenchmarks.Lean_Dispatch_Single",
+            "value": 5043.242857142857,
+            "unit": "ns",
+            "range": "± 256.8254601421473"
+          },
+          {
+            "name": "Automaton.Benchmarks.AutomatonBenchmarks.Lean_Dispatch_WithFeedback",
+            "value": 6315.366666666667,
+            "unit": "ns",
+            "range": "± 113.2833783461802"
+          },
+          {
+            "name": "Automaton.Benchmarks.AutomatonBenchmarks.Lean_Handle_Accept",
+            "value": 6040.489583333333,
+            "unit": "ns",
+            "range": "± 444.1357069704488"
+          },
+          {
+            "name": "Automaton.Benchmarks.AutomatonBenchmarks.Lean_Handle_Reject",
+            "value": 3436.6949152542375,
+            "unit": "ns",
+            "range": "± 162.51474779096714"
           }
         ]
       }
