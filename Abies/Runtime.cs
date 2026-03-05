@@ -99,6 +99,7 @@ public sealed class AbiesRuntime<TProgram, TModel, TArgument> : IDisposable
 
     private AutomatonRuntime<TProgram, TModel, Message, Command, TArgument> _core = null!;
     private readonly Apply _apply;
+    private readonly Action<string>? _titleChanged;
     private Document? _currentDocument;
     private SubscriptionState _subscriptionState = SubscriptionState.Empty;
 
@@ -117,8 +118,8 @@ public sealed class AbiesRuntime<TProgram, TModel, TArgument> : IDisposable
     /// The runtime uses two-phase initialization: construct first, then
     /// wire the kernel runtime via field assignment in <see cref="Start"/>.
     /// </summary>
-    private AbiesRuntime(Apply apply) =>
-        _apply = apply;
+    private AbiesRuntime(Apply apply, Action<string>? titleChanged) =>
+        (_apply, _titleChanged) = (apply, titleChanged);
 
     /// <summary>
     /// The observer callback: renders view, diffs, applies patches, updates subscriptions.
@@ -136,10 +137,19 @@ public sealed class AbiesRuntime<TProgram, TModel, TArgument> : IDisposable
         // Diff against previous
         var patches = Operations.Diff(_currentDocument?.Body, newDocument.Body);
 
+        // Update handler registry for new/removed event handlers
+        UpdateHandlerRegistry(patches);
+
         // Apply patches to platform
         if (patches.Count > 0)
         {
             _apply(patches);
+        }
+
+        // Update title if changed
+        if (_currentDocument is null || _currentDocument.Title != newDocument.Title)
+        {
+            _titleChanged?.Invoke(newDocument.Title);
         }
 
         _currentDocument = newDocument;
@@ -153,6 +163,67 @@ public sealed class AbiesRuntime<TProgram, TModel, TArgument> : IDisposable
         renderActivity?.SetStatus(ActivityStatusCode.Ok);
 
         return PipelineResult.Ok;
+    }
+
+    /// <summary>
+    /// Updates the <see cref="HandlerRegistry"/> based on the patches produced by diff.
+    /// Registers new handlers and unregisters removed handlers so event delegation
+    /// can dispatch messages correctly.
+    /// </summary>
+    private static void UpdateHandlerRegistry(IReadOnlyList<Patch> patches)
+    {
+        foreach (var patch in patches)
+        {
+            switch (patch)
+            {
+                case AddHandler p:
+                    HandlerRegistry.Register(p.Handler);
+                    break;
+
+                case RemoveHandler p:
+                    HandlerRegistry.Unregister(p.Handler.CommandId);
+                    break;
+
+                case UpdateHandler p:
+                    HandlerRegistry.Unregister(p.OldHandler.CommandId);
+                    HandlerRegistry.Register(p.NewHandler);
+                    break;
+
+                // When adding children, register all handlers in the new subtree
+                case AddChild p:
+                    HandlerRegistry.RegisterHandlers(p.Child);
+                    break;
+
+                case AddRoot p:
+                    HandlerRegistry.RegisterHandlers(p.Element);
+                    break;
+
+                case ReplaceChild p:
+                    HandlerRegistry.UnregisterHandlers(p.OldElement);
+                    HandlerRegistry.RegisterHandlers(p.NewElement);
+                    break;
+
+                // When removing children, unregister all handlers in the old subtree
+                case RemoveChild p:
+                    HandlerRegistry.UnregisterHandlers(p.Child);
+                    break;
+
+                case ClearChildren p:
+                    foreach (var child in p.OldChildren)
+                    {
+                        HandlerRegistry.UnregisterHandlers(child);
+                    }
+                    break;
+
+                // SetChildrenHtml replaces all children — register all new handlers
+                case SetChildrenHtml p:
+                    foreach (var child in p.Children)
+                    {
+                        HandlerRegistry.RegisterHandlers(child);
+                    }
+                    break;
+            }
+        }
     }
 
     /// <summary>
@@ -193,6 +264,7 @@ public sealed class AbiesRuntime<TProgram, TModel, TArgument> : IDisposable
     /// browser interpreters handle HTTP, localStorage, etc.; test interpreters are no-ops or mocks.
     /// </param>
     /// <param name="argument">Initialization parameters passed to <c>TProgram.Initialize</c>.</param>
+    /// <param name="titleChanged">Optional callback invoked when the document title changes.</param>
     /// <param name="threadSafe">
     /// When <c>true</c>, all dispatch calls are serialized via a semaphore.
     /// Defaults to <c>false</c> for WASM's single-threaded environment.
@@ -202,13 +274,17 @@ public sealed class AbiesRuntime<TProgram, TModel, TArgument> : IDisposable
         Apply apply,
         Interpreter<Command, Message> interpreter,
         TArgument argument = default!,
+        Action<string>? titleChanged = null,
         bool threadSafe = false)
     {
         using var activity = _activitySource.StartActivity("Abies.Start");
         activity?.SetTag("abies.program", typeof(TProgram).Name);
 
         // Phase 1: Create the runtime shell (observer needs 'this' reference)
-        var runtime = new AbiesRuntime<TProgram, TModel, TArgument>(apply);
+        var runtime = new AbiesRuntime<TProgram, TModel, TArgument>(apply, titleChanged);
+
+        // Wire the handler registry's dispatch to the runtime (needed for event delegation)
+        HandlerRegistry.Dispatch = runtime.DispatchFromSubscription;
 
         // Phase 2: Initialize the program
         var (model, initialCommand) = TProgram.Initialize(argument);
@@ -216,8 +292,15 @@ public sealed class AbiesRuntime<TProgram, TModel, TArgument> : IDisposable
         // Phase 3: Render initial view and apply
         var document = TProgram.View(model);
         var patches = Operations.Diff(null, document.Body);
+
+        // Register all event handlers from the initial view tree
+        HandlerRegistry.RegisterHandlers(document.Body);
+
         apply(patches);
         runtime._currentDocument = document;
+
+        // Set initial title
+        titleChanged?.Invoke(document.Title);
 
         // Phase 4: Wire the kernel runtime with the instance-method observer
         runtime._core = new AutomatonRuntime<TProgram, TModel, Message, Command, TArgument>(
@@ -266,6 +349,8 @@ public sealed class AbiesRuntime<TProgram, TModel, TArgument> : IDisposable
         using var activity = _activitySource.StartActivity("Abies.Stop");
 
         SubscriptionManager.Stop(_subscriptionState);
+        HandlerRegistry.Dispatch = null;
+        HandlerRegistry.Clear();
         _core.Dispose();
 
         activity?.SetStatus(ActivityStatusCode.Ok);

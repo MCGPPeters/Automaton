@@ -7,6 +7,8 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    <!-- Praefixum source generator uses interceptors to replace UniqueId calls at compile time. -->
+    <InterceptorsNamespaces>$(InterceptorsNamespaces);Praefixum</InterceptorsNamespaces>
     <!-- This project only targets browser-wasm, suppress platform compatibility warnings. -->
     <NoWarn>CA1416</NoWarn>
   </PropertyGroup>
