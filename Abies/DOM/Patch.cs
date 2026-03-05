@@ -134,9 +134,10 @@ public readonly struct UpdateHandler(Element element, Handler oldHandler, Handle
 }
 
 /// <summary>Update the text content of a text node.</summary>
-public readonly struct UpdateText(Element parent, string text, string newId) : Patch
+public readonly struct UpdateText(Element parent, Text node, string text, string newId) : Patch
 {
     public readonly Element Parent = parent;
+    public readonly Text Node = node;
     public readonly string Text = text;
     public readonly string NewId = newId;
 }
