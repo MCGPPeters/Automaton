@@ -184,3 +184,30 @@ public readonly struct UpdateRaw(RawHtml node, string html, string newId) : Patc
     public readonly string Html = html;
     public readonly string NewId = newId;
 }
+
+// =============================================================================
+// Head Element Mutations
+// =============================================================================
+// Head patches manage <head> elements (meta, link, script, base) using a
+// stable key (data-abies-head attribute) for identity. These flow through
+// the same binary protocol as body patches — a single interop call per
+// render cycle carries both body and head mutations.
+// =============================================================================
+
+/// <summary>Add a new managed element to the document head.</summary>
+public readonly struct AddHeadElement(HeadContent content) : Patch
+{
+    public readonly HeadContent Content = content;
+}
+
+/// <summary>Update an existing managed head element whose key matches but content changed.</summary>
+public readonly struct UpdateHeadElement(HeadContent content) : Patch
+{
+    public readonly HeadContent Content = content;
+}
+
+/// <summary>Remove a managed head element that is no longer declared.</summary>
+public readonly struct RemoveHeadElement(string key) : Patch
+{
+    public readonly string Key = key;
+}

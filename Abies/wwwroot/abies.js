@@ -57,6 +57,9 @@ const OP_ADD_RAW          = 16;
 const OP_REMOVE_RAW       = 17;
 const OP_REPLACE_RAW      = 18;
 const OP_UPDATE_RAW       = 19;
+const OP_ADD_HEAD_ELEMENT    = 20;
+const OP_UPDATE_HEAD_ELEMENT = 21;
+const OP_REMOVE_HEAD_ELEMENT = 22;
 
 // =============================================================================
 // Event types to register for delegation
@@ -505,6 +508,61 @@ function applyPatch(type, f1, f2, f3) {
             const el = document.getElementById(f1);
             if (el) {
                 el.innerHTML = f2;
+            }
+            break;
+        }
+
+        // =====================================================================
+        // Head Element Mutations
+        // =====================================================================
+        // Managed head elements are identified by data-abies-head="{key}".
+        // These never conflict with user-defined head elements from index.html.
+        // =====================================================================
+
+        case OP_ADD_HEAD_ELEMENT: {
+            // f1 = key, f2 = html
+            const head = document.head;
+            if (head) {
+                _fragmentContainer.innerHTML = f2;
+                const el = _fragmentContainer.firstElementChild;
+                if (el) {
+                    head.appendChild(el);
+                }
+            }
+            break;
+        }
+
+        case OP_UPDATE_HEAD_ELEMENT: {
+            // f1 = key, f2 = html
+            const head = document.head;
+            if (head) {
+                const existing = head.querySelector(`[data-abies-head="${f1}"]`);
+                if (existing) {
+                    _fragmentContainer.innerHTML = f2;
+                    const newEl = _fragmentContainer.firstElementChild;
+                    if (newEl) {
+                        existing.replaceWith(newEl);
+                    }
+                } else {
+                    // Fallback: element not found, add it
+                    _fragmentContainer.innerHTML = f2;
+                    const el = _fragmentContainer.firstElementChild;
+                    if (el) {
+                        head.appendChild(el);
+                    }
+                }
+            }
+            break;
+        }
+
+        case OP_REMOVE_HEAD_ELEMENT: {
+            // f1 = key
+            const head = document.head;
+            if (head) {
+                const existing = head.querySelector(`[data-abies-head="${f1}"]`);
+                if (existing) {
+                    existing.remove();
+                }
             }
             break;
         }
