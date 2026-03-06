@@ -47,6 +47,8 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Abies.Conduit.ReadStore.Pos
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Abies.Conduit.Api", "Abies.Conduit.Api\Abies.Conduit.Api.csproj", "{C8943DF8-B958-41FF-A32B-992152570A34}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Abies.Conduit.Api.Tests", "Abies.Conduit.Api.Tests\Abies.Conduit.Api.Tests.csproj", "{49232E77-AFA4-4766-B163-2898718DFFA7}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -321,6 +323,18 @@ Global
 		{C8943DF8-B958-41FF-A32B-992152570A34}.Release|x64.Build.0 = Release|Any CPU
 		{C8943DF8-B958-41FF-A32B-992152570A34}.Release|x86.ActiveCfg = Release|Any CPU
 		{C8943DF8-B958-41FF-A32B-992152570A34}.Release|x86.Build.0 = Release|Any CPU
+		{49232E77-AFA4-4766-B163-2898718DFFA7}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{49232E77-AFA4-4766-B163-2898718DFFA7}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{49232E77-AFA4-4766-B163-2898718DFFA7}.Debug|x64.ActiveCfg = Debug|Any CPU
+		{49232E77-AFA4-4766-B163-2898718DFFA7}.Debug|x64.Build.0 = Debug|Any CPU
+		{49232E77-AFA4-4766-B163-2898718DFFA7}.Debug|x86.ActiveCfg = Debug|Any CPU
+		{49232E77-AFA4-4766-B163-2898718DFFA7}.Debug|x86.Build.0 = Debug|Any CPU
+		{49232E77-AFA4-4766-B163-2898718DFFA7}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{49232E77-AFA4-4766-B163-2898718DFFA7}.Release|Any CPU.Build.0 = Release|Any CPU
+		{49232E77-AFA4-4766-B163-2898718DFFA7}.Release|x64.ActiveCfg = Release|Any CPU
+		{49232E77-AFA4-4766-B163-2898718DFFA7}.Release|x64.Build.0 = Release|Any CPU
+		{49232E77-AFA4-4766-B163-2898718DFFA7}.Release|x86.ActiveCfg = Release|Any CPU
+		{49232E77-AFA4-4766-B163-2898718DFFA7}.Release|x86.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE

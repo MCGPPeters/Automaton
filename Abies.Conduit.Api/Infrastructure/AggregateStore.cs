@@ -90,7 +90,7 @@ public sealed class AggregateStore
 {
     private readonly EventStore<UserEvent> _userEventStore;
     private readonly EventStore<ArticleEvent> _articleEventStore;
-    private readonly NpgsqlDataSource _dataSource;
+    private readonly NpgsqlDataSource? _dataSource;
 
     private readonly ConcurrentDictionary<string, AggregateRunner<User, UserState, UserCommand, UserEvent, UserEffect, UserError, Unit>> _userRunners = new();
     private readonly ConcurrentDictionary<string, AggregateRunner<Article, ArticleState, ArticleCommand, ArticleEvent, ArticleEffect, ArticleError, Unit>> _articleRunners = new();
@@ -98,11 +98,11 @@ public sealed class AggregateStore
     /// <summary>Creates a new aggregate store.</summary>
     /// <param name="userEventStore">The KurrentDB-backed event store for User events.</param>
     /// <param name="articleEventStore">The KurrentDB-backed event store for Article events.</param>
-    /// <param name="dataSource">The PostgreSQL data source for projection writes.</param>
+    /// <param name="dataSource">The PostgreSQL data source for projection writes. Null disables projection (testing).</param>
     public AggregateStore(
         EventStore<UserEvent> userEventStore,
         EventStore<ArticleEvent> articleEventStore,
-        NpgsqlDataSource dataSource)
+        NpgsqlDataSource? dataSource)
     {
         _userEventStore = userEventStore;
         _articleEventStore = articleEventStore;
@@ -190,6 +190,9 @@ public sealed class AggregateStore
         AggregateRunner<User, UserState, UserCommand, UserEvent, UserEffect, UserError, Unit> runner,
         CancellationToken cancellationToken)
     {
+        // Skip projection when no data source is configured (integration tests)
+        if (_dataSource is null) return;
+
         // Load only the new events (after the version we had before Handle)
         var newEvents = await _userEventStore.LoadAsync(streamId, versionBefore, cancellationToken)
             .ConfigureAwait(false);
@@ -267,6 +270,9 @@ public sealed class AggregateStore
         AggregateRunner<Article, ArticleState, ArticleCommand, ArticleEvent, ArticleEffect, ArticleError, Unit> runner,
         CancellationToken cancellationToken)
     {
+        // Skip projection when no data source is configured (integration tests)
+        if (_dataSource is null) return;
+
         var newEvents = await _articleEventStore.LoadAsync(streamId, versionBefore, cancellationToken)
             .ConfigureAwait(false);
 
