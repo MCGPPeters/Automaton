@@ -1,19 +1,19 @@
 // =============================================================================
 // WASM Bootstrap — main.js
 // =============================================================================
-// Loads the .NET WebAssembly runtime, wires the Abies event dispatch callback,
-// and starts the Counter application.
+// Loads the .NET WebAssembly runtime, wires the Abies event dispatch and
+// navigation callbacks, and starts the Counter application.
 //
 // The dispatch bridge connects two module instances:
 //   - abies.js (the Abies framework's browser runtime)
-//   - Abies.dll (the .NET assembly with [JSExport] DispatchDomEvent)
+//   - Abies.dll (the .NET assembly with [JSExport] DispatchDomEvent + OnUrlChanged)
 //
 // ES modules are cached by URL, so the `import` here and .NET's
 // `JSHost.ImportAsync("Abies", "/abies.js")` share the same module instance.
 // =============================================================================
 
 import { dotnet } from "./_framework/dotnet.js";
-import { setDispatchCallback, setupEventDelegation } from "./abies.js";
+import { setDispatchCallback, setOnUrlChangedCallback, setupEventDelegation, setupNavigation } from "./abies.js";
 
 const { getAssemblyExports } = await dotnet
     .withDiagnosticTracing(false)
@@ -27,8 +27,16 @@ setDispatchCallback((commandId, eventName, eventData) =>
     abiesExports.Abies.Interop.DispatchDomEvent(commandId, eventName, eventData)
 );
 
+// Wire the navigation bridge: abies.js URL changes → .NET OnUrlChanged.
+setOnUrlChangedCallback((url) =>
+    abiesExports.Abies.Interop.OnUrlChanged(url)
+);
+
 // Register document-level event listeners for event delegation.
 setupEventDelegation();
+
+// Set up navigation interception (popstate + link click).
+setupNavigation();
 
 // Start the .NET application (calls Program.Main).
 await dotnet.run();

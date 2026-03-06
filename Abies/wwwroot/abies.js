@@ -644,11 +644,145 @@ export function navigateTo(url) {
 }
 
 /**
+ * Replaces the current URL via history.replaceState (no new history entry).
+ * @param {string} url - The target URL.
+ */
+export function replaceUrl(url) {
+    history.replaceState(null, "", url);
+    // Trigger popstate so the .NET side picks up the URL change
+    window.dispatchEvent(new PopStateEvent("popstate"));
+}
+
+/**
+ * Navigates back one step in browser history.
+ */
+export function historyBack() {
+    history.back();
+}
+
+/**
+ * Navigates forward one step in browser history.
+ */
+export function historyForward() {
+    history.forward();
+}
+
+/**
+ * Navigates to an external URL (full page load).
+ * @param {string} href - The external URL.
+ */
+export function externalNavigate(href) {
+    window.location.href = href;
+}
+
+/**
  * Sets up event delegation for all common event types.
  * Called once during initialization.
  */
 export function setupEventDelegation() {
     COMMON_EVENT_TYPES.forEach(registerEventType);
+}
+
+// =============================================================================
+// Navigation — URL Change Detection & Link Click Interception
+// =============================================================================
+// Two event sources feed URL changes into the .NET subscription:
+//
+//   1. popstate — fired by browser back/forward or programmatic
+//      history.pushState/replaceState (we fire synthetic popstate after those)
+//
+//   2. Click interception — internal <a> links are caught before the browser
+//      navigates, pushed via pushState, and reported to .NET
+//
+// The onUrlChanged callback is wired during setupNavigation and calls the
+// .NET [JSExport] OnUrlChanged method.
+// =============================================================================
+
+let onUrlChangedCallback = null;
+
+/**
+ * Sets up navigation: registers popstate listener and intercepts internal link clicks.
+ * Called once during initialization. The .NET side has already set up the
+ * OnUrlChanged [JSExport], which is called via the dispatch callback.
+ */
+export function setupNavigation() {
+    // Get the .NET callback for URL changes
+    onUrlChangedCallback = onUrlChangedDotNet;
+
+    // Listen for popstate events (back/forward, pushState, replaceState)
+    window.addEventListener("popstate", () => {
+        if (onUrlChangedCallback) {
+            onUrlChangedCallback(window.location.pathname + window.location.search + window.location.hash);
+        }
+    });
+
+    // Intercept clicks on <a> elements for client-side routing
+    document.addEventListener("click", (event) => {
+        // Only intercept left-click without modifiers
+        if (event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) {
+            return;
+        }
+
+        // Walk up from the click target to find an <a> element
+        let anchor = event.target;
+        while (anchor && anchor.tagName !== "A") {
+            anchor = anchor.parentElement;
+        }
+
+        if (!anchor) return;
+
+        // Skip links with target attributes (e.g., target="_blank")
+        if (anchor.hasAttribute("target")) return;
+
+        // Skip links with download attribute
+        if (anchor.hasAttribute("download")) return;
+
+        // Skip links with rel="external"
+        if (anchor.getAttribute("rel") === "external") return;
+
+        const href = anchor.getAttribute("href");
+        if (!href) return;
+
+        // Skip javascript: URLs
+        if (href.startsWith("javascript:")) return;
+
+        // Skip anchor-only links (just "#")
+        if (href === "#") return;
+
+        // Determine if internal: same origin or relative path
+        try {
+            const url = new URL(href, window.location.origin);
+
+            if (url.origin !== window.location.origin) {
+                // External link — let the browser handle it
+                return;
+            }
+
+            // Internal link — prevent default, push state, notify .NET
+            event.preventDefault();
+            const path = url.pathname + url.search + url.hash;
+            history.pushState(null, "", path);
+
+            if (onUrlChangedCallback) {
+                onUrlChangedCallback(path);
+            }
+        } catch {
+            // Invalid URL — let the browser handle it
+            return;
+        }
+    });
+}
+
+// .NET OnUrlChanged callback — set after assembly exports are loaded
+let onUrlChangedDotNet = null;
+
+/**
+ * Sets the .NET callback for URL change notifications.
+ * Called from main.js after getting assembly exports.
+ * @param {Function} callback - The OnUrlChanged function from .NET.
+ */
+export function setOnUrlChangedCallback(callback) {
+    onUrlChangedDotNet = callback;
 }
 
 /**
