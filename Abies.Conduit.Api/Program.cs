@@ -129,8 +129,12 @@ builder.Services.AddSingleton(sp =>
 var app = builder.Build();
 
 // ─── Schema Migration ──────────────────────────────────────────────────────
-await Schema.EnsureCreated(app.Services.GetRequiredService<NpgsqlDataSource>())
-    .ConfigureAwait(false);
+// Skip schema migration in test environments (no real PostgreSQL)
+var pgDataSource = app.Services.GetService<NpgsqlDataSource>();
+if (pgDataSource is not null)
+{
+    await Schema.EnsureCreated(pgDataSource).ConfigureAwait(false);
+}
 
 // ─── Middleware ─────────────────────────────────────────────────────────────
 app.UseAuthentication();
@@ -148,3 +152,7 @@ app.MapCommentEndpoints();
 app.MapTagEndpoints();
 
 app.Run();
+
+// Expose for WebApplicationFactory<Program> in integration tests
+/// <summary>Marker class for integration test hosting.</summary>
+public partial class Program;
