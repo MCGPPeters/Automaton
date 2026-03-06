@@ -53,6 +53,102 @@ namespace Abies;
 /// <param name="patches">The DOM patches to apply.</param>
 public delegate void Apply(IReadOnlyList<Patch> patches);
 
+// =============================================================================
+// Head Content Diffing
+// =============================================================================
+// Pure functions for computing the delta between two HeadContent arrays.
+// Head patches are standard Patch types (AddHeadElement, UpdateHeadElement,
+// RemoveHeadElement) that flow through the same binary batch protocol as
+// body patches — a single interop call per render cycle.
+// =============================================================================
+
+/// <summary>
+/// Pure functions for diffing <see cref="HeadContent"/> arrays between renders.
+/// </summary>
+public static class HeadDiff
+{
+    /// <summary>
+    /// Computes the delta between old and new head content arrays.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Uses the <see cref="HeadContent.Key"/> property for identity matching.
+    /// Elements present in both old and new are compared by value equality
+    /// (record equality). Elements only in old are removed; only in new are added.
+    /// </para>
+    /// <para>
+    /// Returns standard <see cref="Patch"/> types (<see cref="AddHeadElement"/>,
+    /// <see cref="UpdateHeadElement"/>, <see cref="RemoveHeadElement"/>) so head
+    /// changes flow through the same binary batch protocol as body patches.
+    /// </para>
+    /// </remarks>
+    /// <param name="oldHead">The previous head content (empty array if first render).</param>
+    /// <param name="newHead">The desired head content.</param>
+    /// <returns>A list of patches to apply via the binary protocol.</returns>
+    public static IReadOnlyList<Patch> Diff(
+        ReadOnlySpan<HeadContent> oldHead,
+        ReadOnlySpan<HeadContent> newHead)
+    {
+        // Fast path: both empty — no changes
+        if (oldHead.Length == 0 && newHead.Length == 0)
+            return [];
+
+        // Fast path: old empty — add all new
+        if (oldHead.Length == 0)
+        {
+            var adds = new Patch[newHead.Length];
+            for (var i = 0; i < newHead.Length; i++)
+                adds[i] = new AddHeadElement(newHead[i]);
+            return adds;
+        }
+
+        // Fast path: new empty — remove all old
+        if (newHead.Length == 0)
+        {
+            var removes = new Patch[oldHead.Length];
+            for (var i = 0; i < oldHead.Length; i++)
+                removes[i] = new RemoveHeadElement(oldHead[i].Key);
+            return removes;
+        }
+
+        // Build lookup from old head by key
+        var oldByKey = new Dictionary<string, HeadContent>(oldHead.Length);
+        for (var i = 0; i < oldHead.Length; i++)
+            oldByKey[oldHead[i].Key] = oldHead[i];
+
+        var patches = new List<Patch>();
+        var seenKeys = new HashSet<string>(newHead.Length);
+
+        // Walk new head: add or update
+        for (var i = 0; i < newHead.Length; i++)
+        {
+            var item = newHead[i];
+            seenKeys.Add(item.Key);
+
+            if (oldByKey.TryGetValue(item.Key, out var existing))
+            {
+                // Key exists — update only if content changed
+                if (!existing.Equals(item))
+                    patches.Add(new UpdateHeadElement(item));
+            }
+            else
+            {
+                // New key — add
+                patches.Add(new AddHeadElement(item));
+            }
+        }
+
+        // Walk old head: remove keys not in new
+        for (var i = 0; i < oldHead.Length; i++)
+        {
+            if (!seenKeys.Contains(oldHead[i].Key))
+                patches.Add(new RemoveHeadElement(oldHead[i].Key));
+        }
+
+        return patches;
+    }
+}
+
 /// <summary>
 /// The MVU runtime: wires the Automaton kernel to View, Diff, and Subscriptions.
 /// </summary>
@@ -134,16 +230,34 @@ public sealed class AbiesRuntime<TProgram, TModel, TArgument> : IDisposable
         // Render new view
         var newDocument = TProgram.View(state);
 
-        // Diff against previous
+        // Diff body against previous
         var patches = Operations.Diff(_currentDocument?.Body, newDocument.Body);
 
-        // Update handler registry for new/removed event handlers
-        UpdateHandlerRegistry(patches);
+        // Diff head content and merge into the same patch list
+        var headPatches = HeadDiff.Diff(
+            _currentDocument?.Head ?? [],
+            newDocument.Head);
 
-        // Apply patches to platform
-        if (patches.Count > 0)
+        // Merge body + head patches into a single list for the binary protocol
+        List<Patch>? mergedPatches = null;
+        if (headPatches.Count > 0)
         {
-            _apply(patches);
+            mergedPatches = new List<Patch>(patches.Count + headPatches.Count);
+            mergedPatches.AddRange(patches);
+            mergedPatches.AddRange(headPatches);
+        }
+
+        var allPatches = mergedPatches is not null
+            ? (IReadOnlyList<Patch>)mergedPatches
+            : patches;
+
+        // Update handler registry for new/removed event handlers
+        UpdateHandlerRegistry(allPatches);
+
+        // Apply all patches (body + head) to platform via a single binary batch
+        if (allPatches.Count > 0)
+        {
+            _apply(allPatches);
         }
 
         // Update title if changed
@@ -301,6 +415,13 @@ public sealed class AbiesRuntime<TProgram, TModel, TArgument> : IDisposable
 
         // Set initial title
         titleChanged?.Invoke(document.Title);
+
+        // Apply initial head content via the same binary protocol
+        var headPatches = HeadDiff.Diff([], document.Head);
+        if (headPatches.Count > 0)
+        {
+            apply(headPatches);
+        }
 
         // Phase 4: Wire the kernel runtime with the instance-method observer
         runtime._core = new AutomatonRuntime<TProgram, TModel, Message, Command, TArgument>(

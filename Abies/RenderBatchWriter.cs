@@ -70,7 +70,10 @@ internal enum BinaryPatchType : int
     AddRaw = 16,
     RemoveRaw = 17,
     ReplaceRaw = 18,
-    UpdateRaw = 19
+    UpdateRaw = 19,
+    AddHeadElement = 20,
+    UpdateHeadElement = 21,
+    RemoveHeadElement = 22
 }
 
 /// <summary>
@@ -296,6 +299,27 @@ internal sealed class RenderBatchWriter
                     Intern(p.Node.Id),
                     Intern(p.Html),
                     Intern(p.NewId));
+                break;
+
+            case AddHeadElement p:
+                WriteEntry(BinaryPatchType.AddHeadElement,
+                    Intern(p.Content.Key),
+                    Intern(p.Content.ToHtml()),
+                    NullIndex);
+                break;
+
+            case UpdateHeadElement p:
+                WriteEntry(BinaryPatchType.UpdateHeadElement,
+                    Intern(p.Content.Key),
+                    Intern(p.Content.ToHtml()),
+                    NullIndex);
+                break;
+
+            case RemoveHeadElement p:
+                WriteEntry(BinaryPatchType.RemoveHeadElement,
+                    Intern(p.Key),
+                    NullIndex,
+                    NullIndex);
                 break;
         }
     }
