@@ -388,30 +388,35 @@ function applyPatch(type, f1, f2, f3) {
         // =====================================================================
         // Handler Mutations — render as data-event-{name}="{commandId}"
         // =====================================================================
+        // NOTE: f2 is the full attribute name (e.g. "data-event-click"),
+        // not just the event name. This is because Handler.Name in C#
+        // returns the Attribute.Name (the base record's Name property),
+        // which is already prefixed with "data-event-".
+        // =====================================================================
 
         case OP_ADD_HANDLER: {
-            // f1 = elementId, f2 = eventName, f3 = commandId
+            // f1 = elementId, f2 = attribute name (e.g. "data-event-click"), f3 = commandId
             const el = document.getElementById(f1);
             if (el) {
-                el.setAttribute(`data-event-${f2}`, f3);
+                el.setAttribute(f2, f3);
             }
             break;
         }
 
         case OP_REMOVE_HANDLER: {
-            // f1 = elementId, f2 = eventName, f3 = commandId (unused for removal)
+            // f1 = elementId, f2 = attribute name, f3 = commandId (unused for removal)
             const el = document.getElementById(f1);
             if (el) {
-                el.removeAttribute(`data-event-${f2}`);
+                el.removeAttribute(f2);
             }
             break;
         }
 
         case OP_UPDATE_HANDLER: {
-            // f1 = elementId, f2 = eventName, f3 = newCommandId
+            // f1 = elementId, f2 = attribute name, f3 = newCommandId
             const el = document.getElementById(f1);
             if (el) {
-                el.setAttribute(`data-event-${f2}`, f3);
+                el.setAttribute(f2, f3);
             }
             break;
         }

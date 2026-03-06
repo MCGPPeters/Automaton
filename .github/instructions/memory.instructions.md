@@ -15,6 +15,48 @@ Key reminders:
 - Follow the PR template at `.github/pull_request_template.md`
 - Use Conventional Commits format for PR titles
 
+## 📋 TODO: File GitHub Issue — C# Record Inheritance Property Shadowing (2026-03-06)
+
+**Status**: Ready to file — no duplicate found on `dotnet/roslyn` or `dotnet/csharplang`.
+
+**Target Repo**: `dotnet/roslyn` (compiler diagnostic request)
+
+**Title**: `Request: Compiler warning when derived record positional parameter name collides with base constructor argument that transforms the value`
+
+**Minimal Repro**:
+```csharp
+public record Attribute(string Id, string Name, string Value);
+
+public record Handler(string Name, string CommandId, string Id)
+    : Attribute(Id, $"data-event-{Name}", CommandId);
+
+var h = new Handler("click", "cmd-1", "id-1");
+Console.WriteLine(h.Name);                 // "data-event-click" — NOT "click"!
+Console.WriteLine(((Attribute)h).Name);    // "data-event-click" — same value
+```
+
+**Expected Behavior**: Either:
+1. `h.Name` returns `"click"` (the value passed to the derived constructor), OR
+2. The compiler emits a warning that the derived positional parameter `Name` collides with the base property `Name` and the base constructor receives a different expression (`$"data-event-{Name}"`)
+
+**Actual Behavior**: `h.Name` silently returns `"data-event-click"` — the transformed value passed to the base constructor. No warning is emitted.
+
+**Why This Is Dangerous**:
+- The developer writes `Handler("click", ...)` and naturally expects `handler.Name` to be `"click"`
+- The collision is invisible — there's no `new` keyword hiding, no `CS0108` warning
+- In our case, this caused a **silent runtime bug**: JavaScript code used `handler.Name` thinking it was the event type, but got the full attribute name with the prefix already applied, resulting in double-prefixed attributes (`data-event-data-event-click`) that broke event delegation entirely
+- The bug was extremely difficult to diagnose because the code *looks* correct
+
+**Suggested Diagnostic**: A new warning (or extension of `CS0108`) when:
+1. A derived record has a positional parameter with the same name as a base record parameter
+2. The base constructor call passes a *different expression* for that parameter (not just forwarding the value)
+
+**Labels**: `Area-Compilers`, `Feature Request`, `New Language Feature (Suggestion)`
+
+**Discovered While**: Building the Abies MVU framework for Blazor WASM — the `Handler` record extended `Attribute` and reused the `Name` parameter with a transformation in the base constructor call. Cost ~4 hours of debugging.
+
+---
+
 ## ⚠️ Benchmark Environment: Power State Awareness (M4 Pro MacBook)
 
 **CRITICAL**: Always ask "Is your MacBook plugged in or on battery?" before running benchmarks.
