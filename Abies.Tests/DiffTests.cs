@@ -257,9 +257,9 @@ public class DiffTests
     }
 
     [Fact]
-    public void Diff_AppendChild_EmitsAddChild()
+    public void Diff_AppendChild_EmitsAppendChildrenHtml()
     {
-        // Head skip matches c1, then c2 is new → AddChild.
+        // Head skip matches c1, then c2 is new → AppendChildrenHtml.
         var old = new Element("e1", "div", [],
             new Element("c1", "span", []));
         var @new = new Element("e1", "div", [],
@@ -268,7 +268,7 @@ public class DiffTests
 
         var patches = Operations.Diff(old, @new);
 
-        Assert.Contains(patches, p => p is AddChild);
+        Assert.Contains(patches, p => p is AppendChildrenHtml);
     }
 
     [Fact]
@@ -380,7 +380,7 @@ public class DiffTests
     [Fact]
     public void Diff_AppendToEnd_HeadSkipMatchesExisting()
     {
-        // All old children match new head → only additions at the end.
+        // All old children match new head → only AppendChildrenHtml at the end.
         var old = new Element("e1", "div", [],
             new Element("c1", "p", []),
             new Element("c2", "p", []));
@@ -391,7 +391,7 @@ public class DiffTests
 
         var patches = Operations.Diff(old, @new);
 
-        Assert.Contains(patches, p => p is AddChild);
+        Assert.Contains(patches, p => p is AppendChildrenHtml);
         Assert.DoesNotContain(patches, p => p is RemoveChild);
         Assert.DoesNotContain(patches, p => p is MoveChild);
     }

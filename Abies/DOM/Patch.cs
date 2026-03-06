@@ -13,7 +13,7 @@
 // They implement the Patch marker interface for polymorphic dispatch.
 //
 // Patch type catalogue:
-//   Tree mutations:     AddRoot, ReplaceChild, AddChild, RemoveChild, ClearChildren, SetChildrenHtml, MoveChild
+//   Tree mutations:     AddRoot, ReplaceChild, AddChild, RemoveChild, ClearChildren, SetChildrenHtml, AppendChildrenHtml, MoveChild
 //   Attribute mutations: UpdateAttribute, AddAttribute, RemoveAttribute
 //   Handler mutations:   AddHandler, RemoveHandler, UpdateHandler
 //   Text mutations:      UpdateText, AddText, RemoveText
@@ -73,6 +73,17 @@ public readonly struct ClearChildren(Element parent, Node[] oldChildren) : Patch
 /// Used for the 0→N children fast path (initial render of a list).
 /// </summary>
 public readonly struct SetChildrenHtml(Element parent, Node[] children) : Patch
+{
+    public readonly Element Parent = parent;
+    public readonly Node[] Children = children;
+}
+
+/// <summary>
+/// Append children via a single insertAdjacentHTML('beforeend', html) call.
+/// Used for the N→N+M append fast path (e.g., "Add 1000 rows" benchmark).
+/// Unlike SetChildrenHtml, this preserves existing children and appends new ones.
+/// </summary>
+public readonly struct AppendChildrenHtml(Element parent, Node[] children) : Patch
 {
     public readonly Element Parent = parent;
     public readonly Node[] Children = children;

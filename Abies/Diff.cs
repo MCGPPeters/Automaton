@@ -803,22 +803,20 @@ public static class Operations
                 }
             }
 
-            // Add extra new children.
-            for (int i = headSkip; i < newLength; i++)
+            // =================================================================
+            // Append Fast Path — single insertAdjacentHTML instead of N AddChild
+            // =================================================================
+            // When appending multiple children (e.g., "Add 1000 rows"), emit a
+            // single AppendChildrenHtml patch. This uses insertAdjacentHTML on
+            // the JS side, which:
+            //   1. Respects the parent's parsing context (<tr> inside <tbody>)
+            //   2. Preserves existing children (unlike innerHTML)
+            //   3. Is a single DOM operation instead of N appendChild calls
+            // =================================================================
+            if (newLength > headSkip)
             {
-                var effectiveNew = UnwrapMemoNode(newChildren[i]);
-                if (effectiveNew is Element newChild)
-                {
-                    patches.Add(new AddChild(newParent, newChild));
-                }
-                else if (effectiveNew is RawHtml newRaw)
-                {
-                    patches.Add(new AddRaw(newParent, newRaw));
-                }
-                else if (effectiveNew is Text newText)
-                {
-                    patches.Add(new AddText(newParent, newText));
-                }
+                var appendChildren = newChildren[headSkip..];
+                patches.Add(new AppendChildrenHtml(newParent, MaterializeChildren(appendChildren)));
             }
 
             return;

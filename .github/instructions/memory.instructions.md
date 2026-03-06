@@ -443,7 +443,87 @@ For reference, compare against:
 - `vanillajs-keyed` - Baseline (raw DOM manipulation)
 - `blazor-wasm-keyed` - .NET Blazor WASM (similar tech stack)
 
-### Latest Benchmark Results (2026-02-19)
+### Latest Benchmark Results — Abies v2.0.0 Automaton (2026-03-06)
+
+**Branch**: `feat/abies` — Full rewrite on the Automaton kernel.
+
+**Complete js-framework-benchmark results (all 15 benchmarks):**
+
+| Benchmark | Total (ms) | Script (ms) | vs Picea 152 | vs Blazor |
+|-----------|-----------|-------------|-------------|-----------|
+| 01_run1k | **51.7** | **28.6** | **-21%** ✅ | **-42%** 🚀🚀 |
+| 02_replace1k | **60.2** | **37.0** | **-9%** ✅ | — |
+| 03_update10th_x16 | **67.1** | **53.2** | **-51%** 🚀 | — |
+| 04_select1k | **13.8** | **10.3** | **-88%** 🚀 | — |
+| 05_swap1k | **33.8** | **17.2** | **-65%** 🚀 | — |
+| 06_remove-one-1k | **20.7** | **8.3** | **-68%** 🚀 | — |
+| 07_create10k | **550.0** | **322.5** | **-41%** 🚀 | — |
+| 08_create1k-after1k | **76.2** | **48.8** | — (new) | — |
+| 09_clear1k_x8 | **18.3** | **16.2** | **-34%** ✅ | — |
+| 21_ready-memory | 34.4 MB | — | — | **-16%** ✅ |
+| 22_run-memory | 36.2 MB | — | — | — |
+| 25_run-clear-memory | 58.6 MB | — | — | — |
+| 41_size-uncompressed | 3,729 KB | — | — | — |
+| 42_size-compressed | 1,139 KB | — | — | **-17%** ✅ |
+| 43_first-paint | **57.7ms** | — | — | **-23%** ✅ |
+
+### ✅ FIXED: parseHtmlFragment Foster Parenting Bug (2026-03-06)
+
+**Root cause**: `parseHtmlFragment()` used a `<div>` as the container for parsing HTML
+fragments via `innerHTML`. The HTML5 parser enforces **context-sensitive parsing** —
+`<tr>` elements are invalid inside `<div>`, so the parser applies the **foster parenting
+algorithm** (HTML Living Standard §13.2.6.1), stripping `<tr>`/`<td>` wrappers and keeping
+only inline content. This caused appended rows (benchmark 08) to appear as bare `<a>` tags
+instead of full `<tr>` elements.
+
+**Fix**: Changed `_fragmentContainer` from `<div>` to `<template>`. The `<template>` element
+has a special inert `DocumentFragment` that bypasses the normal HTML parser context rules,
+preserving any HTML structure including `<tr>`, `<td>`, `<option>`, etc.
+
+```javascript
+// BEFORE (broken for table elements):
+const _fragmentContainer = document.createElement("div");
+function parseHtmlFragment(html) {
+    _fragmentContainer.innerHTML = html;
+    return _fragmentContainer.firstElementChild;
+}
+
+// AFTER (context-independent):
+const _fragmentTemplate = document.createElement("template");
+function parseHtmlFragment(html) {
+    _fragmentTemplate.innerHTML = html;
+    return _fragmentTemplate.content.firstElementChild;
+}
+```
+
+### ✅ APPLIED: AppendChildrenHtml Batch Patch (2026-03-06)
+
+**Optimization**: When appending new children to a parent (head-skip detects all old keys
+matched), emit a single `AppendChildrenHtml` patch instead of N individual `AddChild` patches.
+
+**JS handler**: Uses `parent.insertAdjacentHTML("beforeend", html)` which:
+1. Respects the parent's parsing context (`<tr>` is valid inside `<tbody>`)
+2. Preserves existing children (unlike `innerHTML`)
+3. Is a single DOM operation instead of N `appendChild` calls
+
+**Code changes**:
+- `DOM/Patch.cs`: Added `AppendChildrenHtml` patch record
+- `RenderBatchWriter.cs`: Added `BinaryPatchType.AppendChildrenHtml = 23`
+- `Diff.cs`: Head-skip append path emits `AppendChildrenHtml` instead of N `AddChild`
+- `Runtime.cs`: Added handler registration for `AppendChildrenHtml` in `UpdateHandlerRegistry`
+- `abies.js`: Added `OP_APPEND_CHILDREN_HTML = 23` handler
+
+### JSHost.ImportAsync Path Resolution (2026-03-06)
+
+**Critical finding**: `JSHost.ImportAsync` resolves paths relative to the **calling module**,
+which is `_framework/dotnet.runtime.js` (not the page URL or wwwroot root). So:
+- `/abies.js` → absolute path from origin (works in dev server, not benchmark)
+- `./abies.js` → `_framework/abies.js` (404!)
+- `../abies.js` → goes up from `_framework/` to wwwroot root ✅
+
+**Applied to**: Both `Abies.Counter.Wasm/Program.cs` and `Abies.Benchmark.Wasm/Program.cs`.
+
+### Previous Picea Results (2026-02-19, for reference)
 
 **Abies v1.0.152 (with SetChildrenHtml + addEventListeners skip) vs Blazor WASM v10.0.0:**
 

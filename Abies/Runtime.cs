@@ -343,6 +343,14 @@ public sealed class AbiesRuntime<TProgram, TModel, TArgument> : IDisposable
                         HandlerRegistry.RegisterHandlers(child);
                     }
                     break;
+
+                // AppendChildrenHtml adds children to existing — register new handlers
+                case AppendChildrenHtml p:
+                    foreach (var child in p.Children)
+                    {
+                        HandlerRegistry.RegisterHandlers(child);
+                    }
+                    break;
             }
         }
     }

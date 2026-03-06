@@ -39,7 +39,7 @@ internal static class Program
 {
     private static async Task Main()
     {
-        await JSHost.ImportAsync("Abies", "/abies.js");
+        await JSHost.ImportAsync("Abies", "../abies.js");
 
         var batchWriter = new RenderBatchWriter();
 
