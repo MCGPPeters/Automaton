@@ -1,0 +1,24 @@
+<Project Sdk="Microsoft.NET.Sdk.Web">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Abies.Conduit\Abies.Conduit.csproj" />
+    <ProjectReference Include="..\Abies.Conduit.ReadStore.PostgreSQL\Abies.Conduit.ReadStore.PostgreSQL.csproj" />
+    <ProjectReference Include="..\Automaton\Automaton.csproj" />
+    <ProjectReference Include="..\Automaton.Patterns\Automaton.Patterns.csproj" />
+    <ProjectReference Include="..\Automaton.Patterns.EventSourcing.KurrentDB\Automaton.Patterns.EventSourcing.KurrentDB.csproj" />
+    <ProjectReference Include="..\Abies.ServiceDefaults\Abies.ServiceDefaults.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="BCrypt.Net-Next" Version="4.0.3" />
+    <PackageReference Include="Microsoft.IdentityModel.JsonWebTokens" Version="8.7.0" />
+  </ItemGroup>
+
+</Project>

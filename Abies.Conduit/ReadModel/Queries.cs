@@ -35,6 +35,13 @@ public delegate ValueTask<Option<UserReadModel>> FindUserById(
     CancellationToken cancellationToken = default);
 
 /// <summary>
+/// Finds a user by their username.
+/// </summary>
+public delegate ValueTask<Option<UserReadModel>> FindUserByUsername(
+    string username,
+    CancellationToken cancellationToken = default);
+
+/// <summary>
 /// Gets a user's profile as seen by another user (includes following status).
 /// </summary>
 /// <param name="username">The username of the profile to retrieve.</param>
@@ -78,6 +85,16 @@ public delegate ValueTask<ArticleListResult> GetFeed(
 public delegate ValueTask<Option<ArticleQueryResult>> FindArticleBySlug(
     string slug,
     Option<Guid> currentUserId,
+    CancellationToken cancellationToken = default);
+
+/// <summary>
+/// Finds an article's aggregate ID by its slug.
+/// Needed for command routing — maps the URL slug to the aggregate GUID.
+/// </summary>
+/// <param name="slug">The article slug.</param>
+/// <param name="cancellationToken">Cancellation token.</param>
+public delegate ValueTask<Option<Guid>> FindArticleIdBySlug(
+    string slug,
     CancellationToken cancellationToken = default);
 
 // ─── Comment Queries ──────────────────────────────────────────────────────────

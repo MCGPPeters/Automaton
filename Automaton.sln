@@ -45,6 +45,8 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Abies.Conduit.ReadStore.Pos
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Abies.Conduit.ReadStore.PostgreSQL.Tests", "Abies.Conduit.ReadStore.PostgreSQL.Tests\Abies.Conduit.ReadStore.PostgreSQL.Tests.csproj", "{2EDB9375-7396-4545-A3E0-6B396799BAF2}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Abies.Conduit.Api", "Abies.Conduit.Api\Abies.Conduit.Api.csproj", "{C8943DF8-B958-41FF-A32B-992152570A34}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -307,6 +309,18 @@ Global
 		{2EDB9375-7396-4545-A3E0-6B396799BAF2}.Release|x64.Build.0 = Release|Any CPU
 		{2EDB9375-7396-4545-A3E0-6B396799BAF2}.Release|x86.ActiveCfg = Release|Any CPU
 		{2EDB9375-7396-4545-A3E0-6B396799BAF2}.Release|x86.Build.0 = Release|Any CPU
+		{C8943DF8-B958-41FF-A32B-992152570A34}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{C8943DF8-B958-41FF-A32B-992152570A34}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{C8943DF8-B958-41FF-A32B-992152570A34}.Debug|x64.ActiveCfg = Debug|Any CPU
+		{C8943DF8-B958-41FF-A32B-992152570A34}.Debug|x64.Build.0 = Debug|Any CPU
+		{C8943DF8-B958-41FF-A32B-992152570A34}.Debug|x86.ActiveCfg = Debug|Any CPU
+		{C8943DF8-B958-41FF-A32B-992152570A34}.Debug|x86.Build.0 = Debug|Any CPU
+		{C8943DF8-B958-41FF-A32B-992152570A34}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{C8943DF8-B958-41FF-A32B-992152570A34}.Release|Any CPU.Build.0 = Release|Any CPU
+		{C8943DF8-B958-41FF-A32B-992152570A34}.Release|x64.ActiveCfg = Release|Any CPU
+		{C8943DF8-B958-41FF-A32B-992152570A34}.Release|x64.Build.0 = Release|Any CPU
+		{C8943DF8-B958-41FF-A32B-992152570A34}.Release|x86.ActiveCfg = Release|Any CPU
+		{C8943DF8-B958-41FF-A32B-992152570A34}.Release|x86.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE

@@ -95,6 +95,39 @@ public static class QueryStore
         };
 
     /// <summary>
+    /// Creates a <see cref="FindUserByUsername"/> capability backed by PostgreSQL.
+    /// </summary>
+    public static FindUserByUsername CreateFindUserByUsername(NpgsqlDataSource dataSource) =>
+        async (username, cancellationToken) =>
+        {
+            using var activity = ReadStoreDiagnostics.Source.StartActivity("QueryStore.FindUserByUsername");
+            activity?.SetTag("query.username", username);
+
+            const string sql = """
+                SELECT id, email, username, password_hash, bio, image, created_at, updated_at
+                FROM users
+                WHERE username = @username
+                """;
+
+            await using var connection = await dataSource.OpenConnectionAsync(cancellationToken)
+                .ConfigureAwait(false);
+            await using var command = new NpgsqlCommand(sql, connection);
+            command.Parameters.AddWithValue("username", NpgsqlDbType.Text, username);
+
+            await using var reader = await command.ExecuteReaderAsync(cancellationToken)
+                .ConfigureAwait(false);
+
+            if (await reader.ReadAsync(cancellationToken).ConfigureAwait(false))
+            {
+                activity?.SetStatus(ActivityStatusCode.Ok);
+                return Option<UserReadModel>.Some(ReadUser(reader));
+            }
+
+            activity?.SetStatus(ActivityStatusCode.Ok);
+            return Option<UserReadModel>.None;
+        };
+
+    /// <summary>
     /// Creates a <see cref="GetProfile"/> capability backed by PostgreSQL.
     /// </summary>
     public static GetProfile CreateGetProfile(NpgsqlDataSource dataSource) =>
@@ -388,6 +421,37 @@ public static class QueryStore
         };
 
     // ─── Comment Queries ──────────────────────────────────────────────────────
+
+    /// <summary>
+    /// Creates a <see cref="FindArticleIdBySlug"/> capability backed by PostgreSQL.
+    /// </summary>
+    public static FindArticleIdBySlug CreateFindArticleIdBySlug(NpgsqlDataSource dataSource) =>
+        async (slug, cancellationToken) =>
+        {
+            using var activity = ReadStoreDiagnostics.Source.StartActivity("QueryStore.FindArticleIdBySlug");
+            activity?.SetTag("query.slug", slug);
+
+            const string sql = """
+                SELECT id FROM articles WHERE slug = @slug AND deleted = FALSE
+                """;
+
+            await using var connection = await dataSource.OpenConnectionAsync(cancellationToken)
+                .ConfigureAwait(false);
+            await using var command = new NpgsqlCommand(sql, connection);
+            command.Parameters.AddWithValue("slug", NpgsqlDbType.Text, slug);
+
+            var result = await command.ExecuteScalarAsync(cancellationToken)
+                .ConfigureAwait(false);
+
+            if (result is Guid id)
+            {
+                activity?.SetStatus(ActivityStatusCode.Ok);
+                return Option<Guid>.Some(id);
+            }
+
+            activity?.SetStatus(ActivityStatusCode.Ok);
+            return Option<Guid>.None;
+        };
 
     /// <summary>
     /// Creates a <see cref="GetComments"/> capability backed by PostgreSQL.

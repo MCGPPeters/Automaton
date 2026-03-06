@@ -8,4 +8,12 @@
     <UserSecretsId>4bf81d52-4f54-487a-b7ad-0a9796de6821</UserSecretsId>
   </PropertyGroup>
 
+  <ItemGroup>
+    <ProjectReference Include="..\Abies.Conduit.Api\Abies.Conduit.Api.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Aspire.Hosting.PostgreSQL" Version="9.3.0" />
+  </ItemGroup>
+
 </Project>
