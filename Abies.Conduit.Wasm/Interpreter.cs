@@ -57,6 +57,9 @@ public static class ConduitInterpreter
                 AddComment cmd => await HandleAddComment(cmd),
                 DeleteCommentCommand cmd => await HandleDeleteComment(cmd),
                 DeleteArticleCommand cmd => await HandleDeleteArticle(cmd),
+                UpdateUser cmd => await HandleUpdateUser(cmd),
+                CreateArticle cmd => await HandleCreateArticle(cmd),
+                UpdateArticle cmd => await HandleUpdateArticle(cmd),
                 _ => []
             };
 
@@ -299,6 +302,68 @@ public static class ConduitInterpreter
 
         var dto = await response.Content.ReadFromJsonAsync<ProfileResponseDto>(_jsonOptions);
         return dto?.Profile is null ? [] : [new FollowToggled(MapProfile(dto.Profile))];
+    }
+
+    // ─── Settings Handlers ────────────────────────────────────────────────
+
+    private static async Task<Message[]> HandleUpdateUser(UpdateUser cmd)
+    {
+        using var request = CreateRequest(HttpMethod.Put, $"{cmd.ApiUrl}/api/user", cmd.Token);
+        var userPayload = new Dictionary<string, object?>
+        {
+            ["image"] = cmd.Image,
+            ["username"] = cmd.Username,
+            ["bio"] = cmd.Bio,
+            ["email"] = cmd.Email
+        };
+        if (cmd.Password is not null)
+            userPayload["password"] = cmd.Password;
+
+        request.Content = JsonContent.Create(
+            new { user = userPayload }, options: _jsonOptions);
+        using var response = await _http.SendAsync(request);
+
+        if (!response.IsSuccessStatusCode)
+            return [new ApiError(await ReadErrors(response))];
+
+        var dto = await response.Content.ReadFromJsonAsync<UserResponseDto>(_jsonOptions);
+        return dto?.User is null ? [] :
+        [
+            new UserUpdated(new Session(
+                dto.User.Token, dto.User.Username, dto.User.Email, dto.User.Bio, dto.User.Image))
+        ];
+    }
+
+    // ─── Article Editor Handlers ──────────────────────────────────────────
+
+    private static async Task<Message[]> HandleCreateArticle(CreateArticle cmd)
+    {
+        using var request = CreateRequest(HttpMethod.Post, $"{cmd.ApiUrl}/api/articles", cmd.Token);
+        request.Content = JsonContent.Create(
+            new { article = new { title = cmd.Title, description = cmd.Description, body = cmd.Body, tagList = cmd.TagList } },
+            options: _jsonOptions);
+        using var response = await _http.SendAsync(request);
+
+        if (!response.IsSuccessStatusCode)
+            return [new ApiError(await ReadErrors(response))];
+
+        var dto = await response.Content.ReadFromJsonAsync<SingleArticleDto>(_jsonOptions);
+        return dto?.Article is null ? [] : [new ArticleSaved(dto.Article.Slug)];
+    }
+
+    private static async Task<Message[]> HandleUpdateArticle(UpdateArticle cmd)
+    {
+        using var request = CreateRequest(HttpMethod.Put, $"{cmd.ApiUrl}/api/articles/{cmd.Slug}", cmd.Token);
+        request.Content = JsonContent.Create(
+            new { article = new { title = cmd.Title, description = cmd.Description, body = cmd.Body, tagList = cmd.TagList } },
+            options: _jsonOptions);
+        using var response = await _http.SendAsync(request);
+
+        if (!response.IsSuccessStatusCode)
+            return [new ApiError(await ReadErrors(response))];
+
+        var dto = await response.Content.ReadFromJsonAsync<SingleArticleDto>(_jsonOptions);
+        return dto?.Article is null ? [] : [new ArticleSaved(dto.Article.Slug)];
     }
 
     // ─── Helpers ──────────────────────────────────────────────────────────

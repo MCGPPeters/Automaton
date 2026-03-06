@@ -53,6 +53,57 @@ public sealed record CommentBodyChanged(string Value) : ConduitMessage;
 /// <summary>Comment form submitted.</summary>
 public sealed record CommentSubmitted : ConduitMessage;
 
+// ─── Settings Form ────────────────────────────────────────────────────────────
+
+/// <summary>Settings form image URL changed.</summary>
+public sealed record SettingsImageChanged(string Value) : ConduitMessage;
+
+/// <summary>Settings form username changed.</summary>
+public sealed record SettingsUsernameChanged(string Value) : ConduitMessage;
+
+/// <summary>Settings form bio changed.</summary>
+public sealed record SettingsBioChanged(string Value) : ConduitMessage;
+
+/// <summary>Settings form email changed.</summary>
+public sealed record SettingsEmailChanged(string Value) : ConduitMessage;
+
+/// <summary>Settings form password changed.</summary>
+public sealed record SettingsPasswordChanged(string Value) : ConduitMessage;
+
+/// <summary>Settings form submitted.</summary>
+public sealed record SettingsSubmitted : ConduitMessage;
+
+// ─── Editor Form ──────────────────────────────────────────────────────────────
+
+/// <summary>Editor form title changed.</summary>
+public sealed record EditorTitleChanged(string Value) : ConduitMessage;
+
+/// <summary>Editor form description changed.</summary>
+public sealed record EditorDescriptionChanged(string Value) : ConduitMessage;
+
+/// <summary>Editor form body changed.</summary>
+public sealed record EditorBodyChanged(string Value) : ConduitMessage;
+
+/// <summary>Editor form tag input changed.</summary>
+public sealed record EditorTagInputChanged(string Value) : ConduitMessage;
+
+/// <summary>Editor form add tag.</summary>
+public sealed record EditorAddTag : ConduitMessage;
+
+/// <summary>Editor form tag input key pressed (for Enter detection).</summary>
+public sealed record EditorTagKeyDown(string Key) : ConduitMessage;
+
+/// <summary>Editor form remove tag.</summary>
+public sealed record EditorRemoveTag(string Tag) : ConduitMessage;
+
+/// <summary>Editor form submitted.</summary>
+public sealed record EditorSubmitted : ConduitMessage;
+
+// ─── Profile Interaction ──────────────────────────────────────────────────────
+
+/// <summary>Profile page tab changed (my articles vs favorited).</summary>
+public sealed record ProfileTabChanged(bool ShowFavorites) : ConduitMessage;
+
 // ─── UI Interaction ───────────────────────────────────────────────────────────
 
 /// <summary>Home page feed tab changed.</summary>
@@ -107,6 +158,12 @@ public sealed record CommentDeleted(Guid CommentId) : ConduitMessage;
 
 /// <summary>Article deleted response.</summary>
 public sealed record ArticleDeleted : ConduitMessage;
+
+/// <summary>User settings updated response.</summary>
+public sealed record UserUpdated(Session Session) : ConduitMessage;
+
+/// <summary>Article created/updated response — navigate to the article.</summary>
+public sealed record ArticleSaved(string Slug) : ConduitMessage;
 
 /// <summary>API error response.</summary>
 public sealed record ApiError(IReadOnlyList<string> Errors) : ConduitMessage;
