@@ -31,8 +31,8 @@
 //
 // See also:
 //   - Program.cs — Url, UrlRequest, UrlChanged types
-//   - Interop.cs — JSImport/JSExport bridge
-//   - abies.js — browser-side navigation wiring
+//   - Abies.Browser/Interop.cs — JSImport/JSExport bridge
+//   - Abies.Browser/wwwroot/abies.js — browser-side navigation wiring
 //   - Runtime.cs — navigation command interpretation
 // =============================================================================
 
@@ -234,7 +234,7 @@ public interface NavigationCommand : Command
 internal static class NavigationCallbacks
 {
     /// <summary>
-    /// Called by <see cref="Interop.OnUrlChanged"/> when the browser URL changes.
+    /// Called by the browser interop layer (Abies.Browser.Interop.OnUrlChanged) when the browser URL changes.
     /// Set by <see cref="Navigation.UrlChanges"/> when the subscription starts.
     /// </summary>
     internal static Action<Url>? OnUrlChange { get; set; }

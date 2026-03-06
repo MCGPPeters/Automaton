@@ -11,7 +11,6 @@
 // with View and Subscriptions.
 // =============================================================================
 
-using Abies;
 using Abies.DOM;
 using Abies.Subscriptions;
 using Automaton;
@@ -68,8 +67,8 @@ public sealed class CounterProgram : Program<CounterModel, Unit>
         {
             Increment => (model with { Count = model.Count + 1 }, Commands.None),
             Decrement => (model with { Count = model.Count - 1 }, Commands.None),
-            Reset     => (model with { Count = 0 }, Commands.None),
-            _         => (model, Commands.None)
+            Reset => (model with { Count = 0 }, Commands.None),
+            _ => (model, Commands.None)
         };
 
     /// <summary>

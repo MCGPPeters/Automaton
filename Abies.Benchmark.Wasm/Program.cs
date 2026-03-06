@@ -19,9 +19,6 @@
 // unchanged rows.
 // =============================================================================
 
-using System.Runtime.InteropServices;
-using System.Runtime.InteropServices.JavaScript;
-using System.Runtime.Versioning;
 using Abies;
 using Abies.DOM;
 using Abies.Subscriptions;
@@ -34,31 +31,7 @@ using static Abies.Html.Events;
 // WASM Entry Point
 // =============================================================================
 
-[SupportedOSPlatform("browser")]
-internal static class Program
-{
-    private static async Task Main()
-    {
-        await JSHost.ImportAsync("Abies", "../abies.js");
-
-        var batchWriter = new RenderBatchWriter();
-
-        void BrowserApply(IReadOnlyList<Patch> patches)
-        {
-            var binaryData = batchWriter.Write(patches);
-            MemoryMarshal.TryGetArray(binaryData, out var segment);
-            Interop.ApplyBinaryBatch(segment.Array.AsSpan(segment.Offset, segment.Count));
-        }
-
-        var runtime = await AbiesRuntime<BenchmarkApp, BenchmarkModel, Unit>.Start(
-            apply: BrowserApply,
-            interpreter: _ => new ValueTask<Result<Message[], PipelineError>>(
-                Result<Message[], PipelineError>.Ok([])),
-            titleChanged: Interop.SetTitle);
-
-        await Task.Delay(Timeout.Infinite);
-    }
-}
+await Abies.Browser.Runtime.Run<BenchmarkApp, BenchmarkModel, Unit>();
 
 // =============================================================================
 // Model

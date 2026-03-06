@@ -1,7 +1,7 @@
 // =============================================================================
 // abies.js — Browser-Side Runtime for Abies
 // =============================================================================
-// This module is loaded by .NET WASM via JSHost.ImportAsync("Abies", "/abies.js").
+// This module is loaded by .NET WASM via JSHost.ImportAsync("Abies", "../abies.js").
 //
 // Architecture:
 //   .NET produces binary patch batches (RenderBatchWriter.cs)
@@ -28,10 +28,16 @@
 //   When an event fires, walk up from target looking for the attribute,
 //   extract commandId, serialize relevant event data, call DispatchDomEvent.
 //
+// Callback Wiring:
+//   The .NET side wires all callbacks via JSImport during Runtime.Run():
+//     setDispatchCallback(fn)    — passes DispatchDomEvent [JSExport]
+//     setOnUrlChangedCallback(fn) — passes OnUrlChanged [JSExport]
+//   This eliminates the need for a separate main.js bootstrap script.
+//
 // See also:
-//   - Interop.cs — JSImport/JSExport declarations
-//   - RenderBatchWriter.cs — binary serialization (.NET side)
-//   - DOM/Patch.cs — patch type definitions
+//   - Abies.Browser/Interop.cs — JSImport/JSExport declarations
+//   - Abies/RenderBatchWriter.cs — binary serialization (.NET side)
+//   - Abies/DOM/Patch.cs — patch type definitions
 // =============================================================================
 
 // =============================================================================
@@ -296,12 +302,9 @@ function applyPatch(type, f1, f2, f3) {
         // =====================================================================
 
         case OP_ADD_ROOT: {
-            // f1 = rootId (unused — we set innerHTML on the app root)
+            // f1 = rootId (unused — we render directly into document.body)
             // f2 = html
-            const appRoot = document.getElementById("app");
-            if (appRoot) {
-                appRoot.innerHTML = f2;
-            }
+            document.body.innerHTML = f2;
             break;
         }
 
@@ -691,6 +694,15 @@ export function historyForward() {
  */
 export function externalNavigate(href) {
     window.location.href = href;
+}
+
+/**
+ * Returns the current browser URL (window.location.href).
+ * Called by .NET during initialization to determine the initial route.
+ * @returns {string} The current URL.
+ */
+export function getCurrentUrl() {
+    return window.location.href;
 }
 
 /**
