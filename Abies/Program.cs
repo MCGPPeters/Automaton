@@ -192,6 +192,7 @@ public record Url(
     {
         var path = uri.AbsolutePath
             .Split('/', StringSplitOptions.RemoveEmptyEntries)
+            .Select(Uri.UnescapeDataString)
             .ToArray();
 
         var query = new Dictionary<string, string>();

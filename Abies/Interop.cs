@@ -120,6 +120,46 @@ public static partial class Interop
     internal static partial void SetupEventDelegation();
 
     // =========================================================================
+    // Navigation (.NET → JavaScript)
+    // =========================================================================
+
+    /// <summary>
+    /// Replaces the current URL in the browser history via <c>history.replaceState</c>.
+    /// Unlike <see cref="NavigateTo"/>, this does not add a new history entry.
+    /// </summary>
+    /// <param name="url">The URL to replace the current entry with.</param>
+    [JSImport("replaceUrl", "Abies")]
+    internal static partial void ReplaceUrl(string url);
+
+    /// <summary>
+    /// Navigates the browser back one step in history via <c>history.back()</c>.
+    /// </summary>
+    [JSImport("historyBack", "Abies")]
+    internal static partial void HistoryBack();
+
+    /// <summary>
+    /// Navigates the browser forward one step in history via <c>history.forward()</c>.
+    /// </summary>
+    [JSImport("historyForward", "Abies")]
+    internal static partial void HistoryForward();
+
+    /// <summary>
+    /// Navigates to an external URL by setting <c>window.location.href</c>.
+    /// This triggers a full page reload — the WASM application is unloaded.
+    /// </summary>
+    /// <param name="href">The external URL to navigate to.</param>
+    [JSImport("externalNavigate", "Abies")]
+    internal static partial void ExternalNavigate(string href);
+
+    /// <summary>
+    /// Sets up navigation interception: registers a <c>popstate</c> listener and
+    /// intercepts internal <c>&lt;a&gt;</c> link clicks. Calls back to .NET via
+    /// <see cref="OnUrlChanged"/> when the URL changes.
+    /// </summary>
+    [JSImport("setupNavigation", "Abies")]
+    internal static partial void SetupNavigation();
+
+    // =========================================================================
     // JavaScript → .NET (JSExport)
     // =========================================================================
 
@@ -140,6 +180,16 @@ public static partial class Interop
             HandlerRegistry.Dispatch?.Invoke(message);
         }
     }
+
+    /// <summary>
+    /// Called by abies.js when the browser URL changes (popstate event or
+    /// intercepted link click). Delegates to <see cref="NavigationCallbacks"/>
+    /// which routes the URL change to the navigation subscription.
+    /// </summary>
+    /// <param name="url">The new URL as a string from the browser (e.g., "/articles/my-slug").</param>
+    [JSExport]
+    public static void OnUrlChanged(string url) =>
+        NavigationCallbacks.HandleUrlChanged(url);
 }
 
 /// <summary>

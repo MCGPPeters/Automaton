@@ -165,6 +165,12 @@ public static class HeadDiff
 ///   <item>Calls <c>TProgram.Subscriptions(model)</c> and reconciles with running subscriptions</item>
 /// </list>
 /// <para>
+/// <b>Navigation commands</b> (<see cref="NavigationCommand"/>) are handled by the
+/// runtime's built-in interpreter before falling through to the caller-supplied
+/// interpreter. This means applications never need to handle navigation commands
+/// manually — they are framework concerns.
+/// </para>
+/// <para>
 /// The <see cref="Interpreter{TEffect,TEvent}"/> is supplied by the platform
 /// or the test harness. It converts <see cref="Command"/> instances into
 /// feedback <see cref="Message"/> arrays. For commands that produce no feedback,
@@ -196,6 +202,7 @@ public sealed class AbiesRuntime<TProgram, TModel, TArgument> : IDisposable
     private AutomatonRuntime<TProgram, TModel, Message, Command, TArgument> _core = null!;
     private readonly Apply _apply;
     private readonly Action<string>? _titleChanged;
+    private readonly Action<NavigationCommand>? _navigationExecutor;
     private Document? _currentDocument;
     private SubscriptionState _subscriptionState = SubscriptionState.Empty;
 
@@ -214,8 +221,8 @@ public sealed class AbiesRuntime<TProgram, TModel, TArgument> : IDisposable
     /// The runtime uses two-phase initialization: construct first, then
     /// wire the kernel runtime via field assignment in <see cref="Start"/>.
     /// </summary>
-    private AbiesRuntime(Apply apply, Action<string>? titleChanged) =>
-        (_apply, _titleChanged) = (apply, titleChanged);
+    private AbiesRuntime(Apply apply, Action<string>? titleChanged, Action<NavigationCommand>? navigationExecutor) =>
+        (_apply, _titleChanged, _navigationExecutor) = (apply, titleChanged, navigationExecutor);
 
     /// <summary>
     /// The observer callback: renders view, diffs, applies patches, updates subscriptions.
@@ -379,6 +386,16 @@ public sealed class AbiesRuntime<TProgram, TModel, TArgument> : IDisposable
     /// </param>
     /// <param name="argument">Initialization parameters passed to <c>TProgram.Initialize</c>.</param>
     /// <param name="titleChanged">Optional callback invoked when the document title changes.</param>
+    /// <param name="navigationExecutor">
+    /// Optional callback that executes navigation commands (pushState, replaceState, etc.).
+    /// In the browser, this calls JS interop. In tests, this can be a no-op or a mock.
+    /// When null, navigation commands are silently ignored.
+    /// </param>
+    /// <param name="initialUrl">
+    /// Optional initial URL to dispatch as a <see cref="UrlChanged"/> message after startup.
+    /// In the browser, this is <c>window.location</c>. In tests, this can be any URL.
+    /// When null, no initial URL message is dispatched.
+    /// </param>
     /// <param name="threadSafe">
     /// When <c>true</c>, all dispatch calls are serialized via a semaphore.
     /// Defaults to <c>false</c> for WASM's single-threaded environment.
@@ -389,13 +406,15 @@ public sealed class AbiesRuntime<TProgram, TModel, TArgument> : IDisposable
         Interpreter<Command, Message> interpreter,
         TArgument argument = default!,
         Action<string>? titleChanged = null,
+        Action<NavigationCommand>? navigationExecutor = null,
+        Url? initialUrl = null,
         bool threadSafe = false)
     {
         using var activity = _activitySource.StartActivity("Abies.Start");
         activity?.SetTag("abies.program", typeof(TProgram).Name);
 
         // Phase 1: Create the runtime shell (observer needs 'this' reference)
-        var runtime = new AbiesRuntime<TProgram, TModel, TArgument>(apply, titleChanged);
+        var runtime = new AbiesRuntime<TProgram, TModel, TArgument>(apply, titleChanged, navigationExecutor);
 
         // Wire the handler registry's dispatch to the runtime (needed for event delegation)
         HandlerRegistry.Dispatch = runtime.DispatchFromSubscription;
@@ -423,9 +442,23 @@ public sealed class AbiesRuntime<TProgram, TModel, TArgument> : IDisposable
             apply(headPatches);
         }
 
-        // Phase 4: Wire the kernel runtime with the instance-method observer
+        // Phase 4: Wire the kernel runtime with the instance-method observer.
+        // Wrap the caller-supplied interpreter with navigation command handling:
+        // navigation commands are handled by the runtime's built-in executor,
+        // all other commands fall through to the caller-supplied interpreter.
+        Interpreter<Command, Message> wrappedInterpreter = command =>
+        {
+            if (command is NavigationCommand navCommand)
+            {
+                runtime._navigationExecutor?.Invoke(navCommand);
+                return new ValueTask<Result<Message[], PipelineError>>(
+                    Result<Message[], PipelineError>.Ok([]));
+            }
+            return interpreter(command);
+        };
+
         runtime._core = new AutomatonRuntime<TProgram, TModel, Message, Command, TArgument>(
-            model, runtime.Observe, interpreter,
+            model, runtime.Observe, wrappedInterpreter,
             threadSafe: threadSafe,
             trackEvents: false);
 
@@ -436,6 +469,13 @@ public sealed class AbiesRuntime<TProgram, TModel, TArgument> : IDisposable
 
         // Phase 6: Interpret initial command (may produce feedback messages → re-enter loop)
         await runtime._core.InterpretEffect(initialCommand);
+
+        // Phase 7: Dispatch initial URL as UrlChanged message so the application
+        // can route based on the current page URL at startup
+        if (initialUrl is not null)
+        {
+            await runtime.Dispatch(new UrlChanged(initialUrl));
+        }
 
         activity?.SetStatus(ActivityStatusCode.Ok);
 
