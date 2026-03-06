@@ -5,7 +5,7 @@
 //
 // There are two kinds:
 //   - Attribute(Id, Name, Value) — a plain HTML attribute (class, href, ...)
-//   - Handler(Name, CommandId, Command, Id, WithData, DataType) — an event binding
+//   - Handler(EventName, CommandId, Command, Id, WithData, DataType) — an event binding
 //
 // Handler extends Attribute and renders as a data-event-{name} attribute
 // in the DOM. The CommandId links the DOM attribute to the registered
@@ -31,7 +31,7 @@ namespace Abies.DOM;
 public record Attribute(string Id, string Name, string Value);
 
 /// <summary>
-/// An event handler attribute. Renders as <c>data-event-{Name}="{CommandId}"</c> in HTML.
+/// An event handler attribute. Renders as <c>data-event-{EventName}="{CommandId}"</c> in HTML.
 /// The runtime uses the <see cref="CommandId"/> to look up the handler in its registry.
 /// </summary>
 /// <remarks>
@@ -42,20 +42,26 @@ public record Attribute(string Id, string Name, string Value);
 ///   to produce a message (e.g., <c>oninput(e =&gt; new TextChanged(e.Value))</c>).</item>
 /// </list>
 /// </remarks>
-/// <param name="Name">The DOM event name (e.g., "click", "input", "change").</param>
+/// <param name="EventName">The DOM event name (e.g., "click", "input", "change").
+/// Note: This is distinct from the inherited <c>Attribute.Name</c> property,
+/// which returns the full attribute name (e.g., "data-event-click").
+/// C# record inheritance means <c>Attribute.Name</c> gets the transformed
+/// value passed to the base constructor, so <c>Handler.Name</c> also returns
+/// "data-event-click", not "click". Use <c>EventName</c> when you need the
+/// raw DOM event type.</param>
 /// <param name="CommandId">Unique identifier linking this handler to its runtime registration.</param>
 /// <param name="Command">The static message to dispatch (null when <paramref name="WithData"/> is set).</param>
 /// <param name="Id">Unique identifier for this attribute node.</param>
 /// <param name="WithData">Factory function that creates a message from deserialized event data.</param>
 /// <param name="DataType">The CLR type of the event data, used for JSON deserialization.</param>
 public record Handler(
-    string Name,
+    string EventName,
     string CommandId,
     Message? Command,
     string Id,
     Func<object?, Message>? WithData = null,
     Type? DataType = null)
-    : Attribute(Id, $"data-event-{Name}", CommandId);
+    : Attribute(Id, $"data-event-{EventName}", CommandId);
 
 /// <summary>
 /// Well-known event attribute name cache to avoid string interpolation at runtime.

@@ -535,8 +535,8 @@ public static class Operations
             var sameOrder = true;
             for (int i = 0; i < oldAttrs.Length; i++)
             {
-                var oldAttrName = oldAttrs[i] is Handler oh ? oh.Name : oldAttrs[i].Name;
-                var newAttrName = newAttrs[i] is Handler nh ? nh.Name : newAttrs[i].Name;
+                var oldAttrName = oldAttrs[i].Name;
+                var newAttrName = newAttrs[i].Name;
                 if (!string.Equals(oldAttrName, newAttrName, StringComparison.Ordinal))
                 {
                     sameOrder = false;
@@ -595,13 +595,13 @@ public static class Operations
 
             foreach (var attr in oldAttrs)
             {
-                var attrName = attr is Handler h ? h.Name : attr.Name;
+                var attrName = attr.Name;
                 oldMap[attrName] = attr;
             }
 
             foreach (var newAttr in newAttrs)
             {
-                var newAttrName = newAttr is Handler nh ? nh.Name : newAttr.Name;
+                var newAttrName = newAttr.Name;
                 if (oldMap.TryGetValue(newAttrName, out var oldAttr))
                 {
                     oldMap.Remove(newAttrName);
