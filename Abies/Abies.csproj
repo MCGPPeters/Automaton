@@ -28,6 +28,7 @@
     <ProjectReference Include="..\Automaton\Automaton.csproj" />
     <PackageReference Include="Praefixum" Version="2.0.1" />
     <InternalsVisibleTo Include="Abies.Tests" />
+    <InternalsVisibleTo Include="Abies.Benchmarks" />
     <InternalsVisibleTo Include="Abies.Browser" />
     <InternalsVisibleTo Include="Abies.Counter.Wasm" />
   </ItemGroup>
