@@ -150,6 +150,95 @@ public static class Actor
     }
 
     /// <summary>
+    /// Spawns a new actor that accepts enveloped commands with reply addresses.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// This overload implements Hewitt's request-reply pattern: each incoming message
+    /// is an <see cref="Envelope{TCommand,TReply}"/> containing both the domain command
+    /// and the address of a reply actor. After processing the command via the Decider's
+    /// <c>Handle</c> method, the result is sent to the reply address.
+    /// </para>
+    /// <para>
+    /// The reply is <c>Result&lt;TState, TError&gt;</c> — the same type returned by
+    /// <see cref="DecidingRuntime{TDecider,TState,TCommand,TEvent,TEffect,TError,TParameters}.Handle"/>.
+    /// The caller spawns a <see cref="ReplyActor{T}"/> via <see cref="ReplyChannel.Open{T}"/>
+    /// and includes its address in the envelope.
+    /// </para>
+    /// <para>
+    /// This is actors all the way:
+    /// <list type="number">
+    ///   <item>The aggregate actor processes the command (Decide → Transition)</item>
+    ///   <item>The aggregate actor sends the result to the reply actor (axiom #1)</item>
+    ///   <item>The reply actor receives the result and terminates (axiom #3)</item>
+    ///   <item>The reply actor's observer bridges to the caller's Task (observer side-effect)</item>
+    /// </list>
+    /// </para>
+    /// <example>
+    /// <code>
+    /// // Spawn an aggregate actor that accepts enveloped commands
+    /// var address = await Actor.SpawnWithReply&lt;UserDecider, UserState, UserCommand,
+    ///     UserEvent, UserEffect, UserError, Unit&gt;(default, observer, interpreter, ct: ct);
+    ///
+    /// // Create reply channel (spawns a one-shot reply actor)
+    /// var (replyAddress, replyTask) = await ReplyChannel.Open&lt;Result&lt;UserState, UserError&gt;&gt;(ct);
+    ///
+    /// // Send enveloped command
+    /// await address.Tell(new Envelope&lt;UserCommand, Result&lt;UserState, UserError&gt;&gt;(command, replyAddress));
+    ///
+    /// // Await reply from the reply actor
+    /// var result = await replyTask;
+    /// </code>
+    /// </example>
+    /// </remarks>
+    /// <param name="parameters">Initialization parameters for the Decider.</param>
+    /// <param name="observer">Observer notified after each state transition.</param>
+    /// <param name="interpreter">Interpreter that converts effects to feedback events.</param>
+    /// <param name="mailboxCapacity">Bounded mailbox size. Defaults to <see cref="DefaultMailboxCapacity"/>.</param>
+    /// <param name="cancellationToken">Token to stop the actor's processing loop.</param>
+    /// <returns>
+    /// An <see cref="Address{TCommand}"/> typed on <see cref="Envelope{TCommand,TReply}"/>
+    /// — callers must include a reply address in every message.
+    /// </returns>
+    public static async ValueTask<Address<Envelope<TCommand, Result<TState, TError>>>> SpawnWithReply<TDecider, TState, TCommand, TEvent, TEffect, TError, TParameters>(
+        TParameters parameters,
+        Observer<TState, TEvent, TEffect> observer,
+        Interpreter<TEffect, TEvent> interpreter,
+        int mailboxCapacity = DefaultMailboxCapacity,
+        CancellationToken cancellationToken = default)
+        where TDecider : Decider<TState, TCommand, TEvent, TEffect, TError, TParameters>
+    {
+        using var spawnActivity = AutomatonDiagnostics.Source.StartActivity("Actor.SpawnWithReply");
+        spawnActivity?.SetTag("actor.type", typeof(TDecider).Name);
+        spawnActivity?.SetTag("actor.mailbox.capacity", mailboxCapacity);
+        spawnActivity?.SetTag("actor.reply", true);
+
+        var channel = Channel.CreateBounded<Envelope<TCommand, Result<TState, TError>>>(
+            new BoundedChannelOptions(mailboxCapacity)
+            {
+                SingleReader = true,
+                SingleWriter = false,
+                FullMode = BoundedChannelFullMode.Wait
+            });
+
+        var runtime = await DecidingRuntime<TDecider, TState, TCommand, TEvent, TEffect, TError, TParameters>
+            .Start(parameters, observer, interpreter, threadSafe: false, trackEvents: false, cancellationToken)
+            .ConfigureAwait(false);
+
+        var address = new Address<Envelope<TCommand, Result<TState, TError>>>(channel.Writer);
+
+        _ = EnvelopeProcessLoop<TDecider, TState, TCommand, TEvent, TEffect, TError, TParameters>(
+            runtime, channel.Reader, cancellationToken);
+
+        spawnActivity?.SetStatus(ActivityStatusCode.Ok);
+        return address;
+    }
+
+    // =========================================================================
+    // Processing Loops
+    // =========================================================================
+
+    /// <summary>
     /// The actor's processing loop — reads commands from the mailbox one at a time.
     /// </summary>
     /// <remarks>
@@ -180,6 +269,73 @@ public static class Actor
                 activity?.SetTag("actor.command.type", command?.GetType().Name);
 
                 var result = await runtime.Handle(command, cancellationToken).ConfigureAwait(false);
+
+                result.Switch(
+                    _ =>
+                    {
+                        activity?.SetTag("actor.result", "ok");
+                        activity?.SetStatus(ActivityStatusCode.Ok);
+                    },
+                    error =>
+                    {
+                        activity?.SetTag("actor.result", "error");
+                        activity?.SetTag("actor.error.type", error?.GetType().Name);
+                        activity?.SetStatus(ActivityStatusCode.Ok);
+                    });
+
+                // Terminal state: actor stops accepting new commands
+                if (runtime.IsTerminal)
+                {
+                    activity?.SetTag("actor.terminal", true);
+                    break;
+                }
+            }
+        }
+        catch (OperationCanceledException)
+        {
+            // Cooperative shutdown via CancellationToken — this is expected
+        }
+        finally
+        {
+            runtime.Dispose();
+        }
+    }
+
+    /// <summary>
+    /// Envelope-aware processing loop — unwraps envelopes and sends replies.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// This loop implements Hewitt's request-reply pattern: each message is an
+    /// <see cref="Envelope{TCommand,TReply}"/> containing a domain command and a
+    /// reply address. After <c>Handle</c>, the result is sent to the reply actor
+    /// via <see cref="Address{T}.Tell"/> — axiom #1 in action.
+    /// </para>
+    /// <para>
+    /// The reply is sent regardless of whether the command succeeded or failed —
+    /// the reply actor receives <c>Result&lt;TState, TError&gt;</c> and the caller
+    /// can pattern match on Ok/Err.
+    /// </para>
+    /// </remarks>
+    private static async Task EnvelopeProcessLoop<TDecider, TState, TCommand, TEvent, TEffect, TError, TParameters>(
+        DecidingRuntime<TDecider, TState, TCommand, TEvent, TEffect, TError, TParameters> runtime,
+        ChannelReader<Envelope<TCommand, Result<TState, TError>>> reader,
+        CancellationToken cancellationToken)
+        where TDecider : Decider<TState, TCommand, TEvent, TEffect, TError, TParameters>
+    {
+        try
+        {
+            await foreach (var envelope in reader.ReadAllAsync(cancellationToken).ConfigureAwait(false))
+            {
+                using var activity = AutomatonDiagnostics.Source.StartActivity("Actor.Handle");
+                activity?.SetTag("actor.type", typeof(TDecider).Name);
+                activity?.SetTag("actor.command.type", envelope.Command?.GetType().Name);
+                activity?.SetTag("actor.reply", true);
+
+                var result = await runtime.Handle(envelope.Command, cancellationToken).ConfigureAwait(false);
+
+                // Axiom #1: send the result to the reply actor
+                await envelope.ReplyTo.Tell(result).ConfigureAwait(false);
 
                 result.Switch(
                     _ =>
