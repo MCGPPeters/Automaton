@@ -20,6 +20,7 @@
 // =============================================================================
 
 using Abies.DOM;
+using Abies.Html;
 using Attribute = Abies.DOM.Attribute;
 
 namespace Abies.Tests;
@@ -613,5 +614,181 @@ public class DiffTests
     public void EventAttributeNames_UnknownEvent_FallsBackToInterpolation()
     {
         Assert.Equal("data-event-custom", EventAttributeNames.Get("custom"));
+    }
+
+    // =========================================================================
+    // View Cache — ReferenceEquals Optimization
+    // =========================================================================
+    // The view cache in Elements.lazy() returns the SAME object reference when
+    // called with a matching compile-time ID and key. This enables
+    // ReferenceEquals bailout in DiffInternal — an O(1) skip that avoids
+    // all key comparison, dictionary building, and subtree diffing.
+    // =========================================================================
+
+    [Fact]
+    public void ViewCache_SameIdAndKey_ReturnsSameReference()
+    {
+        Elements.ClearViewCache();
+        var factory = () => new Element("e1", "div", []);
+
+        var first = Elements.lazy("key1", factory, id: "cache-1");
+        var second = Elements.lazy("key1", factory, id: "cache-1");
+
+        Assert.True(ReferenceEquals(first, second), "Same ID + same key should return same reference");
+    }
+
+    [Fact]
+    public void ViewCache_SameIdDifferentKey_ReturnsDifferentReference()
+    {
+        Elements.ClearViewCache();
+        var factory = () => new Element("e1", "div", []);
+
+        var first = Elements.lazy("key1", factory, id: "cache-2");
+        var second = Elements.lazy("key2", factory, id: "cache-2");
+
+        Assert.False(ReferenceEquals(first, second), "Same ID + different key should return new reference");
+    }
+
+    [Fact]
+    public void ViewCache_DifferentId_ReturnsDifferentReference()
+    {
+        Elements.ClearViewCache();
+        var factory = () => new Element("e1", "div", []);
+
+        var first = Elements.lazy("key1", factory, id: "cache-3a");
+        var second = Elements.lazy("key1", factory, id: "cache-3b");
+
+        Assert.False(ReferenceEquals(first, second), "Different IDs should return different references");
+    }
+
+    [Fact]
+    public void ViewCache_TupleKey_ValueEquality()
+    {
+        Elements.ClearViewCache();
+        var factory = () => new Element("e1", "div", []);
+
+        // Tuple keys use value equality — two separate tuple instances with same values match.
+        var first = Elements.lazy((42, true), factory, id: "cache-4");
+        var second = Elements.lazy((42, true), factory, id: "cache-4");
+
+        Assert.True(ReferenceEquals(first, second), "Tuple keys with same values should match");
+    }
+
+    [Fact]
+    public void ViewCache_TupleKey_DifferentValues_ReturnsDifferentReference()
+    {
+        Elements.ClearViewCache();
+        var factory = () => new Element("e1", "div", []);
+
+        var first = Elements.lazy((42, true), factory, id: "cache-5");
+        var second = Elements.lazy((42, false), factory, id: "cache-5");
+
+        Assert.False(ReferenceEquals(first, second), "Tuple keys with different values should not match");
+    }
+
+    [Fact]
+    public void ViewCache_ClearViewCache_InvalidatesCache()
+    {
+        Elements.ClearViewCache();
+        var factory = () => new Element("e1", "div", []);
+
+        var first = Elements.lazy("key1", factory, id: "cache-6");
+        Elements.ClearViewCache();
+        var second = Elements.lazy("key1", factory, id: "cache-6");
+
+        Assert.False(ReferenceEquals(first, second),
+            "After ClearViewCache, same ID + key should return new reference");
+    }
+
+    [Fact]
+    public void ViewCache_CountReflectsCacheSize()
+    {
+        Elements.ClearViewCache();
+        Assert.Equal(0, Elements.ViewCacheCount);
+
+        Elements.lazy("key1", () => new Element("e1", "div", []), id: "cache-7a");
+        Assert.Equal(1, Elements.ViewCacheCount);
+
+        Elements.lazy("key2", () => new Element("e2", "div", []), id: "cache-7b");
+        Assert.Equal(2, Elements.ViewCacheCount);
+
+        // Same ID + same key: no new entry, count stays the same.
+        Elements.lazy("key1", () => new Element("e1", "div", []), id: "cache-7a");
+        Assert.Equal(2, Elements.ViewCacheCount);
+
+        Elements.ClearViewCache();
+        Assert.Equal(0, Elements.ViewCacheCount);
+    }
+
+    [Fact]
+    public void ViewCache_AutoTrimsAtMaxSize()
+    {
+        Elements.ClearViewCache();
+
+        // Fill the cache to MaxViewCacheSize (2000).
+        for (var i = 0; i < 2000; i++)
+        {
+            Elements.lazy(i, () => new Element($"e{i}", "div", []), id: $"auto-{i}");
+        }
+
+        Assert.Equal(2000, Elements.ViewCacheCount);
+
+        // One more should trigger a clear + re-add (count resets to 1).
+        Elements.lazy(9999, () => new Element("overflow", "div", []), id: "overflow");
+        Assert.Equal(1, Elements.ViewCacheCount);
+    }
+
+    [Fact]
+    public void ViewCache_EnablesReferenceEqualsBailout_EmptyDiff()
+    {
+        // Integration test: the view cache returns same reference,
+        // which triggers ReferenceEquals bailout in DiffInternal → empty patches.
+        Elements.ClearViewCache();
+        Operations.ResetMemoCounters();
+
+        var factory = () => new Element("e1", "div", [], new Text("t1", "content"));
+
+        var oldNode = Elements.lazy("key", factory, id: "cache-diff-1");
+        var newNode = Elements.lazy("key", factory, id: "cache-diff-1");
+
+        Assert.True(ReferenceEquals(oldNode, newNode), "Precondition: same reference");
+
+        var patches = Operations.Diff(oldNode, newNode);
+
+        Assert.Empty(patches);
+    }
+
+    [Fact]
+    public void ViewCache_KeyChange_ProducesPatches()
+    {
+        // When the key changes, a new reference is created and diffing proceeds normally.
+        Elements.ClearViewCache();
+        Operations.ResetMemoCounters();
+
+        var oldNode = Elements.lazy("v1", () => new Element("e1", "div", [], new Text("t1", "old")), id: "cache-diff-2");
+        var newNode = Elements.lazy("v2", () => new Element("e1", "div", [], new Text("t1", "new")), id: "cache-diff-2");
+
+        Assert.False(ReferenceEquals(oldNode, newNode), "Precondition: different references");
+
+        var patches = Operations.Diff(oldNode, newNode);
+
+        // Key changed → diff should detect the text change and produce patches.
+        Assert.NotEmpty(patches);
+    }
+
+    [Fact]
+    public void ViewCache_UpdatesCacheEntryOnKeyChange()
+    {
+        Elements.ClearViewCache();
+        var factory = () => new Element("e1", "div", []);
+
+        var first = Elements.lazy("key1", factory, id: "cache-update-1");
+        var second = Elements.lazy("key2", factory, id: "cache-update-1");
+        var third = Elements.lazy("key2", factory, id: "cache-update-1");
+
+        // Second call with different key should create new reference.
+        Assert.False(ReferenceEquals(first, second));
+        // Third call with same key as second should return second's reference.
+        Assert.True(ReferenceEquals(second, third));
     }
 }
