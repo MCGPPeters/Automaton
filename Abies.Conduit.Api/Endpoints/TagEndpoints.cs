@@ -1,0 +1,39 @@
+// =============================================================================
+// Tag Endpoints — Public Tag List
+// =============================================================================
+// GET /api/tags — Get all tags
+// =============================================================================
+
+using Abies.Conduit.Api.Dto;
+using Abies.Conduit.ReadModel;
+
+namespace Abies.Conduit.Api.Endpoints;
+
+/// <summary>
+/// Maps the /api/tags endpoint group.
+/// </summary>
+public static class TagEndpoints
+{
+    /// <summary>Registers the /api/tags endpoints.</summary>
+    public static RouteGroupBuilder MapTagEndpoints(this IEndpointRouteBuilder routes)
+    {
+        var group = routes.MapGroup("/api/tags");
+
+        group.MapGet("/", GetTags)
+            .AllowAnonymous()
+            .WithName("GetTags");
+
+        return group;
+    }
+
+    /// <summary>
+    /// GET /api/tags — List all tags used across articles.
+    /// </summary>
+    private static async Task<IResult> GetTags(
+        ReadModel.GetTags getTags,
+        CancellationToken cancellationToken)
+    {
+        var tags = await getTags(cancellationToken).ConfigureAwait(false);
+        return Results.Ok(new TagsResponse(tags));
+    }
+}
