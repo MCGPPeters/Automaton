@@ -446,26 +446,31 @@ For reference, compare against:
 ### Latest Benchmark Results — Abies v2.0.0 Automaton (2026-03-06)
 
 **Branch**: `feat/abies` — Full rewrite on the Automaton kernel.
+**Session**: Same session, AC Power, all three frameworks back-to-back.
+**Full report**: `docs/benchmarks/baseline-2026-03-06.md`
 
-**Complete js-framework-benchmark results (all 15 benchmarks):**
+**Complete js-framework-benchmark results (all 15 benchmarks, same-session fair comparison):**
 
-| Benchmark | Total (ms) | Script (ms) | vs Picea 152 | vs Blazor |
-|-----------|-----------|-------------|-------------|-----------|
-| 01_run1k | **51.7** | **28.6** | **-21%** ✅ | **-42%** 🚀🚀 |
-| 02_replace1k | **60.2** | **37.0** | **-9%** ✅ | — |
-| 03_update10th_x16 | **67.1** | **53.2** | **-51%** 🚀 | — |
-| 04_select1k | **13.8** | **10.3** | **-88%** 🚀 | — |
-| 05_swap1k | **33.8** | **17.2** | **-65%** 🚀 | — |
-| 06_remove-one-1k | **20.7** | **8.3** | **-68%** 🚀 | — |
-| 07_create10k | **550.0** | **322.5** | **-41%** 🚀 | — |
-| 08_create1k-after1k | **76.2** | **48.8** | — (new) | — |
-| 09_clear1k_x8 | **18.3** | **16.2** | **-34%** ✅ | — |
-| 21_ready-memory | 34.4 MB | — | — | **-16%** ✅ |
-| 22_run-memory | 36.2 MB | — | — | — |
-| 25_run-clear-memory | 58.6 MB | — | — | — |
-| 41_size-uncompressed | 3,729 KB | — | — | — |
-| 42_size-compressed | 1,139 KB | — | — | **-17%** ✅ |
-| 43_first-paint | **57.7ms** | — | — | **-23%** ✅ |
+| Benchmark | Abies 2.0 | Picea 1.0 | Blazor 10.0 | vs Picea | vs Blazor |
+|-----------|-----------|-----------|-------------|----------|-----------|
+| 01_run1k | **51.7** | 61.1 | 84.9 | **-15%** ✅ | **-39%** 🚀 |
+| 02_replace1k | **60.2** | 63.2 | 99.5 | **-5%** ✅ | **-39%** 🚀 |
+| 03_update10th_x16 | **67.1** | 106.7 | 94.5 | **-37%** 🚀 | **-29%** 🚀 |
+| 04_select1k | **13.8** | 102.9 | 82.5 | **-87%** 🚀 | **-83%** 🚀 |
+| 05_swap1k | **33.8** | 92.2 | 94.6 | **-63%** 🚀 | **-64%** 🚀 |
+| 06_remove-one-1k | **20.7** | 65.7 | 40.2 | **-68%** 🚀 | **-49%** 🚀 |
+| 07_create10k | **550.0** | 618.6 | 766.1 | **-11%** ✅ | **-28%** 🚀 |
+| 08_create1k-after1k | **76.2** | 101.0 | 102.9 | **-25%** 🚀 | **-26%** 🚀 |
+| 09_clear1k_x8 | **18.3** | 24.6 | 36.5 | **-26%** 🚀 | **-50%** 🚀 |
+| 21_ready-memory | **34.4 MB** | 34.4 MB | 41.1 MB | — | **-16%** ✅ |
+| 22_run-memory | **36.2 MB** | N/A¹ | 52.7 MB | — | **-31%** 🚀 |
+| 25_run-clear-memory | 58.6 MB | 58.6 MB | **49.4 MB** | — | +19% ⚠️ |
+| 41_size-uncompressed | **3,729 KB** | 4,033 KB | 4,208 KB | **-8%** | **-11%** |
+| 42_size-compressed | **1,139 KB** | 1,257 KB | 1,377 KB | **-9%** | **-17%** ✅ |
+| 43_first-paint | **57.7ms** | 97.5 ms | 78.0 ms | **-41%** 🚀 | **-26%** ✅ |
+| **Geomean (duration)** | **1.00×** | **1.85×** | **1.98×** | | |
+
+¹ Picea benchmark 22 timed out (protocol error).
 
 ### ✅ FIXED: parseHtmlFragment Foster Parenting Bug (2026-03-06)
 
