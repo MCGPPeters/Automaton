@@ -28,6 +28,39 @@ namespace Abies.Html;
 public static class Elements
 {
     // =========================================================================
+    // View Cache — Reference Equality Optimization
+    // =========================================================================
+    // When lazy() is called with the same compile-time ID and a matching key,
+    // we return the EXACT SAME object reference from the previous render. This
+    // enables ReferenceEquals bailout at the top of DiffInternal — an O(1) skip
+    // that avoids all key comparison, dictionary building, and subtree diffing.
+    //
+    // This is inspired by Elm's lazy optimization where reference equality (===)
+    // enables skipping VDOM construction entirely.
+    //
+    // IMPORTANT: Cache eviction is required to prevent memory leaks!
+    // Call ClearViewCache() when navigating or when the view fundamentally changes.
+    // The cache is also automatically trimmed when it exceeds MaxViewCacheSize.
+    // =========================================================================
+
+    private static readonly Dictionary<string, Node> _lazyCache = new();
+    private const int MaxViewCacheSize = 2000;
+
+    /// <summary>
+    /// Clears the view cache to free memory and prevent stale references.
+    /// Call this when navigating to a new page or when the view structure changes significantly.
+    /// </summary>
+    public static void ClearViewCache()
+    {
+        _lazyCache.Clear();
+    }
+
+    /// <summary>
+    /// Gets the current size of the view cache for diagnostics.
+    /// </summary>
+    public static int ViewCacheCount => _lazyCache.Count;
+
+    // =========================================================================
     // Core Element Factory
     // =========================================================================
 
@@ -80,9 +113,37 @@ public static class Elements
     /// <param name="factory">A function that produces the node content — only called if key differs.</param>
     /// <param name="id">Compile-time unique identifier for the lazy memo node.</param>
     /// <returns>A lazily memoized node that defers evaluation until needed.</returns>
+    /// <remarks>
+    /// <b>View cache optimization:</b> If the same compile-time ID is called with a
+    /// matching key, the exact same object reference is returned. This enables
+    /// <c>ReferenceEquals</c> bailout in <c>DiffInternal</c> — an O(1) skip that
+    /// avoids all key comparison, dictionary building, and subtree diffing.
+    /// Inspired by Elm's <c>lazy</c> where JavaScript <c>===</c> skips VDOM construction.
+    /// </remarks>
     public static Node lazy<TKey>(TKey key, Func<Node> factory, [UniqueId(UniqueIdFormat.HtmlId)] string? id = null) where TKey : notnull
     {
-        return new LazyMemo<TKey>(id!, key, factory);
+        // View cache optimization: return same reference if ID and key match.
+        // This enables ReferenceEquals bailout in DiffInternal.
+        if (id is not null && _lazyCache.TryGetValue(id, out var cached) &&
+            cached is LazyMemo<TKey> lazyCached &&
+            EqualityComparer<TKey>.Default.Equals(lazyCached.Key, key))
+        {
+            return cached; // Same reference — ReferenceEquals will work!
+        }
+
+        var node = new LazyMemo<TKey>(id!, key, factory);
+        if (id is not null)
+        {
+            // Auto-trim cache if it gets too large to prevent memory leaks.
+            if (_lazyCache.Count >= MaxViewCacheSize)
+            {
+                _lazyCache.Clear();
+            }
+
+            _lazyCache[id] = node;
+        }
+
+        return node;
     }
 
     /// <summary>

@@ -197,7 +197,7 @@ The following Toub-inspired optimizations have been applied:
 - The binary data is processed very efficiently in JavaScript
 - JSON's text serialization overhead negates the innerHTML parsing savings
 
-**Conclusion**: 
+**Conclusion**:
 - HTML string rendering via innerHTML is the correct approach for Abies
 - Browser HTML parsers are highly optimized and very hard to beat
 - Do NOT revisit this approach unless moving to a binary protocol like Blazor's RenderBatch
@@ -310,10 +310,10 @@ The following Toub-inspired optimizations have been applied:
 
 ```xml
 <!-- Copy the canonical abies.js before build/publish -->
-<Target Name="SyncAbiesJs" BeforeTargets="Build;ComputeFilesToPublish" 
-        Inputs="..\Abies\wwwroot\abies.js" 
+<Target Name="SyncAbiesJs" BeforeTargets="Build;ComputeFilesToPublish"
+        Inputs="..\Abies\wwwroot\abies.js"
         Outputs="wwwroot\abies.js">
-  <Copy SourceFiles="..\Abies\wwwroot\abies.js" 
+  <Copy SourceFiles="..\Abies\wwwroot\abies.js"
         DestinationFiles="wwwroot\abies.js" />
 </Target>
 
@@ -321,11 +321,11 @@ The following Toub-inspired optimizations have been applied:
 <Target Name="RemoveDuplicateAbiesJs" AfterTargets="ComputeFilesToPublish">
   <ItemGroup>
     <!-- Use Identity metadata (full path) to identify and remove Abies project's copy -->
-    <ResolvedFileToPublish Remove="@(ResolvedFileToPublish)" 
-      Condition="'%(ResolvedFileToPublish.RelativePath)' == 'wwwroot\abies.js' 
+    <ResolvedFileToPublish Remove="@(ResolvedFileToPublish)"
+      Condition="'%(ResolvedFileToPublish.RelativePath)' == 'wwwroot\abies.js'
                  AND $([System.String]::new('%(ResolvedFileToPublish.Identity)').Contains('\Abies\wwwroot\abies.js'))" />
-    <ResolvedFileToPublish Remove="@(ResolvedFileToPublish)" 
-      Condition="'%(ResolvedFileToPublish.RelativePath)' == 'wwwroot/abies.js' 
+    <ResolvedFileToPublish Remove="@(ResolvedFileToPublish)"
+      Condition="'%(ResolvedFileToPublish.RelativePath)' == 'wwwroot/abies.js'
                  AND $([System.String]::new('%(ResolvedFileToPublish.Identity)').Contains('/Abies/wwwroot/abies.js'))" />
   </ItemGroup>
 </Target>
@@ -343,7 +343,7 @@ The following Toub-inspired optimizations have been applied:
 
 **Problem**: Running `dotnet format` on the solution creates merge conflict markers in some files (e.g., `Parser.cs`) due to the multi-targeted nature of the solution (net10.0 and potentially other targets).
 
-**Workaround**: 
+**Workaround**:
 - **DO NOT** run `dotnet format` on the entire solution
 - Instead, manually format only the files you changed
 - If you accidentally run `dotnet format` and it corrupts files, revert with:
@@ -1011,9 +1011,9 @@ public static Document View(Model model) => ...
 // TO stateful component:
 public class RowComponent : Component<RowProps>
 {
-    public override bool ShouldRender(RowProps old, RowProps new) 
+    public override bool ShouldRender(RowProps old, RowProps new)
         => !ReferenceEquals(old.Row, new.Row);
-    
+
     public override Node Render(RowProps props) => TableRow(props.Row);
 }
 ```
@@ -1025,7 +1025,7 @@ public class RowComponent : Component<RowProps>
 
 **Cons:**
 - Breaks pure MVU architecture
-- Components need lifecycle management  
+- Components need lifecycle management
 - More complex mental model
 - Loses referential transparency
 
@@ -1061,7 +1061,7 @@ lazy(memoKey, ...)
 public static Document View(Model model, Document? previous)
 {
     return new Document("Title",
-        tbody([], model.Data.Select((row, i) => 
+        tbody([], model.Data.Select((row, i) =>
             GetCachedRowNode(row, model.Selected == row.Id, previous)
         ))
     );
@@ -1113,7 +1113,7 @@ Use source generators to analyze View functions and generate optimized code:
 
 ```csharp
 // Developer writes:
-public static Node ViewRow(Row row, bool selected) => 
+public static Node ViewRow(Row row, bool selected) =>
     tr([class_(selected ? "danger" : "")], [...]);
 
 // Generator produces:
