@@ -87,6 +87,96 @@ public sealed class ConduitProgram : Program<Model, Unit>
                 (model with { Page = new Page.Article(art.Data with { CommentBody = "" }) },
                  new AddComment(model.ApiUrl, model.Session.Token, art.Data.Slug, art.Data.CommentBody)),
 
+            // ─── Settings Form ────────────────────────────────────────────
+            SettingsImageChanged msg when model.Page is Page.Settings settings =>
+                (model with { Page = new Page.Settings(settings.Data with { Image = msg.Value }) },
+                 Commands.None),
+
+            SettingsUsernameChanged msg when model.Page is Page.Settings settings =>
+                (model with { Page = new Page.Settings(settings.Data with { Username = msg.Value }) },
+                 Commands.None),
+
+            SettingsBioChanged msg when model.Page is Page.Settings settings =>
+                (model with { Page = new Page.Settings(settings.Data with { Bio = msg.Value }) },
+                 Commands.None),
+
+            SettingsEmailChanged msg when model.Page is Page.Settings settings =>
+                (model with { Page = new Page.Settings(settings.Data with { Email = msg.Value }) },
+                 Commands.None),
+
+            SettingsPasswordChanged msg when model.Page is Page.Settings settings =>
+                (model with { Page = new Page.Settings(settings.Data with { Password = msg.Value }) },
+                 Commands.None),
+
+            SettingsSubmitted when model.Page is Page.Settings settings && model.Session is not null =>
+                (model with { Page = new Page.Settings(settings.Data with { IsSubmitting = true, Errors = [] }) },
+                 new UpdateUser(model.ApiUrl, model.Session.Token,
+                     settings.Data.Image, settings.Data.Username, settings.Data.Bio,
+                     settings.Data.Email,
+                     string.IsNullOrWhiteSpace(settings.Data.Password) ? null : settings.Data.Password)),
+
+            // ─── Editor Form ──────────────────────────────────────────────
+            EditorTitleChanged msg when model.Page is Page.Editor editor =>
+                (model with { Page = new Page.Editor(editor.Data with { Title = msg.Value }) },
+                 Commands.None),
+
+            EditorDescriptionChanged msg when model.Page is Page.Editor editor =>
+                (model with { Page = new Page.Editor(editor.Data with { Description = msg.Value }) },
+                 Commands.None),
+
+            EditorBodyChanged msg when model.Page is Page.Editor editor =>
+                (model with { Page = new Page.Editor(editor.Data with { Body = msg.Value }) },
+                 Commands.None),
+
+            EditorTagInputChanged msg when model.Page is Page.Editor editor =>
+                (model with { Page = new Page.Editor(editor.Data with { TagInput = msg.Value }) },
+                 Commands.None),
+
+            EditorAddTag when model.Page is Page.Editor editor
+                && !string.IsNullOrWhiteSpace(editor.Data.TagInput)
+                && !editor.Data.TagList.Contains(editor.Data.TagInput.Trim()) =>
+                (model with
+                {
+                    Page = new Page.Editor(editor.Data with
+                    {
+                        TagList = editor.Data.TagList.Append(editor.Data.TagInput.Trim()).ToList(),
+                        TagInput = ""
+                    })
+                }, Commands.None),
+
+            EditorTagKeyDown { Key: "Enter" } when model.Page is Page.Editor editor
+                && !string.IsNullOrWhiteSpace(editor.Data.TagInput)
+                && !editor.Data.TagList.Contains(editor.Data.TagInput.Trim()) =>
+                (model with
+                {
+                    Page = new Page.Editor(editor.Data with
+                    {
+                        TagList = editor.Data.TagList.Append(editor.Data.TagInput.Trim()).ToList(),
+                        TagInput = ""
+                    })
+                }, Commands.None),
+
+            EditorTagKeyDown => (model, Commands.None),
+
+            EditorRemoveTag msg when model.Page is Page.Editor editor =>
+                (model with
+                {
+                    Page = new Page.Editor(editor.Data with
+                    {
+                        TagList = editor.Data.TagList.Where(t => t != msg.Tag).ToList()
+                    })
+                }, Commands.None),
+
+            EditorSubmitted when model.Page is Page.Editor editor && model.Session is not null =>
+                HandleEditorSubmitted(model, editor.Data),
+
+            // ─── Profile Tab ──────────────────────────────────────────────
+            ProfileTabChanged msg when model.Page is Page.Profile profile =>
+                HandleProfileTabChanged(model, profile.Data, msg),
+
+            PageChanged msg when model.Page is Page.Profile profile =>
+                HandleProfilePageChanged(model, profile.Data, msg),
+
             // ─── Feed Tab / Pagination ────────────────────────────────────
             FeedTabChanged msg when model.Page is Page.Home home =>
                 HandleFeedTabChanged(model, home.Data, msg),
@@ -124,6 +214,8 @@ public sealed class ConduitProgram : Program<Model, Unit>
             CommentAdded msg => HandleCommentAdded(model, msg),
             CommentDeleted msg => HandleCommentDeleted(model, msg),
             ArticleDeleted => HandleArticleDeleted(model),
+            UserUpdated msg => HandleUserUpdated(model, msg),
+            ArticleSaved msg => HandleArticleSaved(model, msg),
 
             // ─── Auth ─────────────────────────────────────────────────────
             Logout =>
@@ -150,6 +242,9 @@ public sealed class ConduitProgram : Program<Model, Unit>
             Page.Login login => Pages.Login.View(login.Data),
             Page.Register reg => Pages.Register.View(reg.Data),
             Page.Article art => Pages.Article.View(art.Data, model.Session),
+            Page.Settings settings => Pages.Settings.View(settings.Data),
+            Page.Editor editor => Pages.Editor.View(editor.Data),
+            Page.Profile profile => Pages.Profile.View(profile.Data, model.Session),
             Page.NotFound => div([], [text("Page not found.")]),
             _ => div([], [text("Coming soon...")])
         };
@@ -160,6 +255,10 @@ public sealed class ConduitProgram : Program<Model, Unit>
             Page.Login => "Sign in — Conduit",
             Page.Register => "Sign up — Conduit",
             Page.Article { Data.Article: not null } art => $"{art.Data.Article.Title} — Conduit",
+            Page.Settings => "Settings — Conduit",
+            Page.Editor { Data.Slug: not null } editor => $"Edit Article — Conduit",
+            Page.Editor => "New Article — Conduit",
+            Page.Profile { Data.Username: var u } => $"{u} — Conduit",
             _ => "Conduit"
         };
 
@@ -249,10 +348,26 @@ public sealed class ConduitProgram : Program<Model, Unit>
         };
 
     private static (Model, Command) HandleArticleLoaded(Model model, ArticleLoaded msg) =>
-        model.Page is Page.Article art
-            ? (model with { Page = new Page.Article(art.Data with { Article = msg.Article, IsLoading = false }) },
-               Commands.None)
-            : (model, Commands.None);
+        model.Page switch
+        {
+            Page.Article art =>
+                (model with { Page = new Page.Article(art.Data with { Article = msg.Article, IsLoading = false }) },
+                 Commands.None),
+
+            Page.Editor editor =>
+                (model with
+                {
+                    Page = new Page.Editor(editor.Data with
+                    {
+                        Title = msg.Article.Title,
+                        Description = msg.Article.Description,
+                        Body = msg.Article.Body,
+                        TagList = msg.Article.TagList
+                    })
+                }, Commands.None),
+
+            _ => (model, Commands.None)
+        };
 
     private static (Model, Command) HandleCommentsLoaded(Model model, CommentsLoaded msg) =>
         model.Page is Page.Article art
@@ -309,20 +424,31 @@ public sealed class ConduitProgram : Program<Model, Unit>
         };
 
     private static (Model, Command) HandleFollowToggled(Model model, FollowToggled msg) =>
-        model.Page is Page.Article art && art.Data.Article is not null
-            ? (model with
-            {
-                Page = new Page.Article(art.Data with
+        model.Page switch
+        {
+            Page.Article art when art.Data.Article is not null =>
+                (model with
                 {
-                    Article = art.Data.Article with
+                    Page = new Page.Article(art.Data with
                     {
-                        Author = new AuthorData(
-                            msg.Profile.Username, msg.Profile.Bio,
-                            msg.Profile.Image, msg.Profile.Following)
-                    }
-                })
-            }, Commands.None)
-            : (model, Commands.None);
+                        Article = art.Data.Article with
+                        {
+                            Author = new AuthorData(
+                                msg.Profile.Username, msg.Profile.Bio,
+                                msg.Profile.Image, msg.Profile.Following)
+                        }
+                    })
+                }, Commands.None),
+
+            Page.Profile profile when profile.Data.Profile is not null
+                && profile.Data.Profile.Username == msg.Profile.Username =>
+                (model with
+                {
+                    Page = new Page.Profile(profile.Data with { Profile = msg.Profile })
+                }, Commands.None),
+
+            _ => (model, Commands.None)
+        };
 
     private static (Model, Command) HandleCommentAdded(Model model, CommentAdded msg) =>
         model.Page is Page.Article art
@@ -367,6 +493,87 @@ public sealed class ConduitProgram : Program<Model, Unit>
                 Page = new Page.Register(reg.Data with { Errors = msg.Errors, IsSubmitting = false })
             }, Commands.None),
 
+            Page.Settings settings => (model with
+            {
+                Page = new Page.Settings(settings.Data with { Errors = msg.Errors, IsSubmitting = false })
+            }, Commands.None),
+
+            Page.Editor editor => (model with
+            {
+                Page = new Page.Editor(editor.Data with { Errors = msg.Errors, IsSubmitting = false })
+            }, Commands.None),
+
             _ => (model, Commands.None)
         };
+
+    private static (Model, Command) HandleUserUpdated(Model model, UserUpdated msg) =>
+        (model with
+        {
+            Session = msg.Session,
+            Page = new Page.Settings(new SettingsModel(
+                Image: msg.Session.Image ?? "",
+                Username: msg.Session.Username,
+                Bio: msg.Session.Bio,
+                Email: msg.Session.Email,
+                Password: "",
+                Errors: [],
+                IsSubmitting: false))
+        }, Commands.None);
+
+    private static (Model, Command) HandleArticleSaved(Model model, ArticleSaved msg)
+    {
+        var url = new Url(["article", msg.Slug], new Dictionary<string, string>(), Option<string>.None);
+        var (page, command) = Route.FromUrl(url, model.Session, model.ApiUrl);
+        return (model with { Page = page }, Commands.Batch(command, Navigation.PushUrl(url)));
+    }
+
+    private static (Model, Command) HandleEditorSubmitted(Model model, EditorModel editor)
+    {
+        var newModel = model with
+        {
+            Page = new Page.Editor(editor with { IsSubmitting = true, Errors = [] })
+        };
+
+        Command command = editor.Slug is not null
+            ? new UpdateArticle(model.ApiUrl, model.Session!.Token,
+                editor.Slug, editor.Title, editor.Description, editor.Body, editor.TagList)
+            : new CreateArticle(model.ApiUrl, model.Session!.Token,
+                editor.Title, editor.Description, editor.Body, editor.TagList);
+
+        return (newModel, command);
+    }
+
+    private static (Model, Command) HandleProfileTabChanged(Model model, ProfileModel profile, ProfileTabChanged msg)
+    {
+        var newProfile = profile with
+        {
+            ShowFavorites = msg.ShowFavorites,
+            Articles = [],
+            ArticlesCount = 0,
+            CurrentPage = 1,
+            IsLoading = true
+        };
+
+        Command articleCmd = msg.ShowFavorites
+            ? new FetchArticles(model.ApiUrl, model.Session?.Token, Constants.ArticlesPerPage, 0,
+                Favorited: profile.Username)
+            : new FetchArticles(model.ApiUrl, model.Session?.Token, Constants.ArticlesPerPage, 0,
+                Author: profile.Username);
+
+        return (model with { Page = new Page.Profile(newProfile) }, articleCmd);
+    }
+
+    private static (Model, Command) HandleProfilePageChanged(Model model, ProfileModel profile, PageChanged msg)
+    {
+        var offset = (msg.PageNumber - 1) * Constants.ArticlesPerPage;
+        var newProfile = profile with { CurrentPage = msg.PageNumber, IsLoading = true };
+
+        Command articleCmd = profile.ShowFavorites
+            ? new FetchArticles(model.ApiUrl, model.Session?.Token, Constants.ArticlesPerPage, offset,
+                Favorited: profile.Username)
+            : new FetchArticles(model.ApiUrl, model.Session?.Token, Constants.ArticlesPerPage, offset,
+                Author: profile.Username);
+
+        return (model with { Page = new Page.Profile(newProfile) }, articleCmd);
+    }
 }

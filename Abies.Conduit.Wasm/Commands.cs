@@ -82,3 +82,39 @@ public sealed record FollowUser(string ApiUrl, string Token, string Username) : 
 
 /// <summary>Unfollow a user.</summary>
 public sealed record UnfollowUser(string ApiUrl, string Token, string Username) : ConduitCommand;
+
+// ─── Settings Commands ────────────────────────────────────────────────────────
+
+/// <summary>Update the current user's settings.</summary>
+public sealed record UpdateUser(
+    string ApiUrl,
+    string Token,
+    string Image,
+    string Username,
+    string Bio,
+    string Email,
+    string? Password
+) : ConduitCommand;
+
+// ─── Editor Commands ──────────────────────────────────────────────────────────
+
+/// <summary>Create a new article.</summary>
+public sealed record CreateArticle(
+    string ApiUrl,
+    string Token,
+    string Title,
+    string Description,
+    string Body,
+    IReadOnlyList<string> TagList
+) : ConduitCommand;
+
+/// <summary>Update an existing article.</summary>
+public sealed record UpdateArticle(
+    string ApiUrl,
+    string Token,
+    string Slug,
+    string Title,
+    string Description,
+    string Body,
+    IReadOnlyList<string> TagList
+) : ConduitCommand;
