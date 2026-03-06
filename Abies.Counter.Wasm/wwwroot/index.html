@@ -82,12 +82,10 @@
     </style>
 </head>
 <body>
-    <!-- App root — Abies renders into this element. -->
-    <div id="app">
-        <p id="loading">Loading Abies Counter…</p>
-    </div>
+    <!-- Abies renders directly into document.body via abies.js OP_ADD_ROOT. -->
+    <p id="loading">Loading Abies Counter…</p>
 
     <!-- .NET WASM bootstrap -->
-    <script type="module" src="./main.js"></script>
+    <script type="module" src="./_framework/dotnet.js"></script>
 </body>
 </html>

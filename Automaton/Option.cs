@@ -26,9 +26,7 @@
 //     pressure per instance.
 // =============================================================================
 
-using Automaton;
-
-namespace Abies;
+namespace Automaton;
 
 /// <summary>
 /// A discriminated union representing either a value (<c>Some</c>) or no value (<c>None</c>).

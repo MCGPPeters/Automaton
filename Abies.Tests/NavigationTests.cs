@@ -14,6 +14,7 @@
 // =============================================================================
 
 using Abies.Subscriptions;
+using Automaton;
 
 namespace Abies.Tests;
 

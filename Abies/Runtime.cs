@@ -1,7 +1,7 @@
 // =============================================================================
 // Abies Runtime — The MVU Execution Loop
 // =============================================================================
-// The AbiesRuntime orchestrates the MVU loop by composing the Automaton kernel's
+// The Runtime orchestrates the MVU loop by composing the Automaton kernel's
 // AutomatonRuntime with three MVU-specific concerns:
 //
 //     1. View:          Model → Document → Diff → Patches → Apply
@@ -154,7 +154,7 @@ public static class HeadDiff
 /// </summary>
 /// <remarks>
 /// <para>
-/// <see cref="AbiesRuntime{TProgram,TModel,TArgument}"/> is a thin orchestration
+/// <see cref="Runtime{TProgram,TModel,TArgument}"/> is a thin orchestration
 /// layer over <see cref="AutomatonRuntime{TAutomaton,TState,TEvent,TEffect,TParameters}"/>.
 /// After each transition, the observer:
 /// </para>
@@ -180,7 +180,7 @@ public static class HeadDiff
 /// <code>
 /// // Test usage — capture patches for assertions
 /// var patches = new List&lt;IReadOnlyList&lt;Patch&gt;&gt;();
-/// var runtime = await AbiesRuntime&lt;Counter, CounterModel, Unit&gt;.Start(
+/// var runtime = await Runtime&lt;Counter, CounterModel, Unit&gt;.Start(
 ///     apply: p =&gt; patches.Add(p),
 ///     interpreter: _ =&gt; new ValueTask&lt;Result&lt;Message[], PipelineError&gt;&gt;(
 ///         Result&lt;Message[], PipelineError&gt;.Ok([])));
@@ -194,7 +194,7 @@ public static class HeadDiff
 /// <typeparam name="TProgram">The program type implementing <see cref="Program{TModel,TArgument}"/>.</typeparam>
 /// <typeparam name="TModel">The application model (state).</typeparam>
 /// <typeparam name="TArgument">Initialization parameters.</typeparam>
-public sealed class AbiesRuntime<TProgram, TModel, TArgument> : IDisposable
+public sealed class Runtime<TProgram, TModel, TArgument> : IDisposable
     where TProgram : Program<TModel, TArgument>
 {
     private static readonly ActivitySource _activitySource = new("Abies.Runtime");
@@ -221,7 +221,7 @@ public sealed class AbiesRuntime<TProgram, TModel, TArgument> : IDisposable
     /// The runtime uses two-phase initialization: construct first, then
     /// wire the kernel runtime via field assignment in <see cref="Start"/>.
     /// </summary>
-    private AbiesRuntime(Apply apply, Action<string>? titleChanged, Action<NavigationCommand>? navigationExecutor) =>
+    private Runtime(Apply apply, Action<string>? titleChanged, Action<NavigationCommand>? navigationExecutor) =>
         (_apply, _titleChanged, _navigationExecutor) = (apply, titleChanged, navigationExecutor);
 
     /// <summary>
@@ -409,7 +409,7 @@ public sealed class AbiesRuntime<TProgram, TModel, TArgument> : IDisposable
     /// Defaults to <c>false</c> for WASM's single-threaded environment.
     /// </param>
     /// <returns>The started runtime, ready to receive messages via <see cref="Dispatch"/>.</returns>
-    public static async Task<AbiesRuntime<TProgram, TModel, TArgument>> Start(
+    public static async Task<Runtime<TProgram, TModel, TArgument>> Start(
         Apply apply,
         Interpreter<Command, Message> interpreter,
         TArgument argument = default!,
@@ -422,7 +422,7 @@ public sealed class AbiesRuntime<TProgram, TModel, TArgument> : IDisposable
         activity?.SetTag("abies.program", typeof(TProgram).Name);
 
         // Phase 1: Create the runtime shell (observer needs 'this' reference)
-        var runtime = new AbiesRuntime<TProgram, TModel, TArgument>(apply, titleChanged, navigationExecutor);
+        var runtime = new Runtime<TProgram, TModel, TArgument>(apply, titleChanged, navigationExecutor);
 
         // Wire the handler registry's dispatch to the runtime (needed for event delegation)
         HandlerRegistry.Dispatch = runtime.DispatchFromSubscription;

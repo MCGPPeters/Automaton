@@ -13,7 +13,7 @@
 //           ≡   <TModel, Message, Command,  TArgument>
 //
 // This interface is the compile-time contract that application authors implement.
-// The runtime (AbiesRuntime) executes the MVU loop using the Automaton kernel's
+// The runtime (Runtime) executes the MVU loop using the Automaton kernel's
 // AutomatonRuntime with an Observer that renders views and a platform-supplied
 // Interpreter that executes commands.
 //
@@ -29,11 +29,12 @@
 
 using Abies.DOM;
 using Abies.Subscriptions;
+using Automaton;
 
 namespace Abies;
 
 /// <summary>
-/// An MVU application: an <see cref="Automaton.Automaton{TState,TEvent,TEffect,TParameters}"/>
+/// An MVU application: an <see cref="Automaton{TState,TEvent,TEffect,TParameters}"/>
 /// extended with <see cref="View"/> and <see cref="Subscriptions"/> capabilities.
 /// </summary>
 /// <remarks>
@@ -99,8 +100,8 @@ namespace Abies;
 /// </example>
 /// </remarks>
 /// <typeparam name="TModel">The application model (state).</typeparam>
-/// <typeparam name="TArgument">Initialization parameters. Use <see cref="Automaton.Unit"/> for parameterless apps.</typeparam>
-public interface Program<TModel, TArgument> : Automaton.Automaton<TModel, Message, Command, TArgument>
+/// <typeparam name="TArgument">Initialization parameters. Use <see cref="Unit"/> for parameterless apps.</typeparam>
+public interface Program<TModel, TArgument> : Automaton<TModel, Message, Command, TArgument>
 {
     /// <summary>
     /// Renders the current model as a virtual DOM <see cref="Document"/>.
@@ -163,7 +164,7 @@ public interface Program<TModel, TArgument> : Automaton.Automaton<TModel, Messag
 /// relevant to client-side routing.
 /// </para>
 /// <para>
-/// For full URL manipulation, convert to/from <see cref="System.Uri"/>
+/// For full URL manipulation, convert to/from <see cref="Uri"/>
 /// using the provided conversion methods.
 /// </para>
 /// </remarks>
@@ -184,7 +185,7 @@ public record Url(
         Option<string>.None);
 
     /// <summary>
-    /// Creates a <see cref="Url"/> from a <see cref="System.Uri"/>.
+    /// Creates a <see cref="Url"/> from a <see cref="Uri"/>.
     /// </summary>
     /// <param name="uri">The URI to parse.</param>
     /// <returns>A parsed <see cref="Url"/> with path segments, query parameters, and fragment.</returns>

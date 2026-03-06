@@ -6,14 +6,16 @@
 //
 // Architecture:
 //   .NET → JS (JSImport):
-//     RenderInitial    — sets innerHTML for the first render
 //     ApplyBinaryBatch — applies a binary-encoded batch of DOM patches
 //     SetTitle         — sets document.title
 //     NavigateTo       — history.pushState for client-side routing
 //     SetupEventDelegation — registers event listeners at the root
+//     SetupNavigation  — registers popstate + link click interception
+//     GetCurrentUrl    — retrieves window.location.href
 //
 //   JS → .NET (JSExport):
 //     DispatchDomEvent — called by event delegation when a DOM event fires
+//     OnUrlChanged     — called when browser URL changes
 //
 // Binary Protocol:
 //   Patches are serialized by RenderBatchWriter into a compact binary format:
@@ -43,16 +45,14 @@
 //   which maps to a Handler in the HandlerRegistry.
 //
 // See also:
-//   - RenderBatchWriter.cs — binary serialization
+//   - Abies/RenderBatchWriter.cs — binary serialization
 //   - abies.js — browser-side runtime
-//   - Runtime.cs — AbiesRuntime wiring
+//   - Runtime.cs — browser runtime bootstrap
 // =============================================================================
 
 using System.Runtime.InteropServices.JavaScript;
-using System.Text.Json;
-using Abies.DOM;
 
-namespace Abies;
+namespace Abies.Browser;
 
 /// <summary>
 /// JavaScript interop bridge for the Abies browser runtime.
@@ -67,7 +67,7 @@ namespace Abies;
 /// </para>
 /// <para>
 /// The module name <c>"Abies"</c> corresponds to the JS module loaded via
-/// <c>JSHost.ImportAsync("Abies", "/abies.js")</c> at startup.
+/// <c>JSHost.ImportAsync("Abies", "../abies.js")</c> at startup.
 /// </para>
 /// </remarks>
 [System.Runtime.Versioning.SupportedOSPlatform("browser")]
@@ -76,14 +76,6 @@ public static partial class Interop
     // =========================================================================
     // .NET → JavaScript (JSImport)
     // =========================================================================
-
-    /// <summary>
-    /// Sets the innerHTML of the app root element for the initial render.
-    /// </summary>
-    /// <param name="rootId">The DOM element ID (e.g., "app").</param>
-    /// <param name="html">The full HTML string produced by <see cref="Render.Html"/>.</param>
-    [JSImport("renderInitial", "Abies")]
-    internal static partial void RenderInitial(string rootId, string html);
 
     /// <summary>
     /// Applies a binary-encoded batch of DOM patches.
@@ -159,6 +151,40 @@ public static partial class Interop
     [JSImport("setupNavigation", "Abies")]
     internal static partial void SetupNavigation();
 
+    /// <summary>
+    /// Gets the current browser URL (window.location.href).
+    /// </summary>
+    [JSImport("getCurrentUrl", "Abies")]
+    internal static partial string GetCurrentUrl();
+
+    // =========================================================================
+    // Callback Wiring (.NET → JavaScript)
+    // =========================================================================
+    // These methods wire the [JSExport] callbacks into abies.js, replacing
+    // the role previously played by main.js. The .NET side passes managed
+    // delegates to JS, eliminating the need for a separate bootstrap script.
+    // =========================================================================
+
+    /// <summary>
+    /// Passes the dispatch callback to abies.js so event delegation can call
+    /// back into .NET when a DOM event fires.
+    /// </summary>
+    /// <param name="callback">The <see cref="DispatchDomEvent"/> method.</param>
+    [JSImport("setDispatchCallback", "Abies")]
+    internal static partial void SetDispatchCallback(
+        [JSMarshalAs<JSType.Function<JSType.String, JSType.String, JSType.String>>]
+        Action<string, string, string> callback);
+
+    /// <summary>
+    /// Passes the URL-changed callback to abies.js so navigation events can
+    /// call back into .NET when the browser URL changes.
+    /// </summary>
+    /// <param name="callback">The <see cref="OnUrlChanged"/> method.</param>
+    [JSImport("setOnUrlChangedCallback", "Abies")]
+    internal static partial void SetOnUrlChangedCallback(
+        [JSMarshalAs<JSType.Function<JSType.String>>]
+        Action<string> callback);
+
     // =========================================================================
     // JavaScript → .NET (JSExport)
     // =========================================================================
@@ -166,7 +192,7 @@ public static partial class Interop
     /// <summary>
     /// Called by abies.js when a DOM event fires on an element with a
     /// <c>data-event-{eventType}</c> attribute. The commandId maps to
-    /// a <see cref="Handler"/> in the <see cref="HandlerRegistry"/>.
+    /// a handler in the <see cref="HandlerRegistry"/>.
     /// </summary>
     /// <param name="commandId">The handler command ID from the data-event attribute.</param>
     /// <param name="eventName">The DOM event name (e.g., "click", "input").</param>
@@ -190,147 +216,4 @@ public static partial class Interop
     [JSExport]
     public static void OnUrlChanged(string url) =>
         NavigationCallbacks.HandleUrlChanged(url);
-}
-
-/// <summary>
-/// Registry mapping commandIds to event handlers.
-/// </summary>
-/// <remarks>
-/// <para>
-/// When the diff algorithm produces patches, event handlers are registered
-/// in this registry with their commandId as the key. When the JS event
-/// delegation system dispatches an event, the commandId is used to look up
-/// the handler and create the appropriate <see cref="Message"/>.
-/// </para>
-/// <para>
-/// The registry uses <see cref="Dictionary{TKey,TValue}"/> (not concurrent)
-/// since WASM is single-threaded.
-/// </para>
-/// </remarks>
-public static class HandlerRegistry
-{
-    private static readonly Dictionary<string, Handler> _handlers = new();
-
-    /// <summary>
-    /// The dispatch function for feeding messages into the MVU loop.
-    /// Set by the browser runtime during startup.
-    /// </summary>
-    internal static Action<Message>? Dispatch { get; set; }
-
-    /// <summary>
-    /// Registers a handler by its commandId.
-    /// </summary>
-    /// <param name="handler">The handler to register.</param>
-    public static void Register(Handler handler) =>
-        _handlers[handler.CommandId] = handler;
-
-    /// <summary>
-    /// Unregisters a handler by its commandId.
-    /// </summary>
-    /// <param name="commandId">The commandId to remove.</param>
-    public static void Unregister(string commandId) =>
-        _handlers.Remove(commandId);
-
-    /// <summary>
-    /// Creates a message from a commandId and event data by looking up
-    /// the registered handler.
-    /// </summary>
-    /// <param name="commandId">The handler commandId.</param>
-    /// <param name="eventData">Raw event data string from JS.</param>
-    /// <returns>The message to dispatch, or null if the handler was not found.</returns>
-    public static Message? CreateMessage(string commandId, string eventData)
-    {
-        if (!_handlers.TryGetValue(commandId, out var handler))
-            return null;
-
-        // Static message handler — dispatch the pre-built message
-        if (handler.Command is not null)
-            return handler.Command;
-
-        // Data-carrying handler — deserialize event data and call factory
-        if (handler.WithData is not null && handler.DataType is not null)
-        {
-            var data = string.IsNullOrEmpty(eventData)
-                ? null
-                : JsonSerializer.Deserialize(eventData, handler.DataType);
-            return handler.WithData(data);
-        }
-
-        return null;
-    }
-
-    /// <summary>
-    /// Clears all registered handlers. Used during shutdown or testing.
-    /// </summary>
-    internal static void Clear() => _handlers.Clear();
-
-    /// <summary>
-    /// Registers all handlers from an element's attributes, and recursively
-    /// from its children.
-    /// </summary>
-    /// <param name="node">The virtual DOM node to scan for handlers.</param>
-    public static void RegisterHandlers(Node? node)
-    {
-        switch (node)
-        {
-            case Element element:
-                foreach (var attr in element.Attributes)
-                {
-                    if (attr is Handler handler)
-                    {
-                        Register(handler);
-                    }
-                }
-
-                foreach (var child in element.Children)
-                {
-                    RegisterHandlers(child);
-                }
-
-                break;
-
-            case MemoNode memo:
-                RegisterHandlers(memo.CachedNode);
-                break;
-
-            case LazyMemoNode lazy:
-                RegisterHandlers(lazy.CachedNode ?? lazy.Evaluate());
-                break;
-        }
-    }
-
-    /// <summary>
-    /// Unregisters all handlers from an element's attributes, and recursively
-    /// from its children.
-    /// </summary>
-    /// <param name="node">The virtual DOM node to scan for handlers.</param>
-    public static void UnregisterHandlers(Node? node)
-    {
-        switch (node)
-        {
-            case Element element:
-                foreach (var attr in element.Attributes)
-                {
-                    if (attr is Handler handler)
-                    {
-                        Unregister(handler.CommandId);
-                    }
-                }
-
-                foreach (var child in element.Children)
-                {
-                    UnregisterHandlers(child);
-                }
-
-                break;
-
-            case MemoNode memo:
-                UnregisterHandlers(memo.CachedNode);
-                break;
-
-            case LazyMemoNode lazy:
-                UnregisterHandlers(lazy.CachedNode);
-                break;
-        }
-    }
 }
