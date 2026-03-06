@@ -60,6 +60,7 @@ const OP_UPDATE_RAW       = 19;
 const OP_ADD_HEAD_ELEMENT    = 20;
 const OP_UPDATE_HEAD_ELEMENT = 21;
 const OP_REMOVE_HEAD_ELEMENT = 22;
+const OP_APPEND_CHILDREN_HTML = 23;
 
 // =============================================================================
 // Event types to register for delegation
@@ -93,18 +94,25 @@ const utf8Decoder = new TextDecoder("utf-8");
 let dispatchDomEvent = null;
 
 // =============================================================================
-// HTML fragment parser helper — reusable container
+// HTML fragment parser helper — reusable <template> container
 // =============================================================================
-const _fragmentContainer = document.createElement("div");
+// Uses <template> instead of <div> to avoid HTML5 foster parenting.
+// The HTML parser enforces context-sensitive rules: <tr> is invalid inside
+// <div>, so the parser strips it. <template> has an inert DocumentFragment
+// that accepts any HTML structure, preserving <tr>, <td>, <option>, etc.
+// See: HTML Living Standard §13.2.6.1 (foster parenting algorithm)
+// =============================================================================
+const _fragmentTemplate = document.createElement("template");
 
 /**
  * Parses an HTML string into a DOM element.
+ * Uses <template> to preserve context-dependent elements (tr, td, option, etc.).
  * @param {string} html - The HTML to parse.
  * @returns {Element} The parsed DOM element.
  */
 function parseHtmlFragment(html) {
-    _fragmentContainer.innerHTML = html;
-    return _fragmentContainer.firstElementChild;
+    _fragmentTemplate.innerHTML = html;
+    return _fragmentTemplate.content.firstElementChild;
 }
 
 // =============================================================================
@@ -348,6 +356,19 @@ function applyPatch(type, f1, f2, f3) {
             break;
         }
 
+        case OP_APPEND_CHILDREN_HTML: {
+            // f1 = parentId, f2 = concatenated children html
+            // Uses insertAdjacentHTML to preserve existing children and append new ones.
+            // Unlike innerHTML, this doesn't destroy existing DOM nodes or event state.
+            // Unlike parseHtmlFragment, this respects the parent's parsing context
+            // (e.g., <tr> is valid inside <tbody>).
+            const parent = document.getElementById(f1);
+            if (parent) {
+                parent.insertAdjacentHTML("beforeend", f2);
+            }
+            break;
+        }
+
         case OP_MOVE_CHILD: {
             // f1 = parentId, f2 = childId, f3 = beforeId (null = append)
             const parent = document.getElementById(f1);
@@ -523,8 +544,7 @@ function applyPatch(type, f1, f2, f3) {
             // f1 = key, f2 = html
             const head = document.head;
             if (head) {
-                _fragmentContainer.innerHTML = f2;
-                const el = _fragmentContainer.firstElementChild;
+                const el = parseHtmlFragment(f2);
                 if (el) {
                     head.appendChild(el);
                 }
@@ -538,15 +558,13 @@ function applyPatch(type, f1, f2, f3) {
             if (head) {
                 const existing = head.querySelector(`[data-abies-head="${f1}"]`);
                 if (existing) {
-                    _fragmentContainer.innerHTML = f2;
-                    const newEl = _fragmentContainer.firstElementChild;
+                    const newEl = parseHtmlFragment(f2);
                     if (newEl) {
                         existing.replaceWith(newEl);
                     }
                 } else {
                     // Fallback: element not found, add it
-                    _fragmentContainer.innerHTML = f2;
-                    const el = _fragmentContainer.firstElementChild;
+                    const el = parseHtmlFragment(f2);
                     if (el) {
                         head.appendChild(el);
                     }

@@ -30,9 +30,11 @@ internal static class Program
     private static async Task Main()
     {
         // Load the abies.js module for [JSImport] interop.
+        // Path is relative to the calling module (_framework/dotnet.runtime.js),
+        // so "../abies.js" navigates up from _framework/ to the wwwroot root.
         // main.js has already imported abies.js as an ES module; the browser
         // caches modules by URL, so this returns the same instance.
-        await JSHost.ImportAsync("Abies", "/abies.js");
+        await JSHost.ImportAsync("Abies", "../abies.js");
 
         // Create the binary batch writer and the browser-specific Apply delegate.
         // This is the seam between the pure Abies core and the real DOM:

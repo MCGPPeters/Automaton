@@ -57,6 +57,7 @@ internal enum BinaryPatchType : int
     RemoveChild = 3,
     ClearChildren = 4,
     SetChildrenHtml = 5,
+    AppendChildrenHtml = 23,
     MoveChild = 6,
     UpdateAttribute = 7,
     AddAttribute = 8,
@@ -198,6 +199,13 @@ internal sealed class RenderBatchWriter
 
             case SetChildrenHtml p:
                 WriteEntry(BinaryPatchType.SetChildrenHtml,
+                    Intern(p.Parent.Id),
+                    Intern(Render.HtmlChildren(p.Children)),
+                    NullIndex);
+                break;
+
+            case AppendChildrenHtml p:
+                WriteEntry(BinaryPatchType.AppendChildrenHtml,
                     Intern(p.Parent.Id),
                     Intern(Render.HtmlChildren(p.Children)),
                     NullIndex);
