@@ -18,6 +18,7 @@
 // all actors in this system are Deciders — a domain design choice.
 // =============================================================================
 
+using Automaton;
 using Automaton.Actor;
 using Automaton.Actor.Testing;
 
@@ -375,5 +376,266 @@ public class ActorTests
         Assert.IsType<CounterError.AlreadyAtZero>(actor.Errors[0]);
 
         actor.Stop();
+    }
+
+    // =========================================================================
+    // Reply Actor — Hewitt's request-reply as a one-shot Decider
+    // =========================================================================
+
+    [Fact]
+    public async Task ReplyChannel_Open_spawns_reply_actor_and_returns_address()
+    {
+        var (replyAddress, replyTask) = await ReplyChannel.Open<int>();
+
+        Assert.NotNull(replyAddress);
+        Assert.NotNull(replyTask);
+        Assert.False(replyTask.IsCompleted);
+
+        await replyAddress.Tell(42);
+
+        var result = await replyTask;
+        Assert.Equal(42, result);
+    }
+
+    [Fact]
+    public async Task ReplyChannel_receives_single_value_and_terminates()
+    {
+        var (replyAddress, replyTask) = await ReplyChannel.Open<string>();
+
+        await replyAddress.Tell("hello from actor");
+
+        var result = await replyTask;
+        Assert.Equal("hello from actor", result);
+    }
+
+    [Fact]
+    public async Task ReplyChannel_works_with_Result_type()
+    {
+        var (replyAddress, replyTask) = await ReplyChannel.Open<Result<CounterState, CounterError>>();
+
+        var okResult = Result<CounterState, CounterError>.Ok(new CounterState(42));
+        await replyAddress.Tell(okResult);
+
+        var result = await replyTask;
+        Assert.True(result.IsOk);
+        Assert.Equal(42, result.Value.Count);
+    }
+
+    [Fact]
+    public async Task ReplyChannel_works_with_error_Result()
+    {
+        var (replyAddress, replyTask) = await ReplyChannel.Open<Result<CounterState, CounterError>>();
+
+        var errResult = Result<CounterState, CounterError>.Err(new CounterError.Overflow(99, 2, 100));
+        await replyAddress.Tell(errResult);
+
+        var result = await replyTask;
+        Assert.True(result.IsErr);
+        Assert.IsType<CounterError.Overflow>(result.Error);
+    }
+
+    [Fact]
+    public async Task ReplyChannel_supports_cancellation()
+    {
+        using var cts = new CancellationTokenSource();
+        var (_, replyTask) = await ReplyChannel.Open<int>(cts.Token);
+
+        await cts.CancelAsync();
+
+        await Assert.ThrowsAsync<TaskCanceledException>(() => replyTask);
+    }
+
+    // =========================================================================
+    // Envelope — command + reply address (Hewitt's request-reply primitive)
+    // =========================================================================
+
+    [Fact]
+    public async Task Envelope_carries_command_and_reply_address()
+    {
+        var (replyAddress, _) = await ReplyChannel.Open<Result<CounterState, CounterError>>();
+
+        var envelope = new Envelope<CounterCommand, Result<CounterState, CounterError>>(
+            new CounterCommand.Add(5),
+            replyAddress);
+
+        Assert.IsType<CounterCommand.Add>(envelope.Command);
+        Assert.Equal(5, ((CounterCommand.Add)envelope.Command).Amount);
+        Assert.Same(replyAddress, envelope.ReplyTo);
+    }
+
+    // =========================================================================
+    // SpawnWithReply — envelope-aware actor with request-reply
+    // =========================================================================
+
+    [Fact]
+    public async Task SpawnWithReply_processes_command_and_sends_reply()
+    {
+        using var cts = new CancellationTokenSource();
+
+        Observer<CounterState, CounterEvent, CounterEffect> observer =
+            (_, _, _) => PipelineResult.Ok;
+        Interpreter<CounterEffect, CounterEvent> interpreter =
+            _ => new ValueTask<Result<CounterEvent[], PipelineError>>(
+                Result<CounterEvent[], PipelineError>.Ok([]));
+
+        var address = await Automaton.Actor.Actor.SpawnWithReply<Counter, CounterState, CounterCommand,
+            CounterEvent, CounterEffect, CounterError, Unit>(
+                default, observer, interpreter, cancellationToken: cts.Token);
+
+        // Open a reply channel — spawns a one-shot reply actor
+        var (replyAddress, replyTask) = await ReplyChannel.Open<Result<CounterState, CounterError>>(cts.Token);
+
+        // Send enveloped command to aggregate actor
+        await address.Tell(new Envelope<CounterCommand, Result<CounterState, CounterError>>(
+            new CounterCommand.Add(5), replyAddress));
+
+        // Await reply from the reply actor
+        var result = await replyTask;
+
+        Assert.True(result.IsOk);
+        Assert.Equal(5, result.Value.Count);
+
+        await cts.CancelAsync();
+    }
+
+    [Fact]
+    public async Task SpawnWithReply_returns_error_for_rejected_command()
+    {
+        using var cts = new CancellationTokenSource();
+
+        Observer<CounterState, CounterEvent, CounterEffect> observer =
+            (_, _, _) => PipelineResult.Ok;
+        Interpreter<CounterEffect, CounterEvent> interpreter =
+            _ => new ValueTask<Result<CounterEvent[], PipelineError>>(
+                Result<CounterEvent[], PipelineError>.Ok([]));
+
+        var address = await Automaton.Actor.Actor.SpawnWithReply<Counter, CounterState, CounterCommand,
+            CounterEvent, CounterEffect, CounterError, Unit>(
+                default, observer, interpreter, cancellationToken: cts.Token);
+
+        // Send invalid command (underflow)
+        var (replyAddress, replyTask) = await ReplyChannel.Open<Result<CounterState, CounterError>>(cts.Token);
+        await address.Tell(new Envelope<CounterCommand, Result<CounterState, CounterError>>(
+            new CounterCommand.Add(-1), replyAddress));
+
+        var result = await replyTask;
+
+        Assert.True(result.IsErr);
+        Assert.IsType<CounterError.Underflow>(result.Error);
+
+        await cts.CancelAsync();
+    }
+
+    [Fact]
+    public async Task SpawnWithReply_handles_multiple_sequential_requests()
+    {
+        using var cts = new CancellationTokenSource();
+
+        Observer<CounterState, CounterEvent, CounterEffect> observer =
+            (_, _, _) => PipelineResult.Ok;
+        Interpreter<CounterEffect, CounterEvent> interpreter =
+            _ => new ValueTask<Result<CounterEvent[], PipelineError>>(
+                Result<CounterEvent[], PipelineError>.Ok([]));
+
+        var address = await Automaton.Actor.Actor.SpawnWithReply<Counter, CounterState, CounterCommand,
+            CounterEvent, CounterEffect, CounterError, Unit>(
+                default, observer, interpreter, cancellationToken: cts.Token);
+
+        // First request: add 3
+        var (reply1, task1) = await ReplyChannel.Open<Result<CounterState, CounterError>>(cts.Token);
+        await address.Tell(new Envelope<CounterCommand, Result<CounterState, CounterError>>(
+            new CounterCommand.Add(3), reply1));
+        var result1 = await task1;
+        Assert.True(result1.IsOk);
+        Assert.Equal(3, result1.Value.Count);
+
+        // Second request: add 7 — state accumulates
+        var (reply2, task2) = await ReplyChannel.Open<Result<CounterState, CounterError>>(cts.Token);
+        await address.Tell(new Envelope<CounterCommand, Result<CounterState, CounterError>>(
+            new CounterCommand.Add(7), reply2));
+        var result2 = await task2;
+        Assert.True(result2.IsOk);
+        Assert.Equal(10, result2.Value.Count);
+
+        // Third request: overflow (current=10, add 91, max=100)
+        var (reply3, task3) = await ReplyChannel.Open<Result<CounterState, CounterError>>(cts.Token);
+        await address.Tell(new Envelope<CounterCommand, Result<CounterState, CounterError>>(
+            new CounterCommand.Add(91), reply3));
+        var result3 = await task3;
+        Assert.True(result3.IsErr);
+        Assert.IsType<CounterError.Overflow>(result3.Error);
+
+        await cts.CancelAsync();
+    }
+
+    [Fact]
+    public async Task SpawnWithReply_handles_concurrent_requests()
+    {
+        using var cts = new CancellationTokenSource();
+
+        Observer<CounterState, CounterEvent, CounterEffect> observer =
+            (_, _, _) => PipelineResult.Ok;
+        Interpreter<CounterEffect, CounterEvent> interpreter =
+            _ => new ValueTask<Result<CounterEvent[], PipelineError>>(
+                Result<CounterEvent[], PipelineError>.Ok([]));
+
+        var address = await Automaton.Actor.Actor.SpawnWithReply<Counter, CounterState, CounterCommand,
+            CounterEvent, CounterEffect, CounterError, Unit>(
+                default, observer, interpreter, cancellationToken: cts.Token);
+
+        // Send 10 concurrent requests, each adding 1
+        var tasks = Enumerable.Range(0, 10).Select(async _ =>
+        {
+            var (reply, task) = await ReplyChannel.Open<Result<CounterState, CounterError>>(cts.Token);
+            await address.Tell(new Envelope<CounterCommand, Result<CounterState, CounterError>>(
+                new CounterCommand.Add(1), reply));
+            return await task;
+        }).ToList();
+
+        var results = await Task.WhenAll(tasks);
+
+        // All should succeed
+        Assert.All(results, r => Assert.True(r.IsOk));
+
+        // The last state should be 10 (sequential processing guarantees deterministic final state)
+        // Each reply gets the state AT THE TIME of processing — the ordering is non-deterministic
+        // but the final state must be 10
+        var maxCount = results.Max(r => r.Value.Count);
+        Assert.Equal(10, maxCount);
+
+        await cts.CancelAsync();
+    }
+
+    [Fact]
+    public async Task SpawnWithReply_observer_is_called_for_each_transition()
+    {
+        using var cts = new CancellationTokenSource();
+        var observedStates = new List<CounterState>();
+
+        Observer<CounterState, CounterEvent, CounterEffect> observer = (state, _, _) =>
+        {
+            observedStates.Add(state);
+            return PipelineResult.Ok;
+        };
+        Interpreter<CounterEffect, CounterEvent> interpreter =
+            _ => new ValueTask<Result<CounterEvent[], PipelineError>>(
+                Result<CounterEvent[], PipelineError>.Ok([]));
+
+        var address = await Automaton.Actor.Actor.SpawnWithReply<Counter, CounterState, CounterCommand,
+            CounterEvent, CounterEffect, CounterError, Unit>(
+                default, observer, interpreter, cancellationToken: cts.Token);
+
+        var (reply, task) = await ReplyChannel.Open<Result<CounterState, CounterError>>(cts.Token);
+        await address.Tell(new Envelope<CounterCommand, Result<CounterState, CounterError>>(
+            new CounterCommand.Add(3), reply));
+        await task;
+
+        // Add(3) produces 3 Increment events → 3 observer calls
+        Assert.Equal(3, observedStates.Count);
+        Assert.Equal(1, observedStates[0].Count);
+        Assert.Equal(2, observedStates[1].Count);
+        Assert.Equal(3, observedStates[2].Count);
+
+        await cts.CancelAsync();
     }
 }
