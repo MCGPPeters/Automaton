@@ -17,6 +17,7 @@
 //   - Favorites (toggle per user)
 // =============================================================================
 
+using System.Collections.Immutable;
 using System.Diagnostics;
 using Abies.Conduit.Domain.Shared;
 using Automaton;
@@ -205,32 +206,27 @@ public class Article
             ArticleEvent.CommentAdded e =>
                 (state with
                 {
-                    Comments = new Dictionary<CommentId, Comment>(state.Comments)
-                    {
-                        [e.CommentId] = new Comment(e.CommentId, e.AuthorId, e.Body, e.CreatedAt)
-                    }
+                    Comments = state.Comments.ToImmutableDictionary()
+                        .Add(e.CommentId, new Comment(e.CommentId, e.AuthorId, e.Body, e.CreatedAt))
                 }, new ArticleEffect.None()),
 
             ArticleEvent.CommentDeleted e =>
                 (state with
                 {
-                    Comments = state.Comments
-                        .Where(kv => kv.Key != e.CommentId)
-                        .ToDictionary(kv => kv.Key, kv => kv.Value)
+                    Comments = state.Comments.ToImmutableDictionary()
+                        .Remove(e.CommentId)
                 }, new ArticleEffect.None()),
 
             ArticleEvent.ArticleFavorited e =>
                 (state with
                 {
-                    FavoritedBy = new HashSet<UserId>(state.FavoritedBy) { e.UserId }
+                    FavoritedBy = state.FavoritedBy.ToImmutableHashSet().Add(e.UserId)
                 }, new ArticleEffect.None()),
 
             ArticleEvent.ArticleUnfavorited e =>
                 (state with
                 {
-                    FavoritedBy = state.FavoritedBy
-                        .Where(id => id != e.UserId)
-                        .ToHashSet()
+                    FavoritedBy = state.FavoritedBy.ToImmutableHashSet().Remove(e.UserId)
                 }, new ArticleEffect.None()),
 
             _ => throw new UnreachableException()

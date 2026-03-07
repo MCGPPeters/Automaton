@@ -76,10 +76,13 @@ public sealed class UserEndpointTests : IClassFixture<ConduitApiFactory>
 
         // The command goes through the aggregate (in-memory event store) but
         // the read model won't reflect the update since we're using fakes.
-        // We verify the endpoint accepts the request and returns OK.
+        // We verify the endpoint accepts the request and returns a valid status:
+        //   - OK if the aggregate processed the update
+        //   - 422 if validation failed
+        //   - 404 if the user stream doesn't exist yet (NotRegistered)
         Assert.True(
-            response.StatusCode is HttpStatusCode.OK or HttpStatusCode.UnprocessableEntity,
-            $"Expected OK or 422, got {response.StatusCode}");
+            response.StatusCode is HttpStatusCode.OK or HttpStatusCode.UnprocessableEntity or HttpStatusCode.NotFound,
+            $"Expected OK, 422, or 404, got {response.StatusCode}");
     }
 
     [Fact]

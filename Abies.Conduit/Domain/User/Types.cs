@@ -41,7 +41,7 @@ public readonly record struct EmailAddress(string Value)
 }
 
 /// <summary>
-/// A validated username (1–20 characters, alphanumeric and hyphens).
+/// A validated username (1–20 characters, alphanumeric, hyphens, and underscores).
 /// </summary>
 /// <param name="Value">The normalized username string.</param>
 public readonly record struct Username(string Value)

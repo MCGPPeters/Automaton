@@ -15,6 +15,7 @@
 //   - Follow/unfollow relationships
 // =============================================================================
 
+using System.Collections.Immutable;
 using System.Diagnostics;
 using Abies.Conduit.Domain.Shared;
 using Automaton;
@@ -155,15 +156,13 @@ public class User
             UserEvent.Followed(var followeeId) =>
                 (state with
                 {
-                    Following = new HashSet<UserId>(state.Following) { followeeId }
+                    Following = state.Following.ToImmutableHashSet().Add(followeeId)
                 }, new UserEffect.None()),
 
             UserEvent.Unfollowed(var followeeId) =>
                 (state with
                 {
-                    Following = state.Following
-                        .Where(id => id != followeeId)
-                        .ToHashSet()
+                    Following = state.Following.ToImmutableHashSet().Remove(followeeId)
                 }, new UserEffect.None()),
 
             _ => throw new UnreachableException()
