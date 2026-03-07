@@ -227,7 +227,7 @@ public static class Actor
 
         var address = new Address<Envelope<TCommand, Result<TState, TError>>>(channel.Writer);
 
-        _ = EnvelopeProcessLoop<TDecider, TState, TCommand, TEvent, TEffect, TError, TParameters>(
+        _ = EnvelopeProcessLoop(
             runtime, channel.Reader, cancellationToken);
 
         spawnActivity?.SetStatus(ActivityStatusCode.Ok);

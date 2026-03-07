@@ -102,7 +102,7 @@ builder.Services
 builder.Services.AddAuthorization();
 
 // ─── Aggregate Store (command handling + projection) ───────────────────────
-builder.Services.AddSingleton<AggregateStore>(sp =>
+builder.Services.AddSingleton(sp =>
     new AggregateStore(
         sp.GetRequiredService<EventStore<UserEvent>>(),
         sp.GetRequiredService<EventStore<ArticleEvent>>(),

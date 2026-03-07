@@ -17,8 +17,6 @@
 // - ADR-002: Pure Functional Programming
 // =============================================================================
 
-using System.Text.Json;
-using System.Text.Json.Serialization.Metadata;
 using Abies.DOM;
 using Praefixum;
 

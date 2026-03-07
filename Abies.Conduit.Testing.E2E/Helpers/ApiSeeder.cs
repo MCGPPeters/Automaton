@@ -271,7 +271,7 @@ public sealed class ApiSeeder
                 var response = await sendAsync();
 
                 // 4xx errors are not transient — fail immediately
-                if ((int)response.StatusCode >= 400 && (int)response.StatusCode < 500)
+                if ((int)response.StatusCode is >= 400 and < 500)
                 {
                     var body = await response.Content.ReadAsStringAsync();
                     throw new HttpRequestException(

@@ -56,10 +56,10 @@ public sealed class ConduitAppFixture : IAsyncLifetime
 
         // Log browser console messages for diagnostics
         page.Console += (_, msg) =>
-            System.Console.WriteLine($"[Browser {msg.Type}] {msg.Text}");
+            Console.WriteLine($"[Browser {msg.Type}] {msg.Text}");
 
         page.PageError += (_, error) =>
-            System.Console.WriteLine($"[Browser ERROR] {error}");
+            Console.WriteLine($"[Browser ERROR] {error}");
 
         // Intercept API calls from the WASM app and redirect to the Aspire-managed API.
         // The WASM app hardcodes http://localhost:5000 as the API URL.
@@ -282,7 +282,7 @@ public sealed class ConduitAppFixture : IAsyncLifetime
         var app = builder.Build();
 
         // Configure MIME type provider with all WASM-specific types
-        var mimeProvider = new Microsoft.AspNetCore.StaticFiles.FileExtensionContentTypeProvider();
+        var mimeProvider = new FileExtensionContentTypeProvider();
         mimeProvider.Mappings[".wasm"] = "application/wasm";
         mimeProvider.Mappings[".dat"] = "application/octet-stream";
         mimeProvider.Mappings[".blat"] = "application/octet-stream";
