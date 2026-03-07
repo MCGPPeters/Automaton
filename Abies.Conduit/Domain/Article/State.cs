@@ -5,6 +5,7 @@
 // folding ArticleEvents via the Decider's Transition function.
 // =============================================================================
 
+using System.Collections.Immutable;
 using Abies.Conduit.Domain.Shared;
 
 namespace Abies.Conduit.Domain.Article;
@@ -49,10 +50,10 @@ public record ArticleState(
         Title: new Title(string.Empty),
         Description: new Description(string.Empty),
         Body: new Body(string.Empty),
-        Tags: new HashSet<Tag>(),
+        Tags: ImmutableHashSet<Tag>.Empty,
         AuthorId: new UserId(Guid.Empty),
-        FavoritedBy: new HashSet<UserId>(),
-        Comments: new Dictionary<CommentId, Comment>(),
+        FavoritedBy: ImmutableHashSet<UserId>.Empty,
+        Comments: ImmutableDictionary<CommentId, Comment>.Empty,
         CreatedAt: new Timestamp(DateTimeOffset.MinValue),
         UpdatedAt: new Timestamp(DateTimeOffset.MinValue),
         Published: false,

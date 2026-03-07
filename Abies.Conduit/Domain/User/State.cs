@@ -5,6 +5,7 @@
 // folding UserEvents via the Decider's Transition function.
 // =============================================================================
 
+using System.Collections.Immutable;
 using Abies.Conduit.Domain.Shared;
 
 namespace Abies.Conduit.Domain.User;
@@ -44,7 +45,7 @@ public record UserState(
         PasswordHash: new PasswordHash(string.Empty),
         Bio: Bio.Empty,
         Image: ImageUrl.Empty,
-        Following: new HashSet<UserId>(),
+        Following: ImmutableHashSet<UserId>.Empty,
         CreatedAt: new Timestamp(DateTimeOffset.MinValue),
         UpdatedAt: new Timestamp(DateTimeOffset.MinValue),
         Registered: false);

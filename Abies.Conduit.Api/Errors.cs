@@ -56,7 +56,7 @@ public static class ApiErrors
     {
         UserError.Validation v => Validation(v.Message),
         UserError.AlreadyRegistered => Validation("Email is already registered."),
-        UserError.NotRegistered => Validation("User not found."),
+        UserError.NotRegistered => NotFound("User not found."),
         UserError.AlreadyFollowing => Validation("Already following this user."),
         UserError.NotFollowing => Validation("Not following this user."),
         UserError.CannotFollowSelf => Validation("Cannot follow yourself."),
