@@ -73,8 +73,22 @@ var dataSource = dataSourceBuilder.Build();
 builder.Services.AddSingleton(dataSource);
 
 // ─── JWT Token Service ─────────────────────────────────────────────────────
-var jwtSecret = builder.Configuration["Jwt:Secret"]
-    ?? "this-is-a-development-secret-key-that-is-at-least-32-characters";
+var jwtSecret = builder.Configuration["Jwt:Secret"];
+
+if (string.IsNullOrWhiteSpace(jwtSecret))
+{
+    if (builder.Environment.IsDevelopment())
+    {
+        // In development we fall back to a well-known secret to simplify local setup.
+        // Non-development environments must explicitly configure Jwt:Secret.
+        jwtSecret = "this-is-a-development-secret-key-that-is-at-least-32-characters";
+    }
+    else
+    {
+        throw new InvalidOperationException("Configuration value 'Jwt:Secret' is required in non-development environments.");
+    }
+}
+
 var jwtIssuer = builder.Configuration["Jwt:Issuer"] ?? "conduit";
 
 var jwtTokenService = new JwtTokenService(jwtSecret, jwtIssuer);
@@ -129,11 +143,15 @@ builder.Services.AddSingleton(sp =>
 var app = builder.Build();
 
 // ─── Schema Migration ──────────────────────────────────────────────────────
-// Skip schema migration in test environments (no real PostgreSQL)
-var pgDataSource = app.Services.GetService<NpgsqlDataSource>();
-if (pgDataSource is not null)
+// Only run schema migration in development — test and production environments
+// manage their own database lifecycle.
+if (app.Environment.IsDevelopment())
 {
-    await Schema.EnsureCreated(pgDataSource).ConfigureAwait(false);
+    var pgDataSource = app.Services.GetService<NpgsqlDataSource>();
+    if (pgDataSource is not null)
+    {
+        await Schema.EnsureCreated(pgDataSource).ConfigureAwait(false);
+    }
 }
 
 // ─── Middleware ─────────────────────────────────────────────────────────────

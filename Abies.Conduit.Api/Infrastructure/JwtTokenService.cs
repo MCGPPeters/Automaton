@@ -110,7 +110,7 @@ public sealed class JwtTokenService
         }
 
         activity?.SetTag("jwt.validation.error", result.Exception?.Message);
-        activity?.SetStatus(ActivityStatusCode.Ok);
+        activity?.SetStatus(ActivityStatusCode.Error, result.Exception?.Message);
         return null;
     }
 
