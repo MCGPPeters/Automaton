@@ -451,19 +451,46 @@ public sealed class Runtime<TProgram, TModel, TArgument> : IDisposable
         }
 
         // Phase 4: Wire the kernel runtime with the instance-method observer.
-        // Wrap the caller-supplied interpreter with navigation command handling:
-        // navigation commands are handled by the runtime's built-in executor,
-        // all other commands fall through to the caller-supplied interpreter.
+        // Wrap the caller-supplied interpreter with structural command handling:
+        //   - Command.None  → no-op (identity element of the command monoid)
+        //   - Command.Batch → flatten and interpret each sub-command, collecting all feedback messages
+        //   - NavigationCommand → handled by the runtime's built-in executor
+        //   - All other commands → fall through to the caller-supplied interpreter
         Interpreter<Command, Message> wrappedInterpreter = command =>
+            InterpretCommand(command, interpreter, runtime._navigationExecutor);
+
+        static async ValueTask<Result<Message[], PipelineError>> InterpretCommand(
+            Command command,
+            Interpreter<Command, Message> interpreter,
+            Action<NavigationCommand>? navigationExecutor)
         {
-            if (command is NavigationCommand navCommand)
+            switch (command)
             {
-                runtime._navigationExecutor?.Invoke(navCommand);
-                return new ValueTask<Result<Message[], PipelineError>>(
-                    Result<Message[], PipelineError>.Ok([]));
+                case Command.None:
+                    return Result<Message[], PipelineError>.Ok([]);
+
+                case Command.Batch batch:
+                {
+                    var allMessages = new List<Message>();
+                    foreach (var sub in batch.Commands)
+                    {
+                        var result = await InterpretCommand(sub, interpreter, navigationExecutor);
+                        if (result.IsErr)
+                            return result;
+                        if (result.Value.Length > 0)
+                            allMessages.AddRange(result.Value);
+                    }
+                    return Result<Message[], PipelineError>.Ok(allMessages.ToArray());
+                }
+
+                case NavigationCommand navCommand:
+                    navigationExecutor?.Invoke(navCommand);
+                    return Result<Message[], PipelineError>.Ok([]);
+
+                default:
+                    return await interpreter(command);
             }
-            return interpreter(command);
-        };
+        }
 
         runtime._core = new AutomatonRuntime<TProgram, TModel, Message, Command, TArgument>(
             model, runtime.Observe, wrappedInterpreter,

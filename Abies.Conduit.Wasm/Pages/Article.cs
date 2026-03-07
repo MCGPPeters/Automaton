@@ -44,7 +44,8 @@ public static class Article
                 [
                     div([class_("col-md-12")],
                     [
-                        p([], [text(article.Body)])
+                        p([], [text(article.Body)]),
+                        TagList(article.TagList)
                     ])
                 ]),
                 hr([]),
@@ -230,4 +231,15 @@ public static class Article
             ])
         ];
     }
+
+    /// <summary>
+    /// Renders the tag list below the article body.
+    /// </summary>
+    private static Node TagList(IReadOnlyList<string> tags) =>
+        tags.Count == 0
+            ? text("")
+            : ul([class_("tag-list")],
+                tags.Select(tag =>
+                    li([class_("tag-default tag-pill tag-outline")],
+                        [text(tag)])).ToArray());
 }

@@ -141,10 +141,10 @@ public static class Runtime
             switch (command)
             {
                 case NavigationCommand.Push push:
-                    Interop.NavigateTo(push.Url.ToString());
+                    Interop.NavigateTo(push.Url.ToRelativeUri());
                     break;
                 case NavigationCommand.Replace replace:
-                    Interop.ReplaceUrl(replace.Url.ToString());
+                    Interop.ReplaceUrl(replace.Url.ToRelativeUri());
                     break;
                 case NavigationCommand.GoBack:
                     Interop.HistoryBack();

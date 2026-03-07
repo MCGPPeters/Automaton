@@ -277,6 +277,25 @@ function registerEventType(eventType) {
                 if (eventType === "submit") {
                     event.preventDefault();
                 }
+
+                // Prevent Enter in a handled keydown from also submitting
+                // the enclosing form (browser default for input elements).
+                if (eventType === "keydown" && event.key === "Enter") {
+                    event.preventDefault();
+                }
+
+                // Prevent default on click events for anchor elements with
+                // Abies event handlers — stops the browser from following
+                // href="" which would trigger a competing navigation.
+                if (eventType === "click") {
+                    let clickedAnchor = event.target;
+                    while (clickedAnchor && clickedAnchor.tagName !== "A") {
+                        clickedAnchor = clickedAnchor.parentElement;
+                    }
+                    if (clickedAnchor) {
+                        event.preventDefault();
+                    }
+                }
                 return;
             }
             el = el.parentElement;
@@ -760,6 +779,14 @@ export function setupNavigation() {
         }
 
         if (!anchor) return;
+
+        // Skip links that have an Abies event handler — the event delegation
+        // system already dispatched the click as a message to .NET. Re-routing
+        // via pushState would reset the page state.
+        if (anchor.hasAttribute("data-event-click")) {
+            event.preventDefault();
+            return;
+        }
 
         // Skip links with target attributes (e.g., target="_blank")
         if (anchor.hasAttribute("target")) return;

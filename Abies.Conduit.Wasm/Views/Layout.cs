@@ -43,44 +43,52 @@ public static class Layout
 
     /// <summary>
     /// Builds navigation links based on whether the user is logged in.
+    /// Each nav link uses an inline li() call so Praefixum generates a distinct
+    /// compile-time ID per call-site, enabling correct diff/patch behavior
+    /// when the navbar transitions between authenticated and anonymous states.
     /// </summary>
     private static Node[] NavLinks(Page currentPage, Session? session)
     {
         if (session is not null)
             return
             [
-                NavLink("Home", "/", currentPage is Page.Home),
-                NavLink("\u2003New Article", "/editor",
-                    currentPage is Page.Editor, iconClass: "ion-compose"),
-                NavLink("\u2003Settings", "/settings",
-                    currentPage is Page.Settings, iconClass: "ion-gear-a"),
-                NavLink(session.Username, $"/profile/{session.Username}",
-                    currentPage is Page.Profile p && p.Data.Username == session.Username)
+                li([class_("nav-item")], [
+                    a([class_(NavClass(currentPage is Page.Home)), href("/")], [text("Home")])
+                ]),
+                li([class_("nav-item")], [
+                    a([class_(NavClass(currentPage is Page.Editor)), href("/editor")], [
+                        i([class_("ion-compose")], []),
+                        text("\u2003New Article")
+                    ])
+                ]),
+                li([class_("nav-item")], [
+                    a([class_(NavClass(currentPage is Page.Settings)), href("/settings")], [
+                        i([class_("ion-gear-a")], []),
+                        text("\u2003Settings")
+                    ])
+                ]),
+                li([class_("nav-item")], [
+                    a([class_(NavClass(currentPage is Page.Profile p && p.Data.Username == session.Username)),
+                       href($"/profile/{session.Username}")], [text(session.Username)])
+                ])
             ];
 
         return
         [
-            NavLink("Home", "/", currentPage is Page.Home),
-            NavLink("Sign in", "/login", currentPage is Page.Login),
-            NavLink("Sign up", "/register", currentPage is Page.Register)
+            li([class_("nav-item")], [
+                a([class_(NavClass(currentPage is Page.Home)), href("/")], [text("Home")])
+            ]),
+            li([class_("nav-item")], [
+                a([class_(NavClass(currentPage is Page.Login)), href("/login")], [text("Sign in")])
+            ]),
+            li([class_("nav-item")], [
+                a([class_(NavClass(currentPage is Page.Register)), href("/register")], [text("Sign up")])
+            ])
         ];
     }
 
-    /// <summary>
-    /// Renders a single navigation link item.
-    /// </summary>
-    private static Node NavLink(string label, string url, bool isActive, string? iconClass = null)
-    {
-        var activeClass = isActive ? "nav-link active" : "nav-link";
-        var children = iconClass is not null
-            ? new Node[] { i([class_(iconClass)], []), text(label) }
-            : [text(label)];
-
-        return li([class_("nav-item")],
-        [
-            a([class_(activeClass), href(url)], children)
-        ]);
-    }
+    private static string NavClass(bool isActive) =>
+        isActive ? "nav-link active" : "nav-link";
 
     /// <summary>
     /// Renders the page footer.
