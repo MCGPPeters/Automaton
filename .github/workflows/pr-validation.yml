@@ -143,7 +143,8 @@ jobs:
         run: |
           FILES="${{ steps.changed-files.outputs.files }}"
           echo "🔍 Checking formatting for changed files..."
-          dotnet format --verify-no-changes --include $FILES --verbosity diagnostic
+          dotnet format whitespace --verify-no-changes --include $FILES --verbosity diagnostic
+          dotnet format style --verify-no-changes --include $FILES --severity error --verbosity diagnostic
 
       - name: Skip format check
         if: steps.changed-files.outputs.has_cs_files == 'false'
