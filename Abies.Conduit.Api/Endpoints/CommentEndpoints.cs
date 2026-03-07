@@ -81,7 +81,7 @@ public static class CommentEndpoints
                 var created = comments.FirstOrDefault(c => c.Id == commentId.Value);
                 return created is not null
                     ? Results.Ok(new SingleCommentResponse(created.ToCommentDto()))
-                    : Results.Ok((object?)null);
+                    : Results.StatusCode(StatusCodes.Status503ServiceUnavailable);
             },
             err: error => Task.FromResult(ApiErrors.FromArticleError(error)));
     }
