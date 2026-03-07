@@ -1,0 +1,36 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+    <InterceptorsNamespaces>$(InterceptorsNamespaces);Praefixum</InterceptorsNamespaces>
+    <EmitCompilerGeneratedFiles>true</EmitCompilerGeneratedFiles>
+    <CompilerGeneratedFilesOutputPath>$(BaseIntermediateOutputPath)Generated</CompilerGeneratedFilesOutputPath>
+  </PropertyGroup>
+
+  <!-- NuGet package metadata -->
+  <PropertyGroup>
+    <PackageId>Abies</PackageId>
+    <Title>Abies</Title>
+    <Description>A pure functional MVU (Model-View-Update) web framework built on the Automaton kernel. Includes an HTML DSL, virtual DOM with diff/patch, and a browser runtime — all as pure functions over the Automaton Mealy machine.</Description>
+    <Authors>Maurice Peters</Authors>
+    <PackageTags>abies;mvu;elm;virtual-dom;html-dsl;blazor;wasm;functional;automaton</PackageTags>
+    <PackageLicenseExpression>Apache-2.0</PackageLicenseExpression>
+    <RepositoryUrl>https://github.com/MCGPPeters/Automaton</RepositoryUrl>
+    <RepositoryType>git</RepositoryType>
+    <PackageProjectUrl>https://github.com/MCGPPeters/Automaton</PackageProjectUrl>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Automaton\Automaton.csproj" />
+    <PackageReference Include="Praefixum" Version="2.0.1" />
+    <InternalsVisibleTo Include="Abies.Tests" />
+    <InternalsVisibleTo Include="Abies.Benchmarks" />
+    <InternalsVisibleTo Include="Abies.Browser" />
+    <InternalsVisibleTo Include="AbiesBenchmark" />
+  </ItemGroup>
+
+</Project>

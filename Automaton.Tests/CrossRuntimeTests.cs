@@ -6,12 +6,13 @@
 //
 // The transition function is the invariant. The runtime is the variable.
 //
-// MVU and Actor receive events directly (Automaton runtimes).
+// MVU receives events directly (Automaton runtime).
 // ES receives commands (Decider runtime) — commands are validated by Decide,
-// producing the same events that MVU/Actor receive directly.
+// producing the same events that MVU receives directly.
+// Actor receives commands (Decider runtime) — same as ES, but with a mailbox.
 // =============================================================================
 
-using Automaton.Actor;
+using Automaton.Actor.Testing;
 using Automaton.EventSourcing;
 using Automaton.Mvu;
 
@@ -75,16 +76,16 @@ public class CrossRuntimeTests
             aggregate.Handle(cmd);
         }
 
-        // --- Actor (receives events) ---
-        var actor = ActorInstance<Thermostat, ThermostatState, ThermostatEvent, ThermostatEffect, Unit>
-            .Spawn("cross-test");
+        // --- Actor (receives commands via mailbox) ---
+        var actor = await TestActor<Thermostat, ThermostatState, ThermostatCommand,
+            ThermostatEvent, ThermostatEffect, ThermostatError, Unit>.Spawn(default);
 
-        foreach (var e in _eventScenario)
+        foreach (var cmd in _commandScenario)
         {
-            await actor.Ref.Tell(e);
+            await actor.Address.Tell(cmd);
         }
 
-        await actor.DrainMailbox();
+        await actor.Drain();
 
         // --- All three produce identical state ---
         Assert.Equal(_expectedFinalState, mvu.State);
@@ -95,7 +96,7 @@ public class CrossRuntimeTests
         Assert.Equal(mvu.State, aggregate.State);
         Assert.Equal(aggregate.State, actor.State);
 
-        await actor.Stop();
+        actor.Stop();
     }
 
     [Fact]

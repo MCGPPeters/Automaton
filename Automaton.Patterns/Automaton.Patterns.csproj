@@ -22,6 +22,12 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <InternalsVisibleTo Include="Automaton.Patterns.EventSourcing.KurrentDB" />
+    <InternalsVisibleTo Include="Automaton.Patterns.EventSourcing.KurrentDB.Tests" />
+    <InternalsVisibleTo Include="Automaton.Patterns.Tests" />
+  </ItemGroup>
+
+  <ItemGroup>
     <None Include="README.md" Pack="true" PackagePath="\" />
   </ItemGroup>
 

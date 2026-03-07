@@ -25,4 +25,9 @@
     <None Include="README.md" Pack="true" PackagePath="\" />
   </ItemGroup>
 
+  <ItemGroup>
+    <InternalsVisibleTo Include="Automaton.Tests" />
+    <InternalsVisibleTo Include="Automaton.Benchmarks" />
+  </ItemGroup>
+
 </Project>

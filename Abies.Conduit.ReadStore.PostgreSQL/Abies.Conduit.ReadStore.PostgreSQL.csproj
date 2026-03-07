@@ -1,0 +1,37 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+  </PropertyGroup>
+
+  <!-- NuGet package metadata -->
+  <PropertyGroup>
+    <PackageId>Abies.Conduit.ReadStore.PostgreSQL</PackageId>
+    <Title>Abies.Conduit.ReadStore.PostgreSQL</Title>
+    <Description>PostgreSQL read store for the Conduit RealWorld application. Provides CQRS read-side projections and queries using raw Npgsql with denormalized read models.</Description>
+    <Authors>Maurice Peters</Authors>
+    <PackageTags>conduit;realworld;cqrs;postgresql;read-store;event-sourcing;projection</PackageTags>
+    <PackageLicenseExpression>Apache-2.0</PackageLicenseExpression>
+    <PackageReadmeFile>README.md</PackageReadmeFile>
+    <RepositoryUrl>https://github.com/MCGPPeters/Automaton</RepositoryUrl>
+    <RepositoryType>git</RepositoryType>
+    <PackageProjectUrl>https://github.com/MCGPPeters/Automaton</PackageProjectUrl>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <None Include="README.md" Pack="true" PackagePath="\" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Abies.Conduit\Abies.Conduit.csproj" />
+    <ProjectReference Include="..\Automaton.Patterns\Automaton.Patterns.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Npgsql" Version="9.0.3" />
+  </ItemGroup>
+
+</Project>

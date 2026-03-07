@@ -1,0 +1,28 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+  </PropertyGroup>
+
+  <!-- NuGet package metadata -->
+  <PropertyGroup>
+    <PackageId>Abies.Browser</PackageId>
+    <Title>Abies.Browser</Title>
+    <Description>Browser host for the Abies MVU framework. Provides the JS interop bridge, event delegation, and one-line bootstrap for .NET WASM applications.</Description>
+    <Authors>Maurice Peters</Authors>
+    <PackageTags>abies;browser;wasm;mvu;elm;interop;blazor;functional;automaton</PackageTags>
+    <PackageLicenseExpression>Apache-2.0</PackageLicenseExpression>
+    <RepositoryUrl>https://github.com/MCGPPeters/Automaton</RepositoryUrl>
+    <RepositoryType>git</RepositoryType>
+    <PackageProjectUrl>https://github.com/MCGPPeters/Automaton</PackageProjectUrl>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Abies\Abies.csproj" />
+  </ItemGroup>
+
+</Project>

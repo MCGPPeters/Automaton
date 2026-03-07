@@ -15,6 +15,48 @@ Key reminders:
 - Follow the PR template at `.github/pull_request_template.md`
 - Use Conventional Commits format for PR titles
 
+## 📋 TODO: File GitHub Issue — C# Record Inheritance Property Shadowing (2026-03-06)
+
+**Status**: Ready to file — no duplicate found on `dotnet/roslyn` or `dotnet/csharplang`.
+
+**Target Repo**: `dotnet/roslyn` (compiler diagnostic request)
+
+**Title**: `Request: Compiler warning when derived record positional parameter name collides with base constructor argument that transforms the value`
+
+**Minimal Repro**:
+```csharp
+public record Attribute(string Id, string Name, string Value);
+
+public record Handler(string Name, string CommandId, string Id)
+    : Attribute(Id, $"data-event-{Name}", CommandId);
+
+var h = new Handler("click", "cmd-1", "id-1");
+Console.WriteLine(h.Name);                 // "data-event-click" — NOT "click"!
+Console.WriteLine(((Attribute)h).Name);    // "data-event-click" — same value
+```
+
+**Expected Behavior**: Either:
+1. `h.Name` returns `"click"` (the value passed to the derived constructor), OR
+2. The compiler emits a warning that the derived positional parameter `Name` collides with the base property `Name` and the base constructor receives a different expression (`$"data-event-{Name}"`)
+
+**Actual Behavior**: `h.Name` silently returns `"data-event-click"` — the transformed value passed to the base constructor. No warning is emitted.
+
+**Why This Is Dangerous**:
+- The developer writes `Handler("click", ...)` and naturally expects `handler.Name` to be `"click"`
+- The collision is invisible — there's no `new` keyword hiding, no `CS0108` warning
+- In our case, this caused a **silent runtime bug**: JavaScript code used `handler.Name` thinking it was the event type, but got the full attribute name with the prefix already applied, resulting in double-prefixed attributes (`data-event-data-event-click`) that broke event delegation entirely
+- The bug was extremely difficult to diagnose because the code *looks* correct
+
+**Suggested Diagnostic**: A new warning (or extension of `CS0108`) when:
+1. A derived record has a positional parameter with the same name as a base record parameter
+2. The base constructor call passes a *different expression* for that parameter (not just forwarding the value)
+
+**Labels**: `Area-Compilers`, `Feature Request`, `New Language Feature (Suggestion)`
+
+**Discovered While**: Building the Abies MVU framework for Blazor WASM — the `Handler` record extended `Attribute` and reused the `Name` parameter with a transformation in the base constructor call. Cost ~4 hours of debugging.
+
+---
+
 ## ⚠️ Benchmark Environment: Power State Awareness (M4 Pro MacBook)
 
 **CRITICAL**: Always ask "Is your MacBook plugged in or on battery?" before running benchmarks.
@@ -155,7 +197,7 @@ The following Toub-inspired optimizations have been applied:
 - The binary data is processed very efficiently in JavaScript
 - JSON's text serialization overhead negates the innerHTML parsing savings
 
-**Conclusion**: 
+**Conclusion**:
 - HTML string rendering via innerHTML is the correct approach for Abies
 - Browser HTML parsers are highly optimized and very hard to beat
 - Do NOT revisit this approach unless moving to a binary protocol like Blazor's RenderBatch
@@ -268,10 +310,10 @@ The following Toub-inspired optimizations have been applied:
 
 ```xml
 <!-- Copy the canonical abies.js before build/publish -->
-<Target Name="SyncAbiesJs" BeforeTargets="Build;ComputeFilesToPublish" 
-        Inputs="..\Abies\wwwroot\abies.js" 
+<Target Name="SyncAbiesJs" BeforeTargets="Build;ComputeFilesToPublish"
+        Inputs="..\Abies\wwwroot\abies.js"
         Outputs="wwwroot\abies.js">
-  <Copy SourceFiles="..\Abies\wwwroot\abies.js" 
+  <Copy SourceFiles="..\Abies\wwwroot\abies.js"
         DestinationFiles="wwwroot\abies.js" />
 </Target>
 
@@ -279,11 +321,11 @@ The following Toub-inspired optimizations have been applied:
 <Target Name="RemoveDuplicateAbiesJs" AfterTargets="ComputeFilesToPublish">
   <ItemGroup>
     <!-- Use Identity metadata (full path) to identify and remove Abies project's copy -->
-    <ResolvedFileToPublish Remove="@(ResolvedFileToPublish)" 
-      Condition="'%(ResolvedFileToPublish.RelativePath)' == 'wwwroot\abies.js' 
+    <ResolvedFileToPublish Remove="@(ResolvedFileToPublish)"
+      Condition="'%(ResolvedFileToPublish.RelativePath)' == 'wwwroot\abies.js'
                  AND $([System.String]::new('%(ResolvedFileToPublish.Identity)').Contains('\Abies\wwwroot\abies.js'))" />
-    <ResolvedFileToPublish Remove="@(ResolvedFileToPublish)" 
-      Condition="'%(ResolvedFileToPublish.RelativePath)' == 'wwwroot/abies.js' 
+    <ResolvedFileToPublish Remove="@(ResolvedFileToPublish)"
+      Condition="'%(ResolvedFileToPublish.RelativePath)' == 'wwwroot/abies.js'
                  AND $([System.String]::new('%(ResolvedFileToPublish.Identity)').Contains('/Abies/wwwroot/abies.js'))" />
   </ItemGroup>
 </Target>
@@ -301,7 +343,7 @@ The following Toub-inspired optimizations have been applied:
 
 **Problem**: Running `dotnet format` on the solution creates merge conflict markers in some files (e.g., `Parser.cs`) due to the multi-targeted nature of the solution (net10.0 and potentially other targets).
 
-**Workaround**: 
+**Workaround**:
 - **DO NOT** run `dotnet format` on the entire solution
 - Instead, manually format only the files you changed
 - If you accidentally run `dotnet format` and it corrupts files, revert with:
@@ -401,7 +443,92 @@ For reference, compare against:
 - `vanillajs-keyed` - Baseline (raw DOM manipulation)
 - `blazor-wasm-keyed` - .NET Blazor WASM (similar tech stack)
 
-### Latest Benchmark Results (2026-02-19)
+### Latest Benchmark Results — Abies v2.0.0 Automaton (2026-03-06)
+
+**Branch**: `feat/abies` — Full rewrite on the Automaton kernel.
+**Session**: Same session, AC Power, all three frameworks back-to-back.
+**Full report**: `docs/benchmarks/baseline-2026-03-06.md`
+
+**Complete js-framework-benchmark results (all 15 benchmarks, same-session fair comparison):**
+
+| Benchmark | Abies 2.0 | Picea 1.0 | Blazor 10.0 | vs Picea | vs Blazor |
+|-----------|-----------|-----------|-------------|----------|-----------|
+| 01_run1k | **51.7** | 61.1 | 84.9 | **-15%** ✅ | **-39%** 🚀 |
+| 02_replace1k | **60.2** | 63.2 | 99.5 | **-5%** ✅ | **-39%** 🚀 |
+| 03_update10th_x16 | **67.1** | 106.7 | 94.5 | **-37%** 🚀 | **-29%** 🚀 |
+| 04_select1k | **13.8** | 102.9 | 82.5 | **-87%** 🚀 | **-83%** 🚀 |
+| 05_swap1k | **33.8** | 92.2 | 94.6 | **-63%** 🚀 | **-64%** 🚀 |
+| 06_remove-one-1k | **20.7** | 65.7 | 40.2 | **-68%** 🚀 | **-49%** 🚀 |
+| 07_create10k | **550.0** | 618.6 | 766.1 | **-11%** ✅ | **-28%** 🚀 |
+| 08_create1k-after1k | **76.2** | 101.0 | 102.9 | **-25%** 🚀 | **-26%** 🚀 |
+| 09_clear1k_x8 | **18.3** | 24.6 | 36.5 | **-26%** 🚀 | **-50%** 🚀 |
+| 21_ready-memory | **34.4 MB** | 34.4 MB | 41.1 MB | — | **-16%** ✅ |
+| 22_run-memory | **36.2 MB** | N/A¹ | 52.7 MB | — | **-31%** 🚀 |
+| 25_run-clear-memory | 58.6 MB | 58.6 MB | **49.4 MB** | — | +19% ⚠️ |
+| 41_size-uncompressed | **3,729 KB** | 4,033 KB | 4,208 KB | **-8%** | **-11%** |
+| 42_size-compressed | **1,139 KB** | 1,257 KB | 1,377 KB | **-9%** | **-17%** ✅ |
+| 43_first-paint | **57.7ms** | 97.5 ms | 78.0 ms | **-41%** 🚀 | **-26%** ✅ |
+| **Geomean (duration)** | **1.00×** | **1.85×** | **1.98×** | | |
+
+¹ Picea benchmark 22 timed out (protocol error).
+
+### ✅ FIXED: parseHtmlFragment Foster Parenting Bug (2026-03-06)
+
+**Root cause**: `parseHtmlFragment()` used a `<div>` as the container for parsing HTML
+fragments via `innerHTML`. The HTML5 parser enforces **context-sensitive parsing** —
+`<tr>` elements are invalid inside `<div>`, so the parser applies the **foster parenting
+algorithm** (HTML Living Standard §13.2.6.1), stripping `<tr>`/`<td>` wrappers and keeping
+only inline content. This caused appended rows (benchmark 08) to appear as bare `<a>` tags
+instead of full `<tr>` elements.
+
+**Fix**: Changed `_fragmentContainer` from `<div>` to `<template>`. The `<template>` element
+has a special inert `DocumentFragment` that bypasses the normal HTML parser context rules,
+preserving any HTML structure including `<tr>`, `<td>`, `<option>`, etc.
+
+```javascript
+// BEFORE (broken for table elements):
+const _fragmentContainer = document.createElement("div");
+function parseHtmlFragment(html) {
+    _fragmentContainer.innerHTML = html;
+    return _fragmentContainer.firstElementChild;
+}
+
+// AFTER (context-independent):
+const _fragmentTemplate = document.createElement("template");
+function parseHtmlFragment(html) {
+    _fragmentTemplate.innerHTML = html;
+    return _fragmentTemplate.content.firstElementChild;
+}
+```
+
+### ✅ APPLIED: AppendChildrenHtml Batch Patch (2026-03-06)
+
+**Optimization**: When appending new children to a parent (head-skip detects all old keys
+matched), emit a single `AppendChildrenHtml` patch instead of N individual `AddChild` patches.
+
+**JS handler**: Uses `parent.insertAdjacentHTML("beforeend", html)` which:
+1. Respects the parent's parsing context (`<tr>` is valid inside `<tbody>`)
+2. Preserves existing children (unlike `innerHTML`)
+3. Is a single DOM operation instead of N `appendChild` calls
+
+**Code changes**:
+- `DOM/Patch.cs`: Added `AppendChildrenHtml` patch record
+- `RenderBatchWriter.cs`: Added `BinaryPatchType.AppendChildrenHtml = 23`
+- `Diff.cs`: Head-skip append path emits `AppendChildrenHtml` instead of N `AddChild`
+- `Runtime.cs`: Added handler registration for `AppendChildrenHtml` in `UpdateHandlerRegistry`
+- `abies.js`: Added `OP_APPEND_CHILDREN_HTML = 23` handler
+
+### JSHost.ImportAsync Path Resolution (2026-03-06)
+
+**Critical finding**: `JSHost.ImportAsync` resolves paths relative to the **calling module**,
+which is `_framework/dotnet.runtime.js` (not the page URL or wwwroot root). So:
+- `/abies.js` → absolute path from origin (works in dev server, not benchmark)
+- `./abies.js` → `_framework/abies.js` (404!)
+- `../abies.js` → goes up from `_framework/` to wwwroot root ✅
+
+**Applied to**: Both `Abies.Counter.Wasm/Program.cs` and `Abies.Benchmark.Wasm/Program.cs`.
+
+### Previous Picea Results (2026-02-19, for reference)
 
 **Abies v1.0.152 (with SetChildrenHtml + addEventListeners skip) vs Blazor WASM v10.0.0:**
 
@@ -969,9 +1096,9 @@ public static Document View(Model model) => ...
 // TO stateful component:
 public class RowComponent : Component<RowProps>
 {
-    public override bool ShouldRender(RowProps old, RowProps new) 
+    public override bool ShouldRender(RowProps old, RowProps new)
         => !ReferenceEquals(old.Row, new.Row);
-    
+
     public override Node Render(RowProps props) => TableRow(props.Row);
 }
 ```
@@ -983,7 +1110,7 @@ public class RowComponent : Component<RowProps>
 
 **Cons:**
 - Breaks pure MVU architecture
-- Components need lifecycle management  
+- Components need lifecycle management
 - More complex mental model
 - Loses referential transparency
 
@@ -1019,7 +1146,7 @@ lazy(memoKey, ...)
 public static Document View(Model model, Document? previous)
 {
     return new Document("Title",
-        tbody([], model.Data.Select((row, i) => 
+        tbody([], model.Data.Select((row, i) =>
             GetCachedRowNode(row, model.Selected == row.Id, previous)
         ))
     );
@@ -1071,7 +1198,7 @@ Use source generators to analyze View functions and generate optimized code:
 
 ```csharp
 // Developer writes:
-public static Node ViewRow(Row row, bool selected) => 
+public static Node ViewRow(Row row, bool selected) =>
     tr([class_(selected ? "danger" : "")], [...]);
 
 // Generator produces:
