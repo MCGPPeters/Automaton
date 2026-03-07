@@ -16,7 +16,6 @@ using Abies.Conduit.Domain.Article;
 using Abies.Conduit.Domain.Shared;
 using Abies.Conduit.Domain.User;
 using Abies.Conduit.ReadModel;
-using Abies.Conduit.ReadStore.PostgreSQL;
 using Automaton;
 using Npgsql;
 

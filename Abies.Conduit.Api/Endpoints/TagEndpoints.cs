@@ -30,7 +30,7 @@ public static class TagEndpoints
     /// GET /api/tags — List all tags used across articles.
     /// </summary>
     private static async Task<IResult> GetTags(
-        ReadModel.GetTags getTags,
+        GetTags getTags,
         CancellationToken cancellationToken)
     {
         var tags = await getTags(cancellationToken).ConfigureAwait(false);

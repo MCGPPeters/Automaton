@@ -285,7 +285,7 @@ public class ActorTests
             _ => new ValueTask<Result<CounterEvent[], PipelineError>>(
                 Result<CounterEvent[], PipelineError>.Ok([]));
 
-        var address = await Automaton.Actor.Actor.Spawn<Counter, CounterState, CounterCommand,
+        var address = await Actor.Actor.Spawn<Counter, CounterState, CounterCommand,
             CounterEvent, CounterEffect, CounterError, Unit>(
                 default, observer, interpreter, cancellationToken: cts.Token);
 
@@ -478,7 +478,7 @@ public class ActorTests
             _ => new ValueTask<Result<CounterEvent[], PipelineError>>(
                 Result<CounterEvent[], PipelineError>.Ok([]));
 
-        var address = await Automaton.Actor.Actor.SpawnWithReply<Counter, CounterState, CounterCommand,
+        var address = await Actor.Actor.SpawnWithReply<Counter, CounterState, CounterCommand,
             CounterEvent, CounterEffect, CounterError, Unit>(
                 default, observer, interpreter, cancellationToken: cts.Token);
 
@@ -509,7 +509,7 @@ public class ActorTests
             _ => new ValueTask<Result<CounterEvent[], PipelineError>>(
                 Result<CounterEvent[], PipelineError>.Ok([]));
 
-        var address = await Automaton.Actor.Actor.SpawnWithReply<Counter, CounterState, CounterCommand,
+        var address = await Actor.Actor.SpawnWithReply<Counter, CounterState, CounterCommand,
             CounterEvent, CounterEffect, CounterError, Unit>(
                 default, observer, interpreter, cancellationToken: cts.Token);
 
@@ -537,7 +537,7 @@ public class ActorTests
             _ => new ValueTask<Result<CounterEvent[], PipelineError>>(
                 Result<CounterEvent[], PipelineError>.Ok([]));
 
-        var address = await Automaton.Actor.Actor.SpawnWithReply<Counter, CounterState, CounterCommand,
+        var address = await Actor.Actor.SpawnWithReply<Counter, CounterState, CounterCommand,
             CounterEvent, CounterEffect, CounterError, Unit>(
                 default, observer, interpreter, cancellationToken: cts.Token);
 
@@ -579,7 +579,7 @@ public class ActorTests
             _ => new ValueTask<Result<CounterEvent[], PipelineError>>(
                 Result<CounterEvent[], PipelineError>.Ok([]));
 
-        var address = await Automaton.Actor.Actor.SpawnWithReply<Counter, CounterState, CounterCommand,
+        var address = await Actor.Actor.SpawnWithReply<Counter, CounterState, CounterCommand,
             CounterEvent, CounterEffect, CounterError, Unit>(
                 default, observer, interpreter, cancellationToken: cts.Token);
 
@@ -621,7 +621,7 @@ public class ActorTests
             _ => new ValueTask<Result<CounterEvent[], PipelineError>>(
                 Result<CounterEvent[], PipelineError>.Ok([]));
 
-        var address = await Automaton.Actor.Actor.SpawnWithReply<Counter, CounterState, CounterCommand,
+        var address = await Actor.Actor.SpawnWithReply<Counter, CounterState, CounterCommand,
             CounterEvent, CounterEffect, CounterError, Unit>(
                 default, observer, interpreter, cancellationToken: cts.Token);
 

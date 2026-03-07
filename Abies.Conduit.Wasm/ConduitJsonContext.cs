@@ -8,7 +8,6 @@
 // See: https://learn.microsoft.com/en-us/dotnet/standard/serialization/system-text-json/source-generation
 // =============================================================================
 
-using System.Text.Json;
 using System.Text.Json.Serialization;
 
 namespace Abies.Conduit.Wasm;

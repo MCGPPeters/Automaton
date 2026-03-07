@@ -15,7 +15,6 @@
 //   - HandlerRegistry.cs — dispatches events using handler-carried deserializers
 // =============================================================================
 
-using System.Text.Json;
 using System.Text.Json.Serialization;
 
 namespace Abies.Html;

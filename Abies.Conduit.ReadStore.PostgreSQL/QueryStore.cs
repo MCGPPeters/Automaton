@@ -501,7 +501,7 @@ public static class QueryStore
             activity?.SetTag("query.count", comments.Count);
             activity?.SetStatus(ActivityStatusCode.Ok);
 
-            return (IReadOnlyList<CommentQueryResult>)comments;
+            return comments;
         };
 
     // ─── Tag Queries ──────────────────────────────────────────────────────────
@@ -534,7 +534,7 @@ public static class QueryStore
             activity?.SetTag("query.count", tags.Count);
             activity?.SetStatus(ActivityStatusCode.Ok);
 
-            return (IReadOnlyList<string>)tags;
+            return tags;
         };
 
     // ─── Helpers ──────────────────────────────────────────────────────────────
