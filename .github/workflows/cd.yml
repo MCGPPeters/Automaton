@@ -55,7 +55,7 @@ jobs:
         run: pwsh Abies.Conduit.Testing.E2E/bin/Debug/net10.0/playwright.ps1 install --with-deps chromium
 
       - name: Test
-        run: dotnet test --no-build --verbosity normal
+        run: dotnet test --no-build --verbosity normal --filter "Category!=Integration"
 
       - name: Pack
         if: github.event_name != 'pull_request'

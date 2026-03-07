@@ -70,6 +70,11 @@ public sealed class ConduitApiFactory : WebApplicationFactory<Program>
     /// <inheritdoc />
     protected override void ConfigureWebHost(IWebHostBuilder builder)
     {
+        // Provide the JWT secret via configuration so Program.cs' fail-fast check
+        // passes before DI service replacement occurs.
+        builder.UseSetting("Jwt:Secret", TestJwtSecret);
+        builder.UseSetting("Jwt:Issuer", TestJwtIssuer);
+
         builder.ConfigureServices(services =>
         {
             // Remove all real infrastructure registrations
