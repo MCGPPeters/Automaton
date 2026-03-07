@@ -50,7 +50,7 @@ public sealed class FeedTests : IAsyncLifetime
         var user = await _seeder.RegisterUserAsync(username, email, "password123");
         var article = await _seeder.CreateArticleAsync(
             user.Token,
-            $"Global Feed {Guid.NewGuid():N}"[..30],
+            $"GloFeed {Guid.NewGuid():N}"[..30],
             "Description for global feed",
             "Body of global feed article.");
         await _seeder.WaitForArticleAsync(article.Slug);
@@ -59,8 +59,8 @@ public sealed class FeedTests : IAsyncLifetime
         await _page.GotoAsync("/");
         await _page.WaitForSelectorAsync(".home-page", new() { Timeout = 15000 });
 
-        // Click "Global Feed" tab
-        await _page.GetByText("Global Feed").ClickAsync();
+        // Click "Global Feed" tab (scoped to feed-toggle to avoid matching article content)
+        await _page.Locator(".feed-toggle").GetByText("Global Feed").ClickAsync();
         await _page.WaitForTimeoutAsync(2000); // Allow feed to load
 
         // Assert — article preview should be visible
@@ -139,7 +139,7 @@ public sealed class FeedTests : IAsyncLifetime
         var authorUser = await _seeder.RegisterUserAsync(author, authorEmail, "password123");
         var article = await _seeder.CreateArticleAsync(
             authorUser.Token,
-            $"Your Feed {Guid.NewGuid():N}"[..30],
+            $"FollowedPost {Guid.NewGuid():N}"[..30],
             "For your feed",
             "This should appear in your feed.");
         await _seeder.WaitForArticleAsync(article.Slug);
@@ -154,7 +154,7 @@ public sealed class FeedTests : IAsyncLifetime
         // Act — navigate to home (SPA navigation to preserve session), "Your Feed" should be available
         await _page.NavigateInAppAsync("/");
         await _page.WaitForSelectorAsync(".home-page", new() { Timeout = 15000 });
-        await _page.GetByText("Your Feed").ClickAsync();
+        await _page.Locator(".feed-toggle").GetByText("Your Feed").ClickAsync();
         await _page.WaitForTimeoutAsync(2000); // Allow feed to load
 
         // Assert — should see the followed user's article
@@ -180,7 +180,7 @@ public sealed class FeedTests : IAsyncLifetime
         // Act — navigate to home, click global feed
         await _page.GotoAsync("/");
         await _page.WaitForSelectorAsync(".home-page", new() { Timeout = 15000 });
-        await _page.GetByText("Global Feed").ClickAsync();
+        await _page.Locator(".feed-toggle").GetByText("Global Feed").ClickAsync();
         await _page.WaitForTimeoutAsync(2000);
 
         // Assert — article preview should show author, title, description
