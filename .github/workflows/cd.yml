@@ -30,6 +30,9 @@ jobs:
           echo "VERSION=$VERSION" >> $GITHUB_OUTPUT
           echo "📦 Package version: $VERSION"
 
+      - name: Install workloads
+        run: dotnet workload restore
+
       - name: Restore dependencies
         run: dotnet restore
 

@@ -35,6 +35,9 @@ jobs:
           languages: csharp
           queries: security-and-quality
 
+      - name: Install workloads
+        run: dotnet workload restore
+
       - name: Build
         run: dotnet build --no-incremental
 
