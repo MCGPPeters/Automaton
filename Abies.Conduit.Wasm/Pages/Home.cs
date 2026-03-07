@@ -30,7 +30,7 @@ public static class Home
                 [
                     div([class_("col-md-9")],
                     [
-                        FeedTabs(model.ActiveTab, session),
+                        FeedTabs(model.ActiveTab, session, model.SelectedTag),
                         Views.ArticlePreview.List(model.Articles, model.IsLoading),
                         Views.ArticlePreview.Pagination(
                             model.ArticlesCount, model.CurrentPage, Constants.ArticlesPerPage)
@@ -59,7 +59,7 @@ public static class Home
     /// <summary>
     /// Renders feed toggle tabs.
     /// </summary>
-    private static Node FeedTabs(FeedTab activeTab, Session? session)
+    private static Node FeedTabs(FeedTab activeTab, Session? session, string? selectedTag)
     {
         var tabs = new List<Node>();
 
@@ -68,8 +68,8 @@ public static class Home
 
         tabs.Add(Tab("Global Feed", FeedTab.Global, activeTab));
 
-        if (activeTab is FeedTab.Tag)
-            tabs.Add(Tab("# ", FeedTab.Tag, activeTab));
+        if (activeTab is FeedTab.Tag && selectedTag is not null)
+            tabs.Add(Tab($"# {selectedTag}", FeedTab.Tag, activeTab));
 
         return div([class_("feed-toggle")],
         [

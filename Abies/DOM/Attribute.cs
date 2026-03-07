@@ -53,14 +53,15 @@ public record Attribute(string Id, string Name, string Value);
 /// <param name="Command">The static message to dispatch (null when <paramref name="WithData"/> is set).</param>
 /// <param name="Id">Unique identifier for this attribute node.</param>
 /// <param name="WithData">Factory function that creates a message from deserialized event data.</param>
-/// <param name="DataType">The CLR type of the event data, used for JSON deserialization.</param>
+/// <param name="Deserializer">Trim-safe deserializer for event data JSON. Provided by the
+/// <c>on&lt;T&gt;</c> factory using a source-generated <see cref="System.Text.Json.Serialization.JsonSerializerContext"/>.</param>
 public record Handler(
     string EventName,
     string CommandId,
     Message? Command,
     string Id,
     Func<object?, Message>? WithData = null,
-    Type? DataType = null)
+    Func<string, object?>? Deserializer = null)
     : Attribute(Id, $"data-event-{EventName}", CommandId);
 
 /// <summary>

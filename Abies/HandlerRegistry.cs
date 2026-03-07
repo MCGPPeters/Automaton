@@ -15,7 +15,6 @@
 //   - Abies.Browser/Interop.cs — DispatchDomEvent calls CreateMessage
 // =============================================================================
 
-using System.Text.Json;
 using Abies.DOM;
 
 namespace Abies;
@@ -75,12 +74,13 @@ public static class HandlerRegistry
         if (handler.Command is not null)
             return handler.Command;
 
-        // Data-carrying handler — deserialize event data and call factory
-        if (handler.WithData is not null && handler.DataType is not null)
+        // Data-carrying handler — deserialize event data via handler-carried
+        // source-generated deserializer (trim-safe, no reflection)
+        if (handler.WithData is not null && handler.Deserializer is not null)
         {
             var data = string.IsNullOrEmpty(eventData)
                 ? null
-                : JsonSerializer.Deserialize(eventData, handler.DataType);
+                : handler.Deserializer(eventData);
             return handler.WithData(data);
         }
 

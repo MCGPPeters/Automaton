@@ -53,6 +53,8 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Abies.Conduit.Wasm", "Abies
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Abies.Conduit.Wasm.Tests", "Abies.Conduit.Wasm.Tests\Abies.Conduit.Wasm.Tests.csproj", "{D5C80F0E-F93A-4955-B7B6-A9748E58E764}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Abies.Conduit.Testing.E2E", "Abies.Conduit.Testing.E2E\Abies.Conduit.Testing.E2E.csproj", "{B286B23E-D95F-44E9-AD70-72ADE83C4ABB}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -363,6 +365,18 @@ Global
 		{D5C80F0E-F93A-4955-B7B6-A9748E58E764}.Release|x64.Build.0 = Release|Any CPU
 		{D5C80F0E-F93A-4955-B7B6-A9748E58E764}.Release|x86.ActiveCfg = Release|Any CPU
 		{D5C80F0E-F93A-4955-B7B6-A9748E58E764}.Release|x86.Build.0 = Release|Any CPU
+		{B286B23E-D95F-44E9-AD70-72ADE83C4ABB}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{B286B23E-D95F-44E9-AD70-72ADE83C4ABB}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{B286B23E-D95F-44E9-AD70-72ADE83C4ABB}.Debug|x64.ActiveCfg = Debug|Any CPU
+		{B286B23E-D95F-44E9-AD70-72ADE83C4ABB}.Debug|x64.Build.0 = Debug|Any CPU
+		{B286B23E-D95F-44E9-AD70-72ADE83C4ABB}.Debug|x86.ActiveCfg = Debug|Any CPU
+		{B286B23E-D95F-44E9-AD70-72ADE83C4ABB}.Debug|x86.Build.0 = Debug|Any CPU
+		{B286B23E-D95F-44E9-AD70-72ADE83C4ABB}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{B286B23E-D95F-44E9-AD70-72ADE83C4ABB}.Release|Any CPU.Build.0 = Release|Any CPU
+		{B286B23E-D95F-44E9-AD70-72ADE83C4ABB}.Release|x64.ActiveCfg = Release|Any CPU
+		{B286B23E-D95F-44E9-AD70-72ADE83C4ABB}.Release|x64.Build.0 = Release|Any CPU
+		{B286B23E-D95F-44E9-AD70-72ADE83C4ABB}.Release|x86.ActiveCfg = Release|Any CPU
+		{B286B23E-D95F-44E9-AD70-72ADE83C4ABB}.Release|x86.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE

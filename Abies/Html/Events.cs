@@ -17,6 +17,8 @@
 // - ADR-002: Pure Functional Programming
 // =============================================================================
 
+using System.Text.Json;
+using System.Text.Json.Serialization.Metadata;
 using Abies.DOM;
 using Praefixum;
 
@@ -71,13 +73,16 @@ public static class Events
 
     /// <summary>
     /// Creates an event handler that produces a message from deserialized event data.
+    /// Uses source-generated JSON deserialization for trim-safe WASM support.
     /// </summary>
     /// <typeparam name="T">The event data type (e.g., <see cref="InputEventData"/>, <see cref="KeyEventData"/>).</typeparam>
     /// <param name="name">The DOM event name (e.g., "click", "input").</param>
     /// <param name="factory">A function that creates a message from event data.</param>
     /// <param name="id">Compile-time unique identifier for this handler.</param>
     public static Handler on<T>(string name, Func<T?, Message> factory, [UniqueId(UniqueIdFormat.HtmlId)] string? id = null)
-        => new(name, NextCommandId(), null, id ?? string.Empty, o => factory((T?)o), typeof(T));
+        => new(name, NextCommandId(), null, id ?? string.Empty,
+            o => factory((T?)o),
+            EventDataDeserializers.Get<T>());
 
     // =========================================================================
     // Mouse Events

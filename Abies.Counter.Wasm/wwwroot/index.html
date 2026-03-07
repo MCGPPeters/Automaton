@@ -85,7 +85,7 @@
     <!-- Abies renders directly into document.body via abies.js OP_ADD_ROOT. -->
     <p id="loading">Loading Abies Counter…</p>
 
-    <!-- .NET WASM bootstrap -->
-    <script type="module" src="./_framework/dotnet.js"></script>
+    <!-- .NET WASM bootstrap — main.js imports dotnet.js and calls dotnet.run() -->
+    <script type="module" src="./main.js"></script>
 </body>
 </html>
