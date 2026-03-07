@@ -122,7 +122,8 @@ public sealed class ConduitAppFixture : IAsyncLifetime
         _playwright = await Playwright.CreateAsync();
         _browser = await _playwright.Chromium.LaunchAsync(new BrowserTypeLaunchOptions
         {
-            Headless = true
+            Headless = Environment.GetEnvironmentVariable("HEADED") == "1" ? false : true,
+            SlowMo = Environment.GetEnvironmentVariable("HEADED") == "1" ? 300 : 0
         });
     }
 
