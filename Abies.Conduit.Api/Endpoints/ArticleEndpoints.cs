@@ -35,7 +35,7 @@ public static class ArticleEndpoints
 
     private static async Task<IResult> ListArticles(
         HttpContext context,
-        ReadModel.ListArticles listArticles,
+        ListArticles listArticles,
         string? tag = null,
         string? author = null,
         string? favorited = null,
@@ -65,13 +65,14 @@ public static class ArticleEndpoints
 
     private static async Task<IResult> GetFeed(
         HttpContext context,
-        ReadModel.GetFeed getFeed,
+        GetFeed getFeed,
         int limit = 20,
         int offset = 0,
         CancellationToken cancellationToken = default)
     {
         var currentUserId = JwtTokenService.GetUserId(context.User);
-        if (currentUserId is null) return ApiErrors.Unauthorized();
+        if (currentUserId is null)
+            return ApiErrors.Unauthorized();
 
         var result = await getFeed(currentUserId.Value, limit, offset, cancellationToken)
             .ConfigureAwait(false);
@@ -108,18 +109,22 @@ public static class ArticleEndpoints
         CancellationToken cancellationToken)
     {
         var currentUserId = JwtTokenService.GetUserId(context.User);
-        if (currentUserId is null) return ApiErrors.Unauthorized();
+        if (currentUserId is null)
+            return ApiErrors.Unauthorized();
 
         var body = request.Article;
 
         var titleResult = Title.Create(body.Title);
-        if (titleResult.IsErr) return ApiErrors.FromArticleError(titleResult.Error);
+        if (titleResult.IsErr)
+            return ApiErrors.FromArticleError(titleResult.Error);
 
         var descriptionResult = Description.Create(body.Description);
-        if (descriptionResult.IsErr) return ApiErrors.FromArticleError(descriptionResult.Error);
+        if (descriptionResult.IsErr)
+            return ApiErrors.FromArticleError(descriptionResult.Error);
 
         var bodyResult = Body.Create(body.Body);
-        if (bodyResult.IsErr) return ApiErrors.FromArticleError(bodyResult.Error);
+        if (bodyResult.IsErr)
+            return ApiErrors.FromArticleError(bodyResult.Error);
 
         var tags = new HashSet<Tag>();
         if (body.TagList is { Length: > 0 })
@@ -127,7 +132,8 @@ public static class ArticleEndpoints
             foreach (var tagStr in body.TagList)
             {
                 var tagResult = Tag.Create(tagStr);
-                if (tagResult.IsErr) return ApiErrors.FromArticleError(tagResult.Error);
+                if (tagResult.IsErr)
+                    return ApiErrors.FromArticleError(tagResult.Error);
                 tags.Add(tagResult.Value);
             }
         }
@@ -153,7 +159,7 @@ public static class ArticleEndpoints
                         $"/api/articles/{article.Slug}",
                         new SingleArticleResponse(article.ToArticleDto())),
                     none: () => Results.Created(
-                        $"/api/articles/{state.Slug.Value}", (object?)null));
+                        $"/api/articles/{state.Slug.Value}", null));
             },
             err: error => Task.FromResult(ApiErrors.FromArticleError(error)));
     }
@@ -168,7 +174,8 @@ public static class ArticleEndpoints
         CancellationToken cancellationToken)
     {
         var currentUserId = JwtTokenService.GetUserId(context.User);
-        if (currentUserId is null) return ApiErrors.Unauthorized();
+        if (currentUserId is null)
+            return ApiErrors.Unauthorized();
 
         var articleIdOption = await findArticleIdBySlug(slug, cancellationToken)
             .ConfigureAwait(false);
@@ -182,7 +189,8 @@ public static class ArticleEndpoints
         if (body.Title is not null)
         {
             var titleResult = Title.Create(body.Title);
-            if (titleResult.IsErr) return ApiErrors.FromArticleError(titleResult.Error);
+            if (titleResult.IsErr)
+                return ApiErrors.FromArticleError(titleResult.Error);
             titleOption = Option<Title>.Some(titleResult.Value);
         }
 
@@ -190,7 +198,8 @@ public static class ArticleEndpoints
         if (body.Description is not null)
         {
             var descResult = Description.Create(body.Description);
-            if (descResult.IsErr) return ApiErrors.FromArticleError(descResult.Error);
+            if (descResult.IsErr)
+                return ApiErrors.FromArticleError(descResult.Error);
             descriptionOption = Option<Description>.Some(descResult.Value);
         }
 
@@ -198,7 +207,8 @@ public static class ArticleEndpoints
         if (body.Body is not null)
         {
             var bodyResult = Body.Create(body.Body);
-            if (bodyResult.IsErr) return ApiErrors.FromArticleError(bodyResult.Error);
+            if (bodyResult.IsErr)
+                return ApiErrors.FromArticleError(bodyResult.Error);
             bodyOption = Option<Body>.Some(bodyResult.Value);
         }
 
@@ -220,7 +230,7 @@ public static class ArticleEndpoints
                 return articleOption.Match(
                     some: article => Results.Ok(
                         new SingleArticleResponse(article.ToArticleDto())),
-                    none: () => Results.Ok((object?)null));
+                    none: () => Results.Ok(null));
             },
             err: error => Task.FromResult(ApiErrors.FromArticleError(error)));
     }
@@ -233,7 +243,8 @@ public static class ArticleEndpoints
         CancellationToken cancellationToken)
     {
         var currentUserId = JwtTokenService.GetUserId(context.User);
-        if (currentUserId is null) return ApiErrors.Unauthorized();
+        if (currentUserId is null)
+            return ApiErrors.Unauthorized();
 
         var articleIdOption = await findArticleIdBySlug(slug, cancellationToken)
             .ConfigureAwait(false);
@@ -258,7 +269,8 @@ public static class ArticleEndpoints
         CancellationToken cancellationToken)
     {
         var currentUserId = JwtTokenService.GetUserId(context.User);
-        if (currentUserId is null) return ApiErrors.Unauthorized();
+        if (currentUserId is null)
+            return ApiErrors.Unauthorized();
 
         var articleIdOption = await findArticleIdBySlug(slug, cancellationToken)
             .ConfigureAwait(false);
@@ -279,7 +291,7 @@ public static class ArticleEndpoints
                 return articleOption.Match(
                     some: article => Results.Ok(
                         new SingleArticleResponse(article.ToArticleDto())),
-                    none: () => Results.Ok((object?)null));
+                    none: () => Results.Ok(null));
             },
             err: error => Task.FromResult(ApiErrors.FromArticleError(error)));
     }
@@ -293,7 +305,8 @@ public static class ArticleEndpoints
         CancellationToken cancellationToken)
     {
         var currentUserId = JwtTokenService.GetUserId(context.User);
-        if (currentUserId is null) return ApiErrors.Unauthorized();
+        if (currentUserId is null)
+            return ApiErrors.Unauthorized();
 
         var articleIdOption = await findArticleIdBySlug(slug, cancellationToken)
             .ConfigureAwait(false);
@@ -314,7 +327,7 @@ public static class ArticleEndpoints
                 return articleOption.Match(
                     some: article => Results.Ok(
                         new SingleArticleResponse(article.ToArticleDto())),
-                    none: () => Results.Ok((object?)null));
+                    none: () => Results.Ok(null));
             },
             err: error => Task.FromResult(ApiErrors.FromArticleError(error)));
     }

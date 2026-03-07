@@ -48,7 +48,9 @@ public sealed class EditorTests : IAsyncLifetime
             if (response.Url.Contains("/api/"))
             {
                 var body = "";
-                try { body = await response.TextAsync(); } catch { body = "(unreadable)"; }
+                try
+                { body = await response.TextAsync(); }
+                catch { body = "(unreadable)"; }
                 apiRequests.Add((response.Request.Method, response.Url, response.Status, body.Length > 500 ? body[..500] : body));
             }
         };

@@ -21,7 +21,6 @@
 // =============================================================================
 
 using System.Collections.Concurrent;
-using System.Diagnostics;
 using Abies.Conduit.Domain.Article;
 using Abies.Conduit.Domain.Shared;
 using Abies.Conduit.Domain.User;
@@ -191,7 +190,8 @@ public sealed class AggregateStore
         CancellationToken cancellationToken)
     {
         // Skip projection when no data source is configured (integration tests)
-        if (_dataSource is null) return;
+        if (_dataSource is null)
+            return;
 
         // Load only the new events (after the version we had before Handle)
         var newEvents = await _userEventStore.LoadAsync(streamId, versionBefore, cancellationToken)
@@ -271,7 +271,8 @@ public sealed class AggregateStore
         CancellationToken cancellationToken)
     {
         // Skip projection when no data source is configured (integration tests)
-        if (_dataSource is null) return;
+        if (_dataSource is null)
+            return;
 
         var newEvents = await _articleEventStore.LoadAsync(streamId, versionBefore, cancellationToken)
             .ConfigureAwait(false);

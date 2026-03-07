@@ -49,13 +49,16 @@ public static class UsersEndpoints
 
         // Validate constrained types at the boundary
         var emailResult = EmailAddress.Create(body.Email);
-        if (emailResult.IsErr) return ApiErrors.FromUserError(emailResult.Error);
+        if (emailResult.IsErr)
+            return ApiErrors.FromUserError(emailResult.Error);
 
         var usernameResult = Username.Create(body.Username);
-        if (usernameResult.IsErr) return ApiErrors.FromUserError(usernameResult.Error);
+        if (usernameResult.IsErr)
+            return ApiErrors.FromUserError(usernameResult.Error);
 
         var passwordResult = Password.Create(body.Password);
-        if (passwordResult.IsErr) return ApiErrors.FromUserError(passwordResult.Error);
+        if (passwordResult.IsErr)
+            return ApiErrors.FromUserError(passwordResult.Error);
 
         // Hash password at the boundary (capability pattern)
         var passwordHash = PasswordHasher.Hash(passwordResult.Value);
