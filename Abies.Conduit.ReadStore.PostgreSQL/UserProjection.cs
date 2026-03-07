@@ -197,7 +197,8 @@ public static class UserProjection
             return image;
         });
 
-        if (!hasAuthorFieldChanges) return;
+        if (!hasAuthorFieldChanges)
+            return;
 
         var setClause = string.Join(", ", articleSetClauses);
 

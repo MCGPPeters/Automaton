@@ -49,7 +49,7 @@ public static class ProfileEndpoints
     private static async Task<IResult> GetProfile(
         string username,
         HttpContext context,
-        ReadModel.GetProfile getProfile,
+        GetProfile getProfile,
         CancellationToken cancellationToken)
     {
         var currentUserId = JwtTokenService.GetUserId(context.User);
@@ -73,11 +73,12 @@ public static class ProfileEndpoints
         HttpContext context,
         AggregateStore aggregateStore,
         FindUserByUsername findUserByUsername,
-        ReadModel.GetProfile getProfile,
+        GetProfile getProfile,
         CancellationToken cancellationToken)
     {
         var currentUserId = JwtTokenService.GetUserId(context.User);
-        if (currentUserId is null) return ApiErrors.Unauthorized();
+        if (currentUserId is null)
+            return ApiErrors.Unauthorized();
 
         var targetUserOption = await findUserByUsername(username, cancellationToken)
             .ConfigureAwait(false);
@@ -113,11 +114,12 @@ public static class ProfileEndpoints
         HttpContext context,
         AggregateStore aggregateStore,
         FindUserByUsername findUserByUsername,
-        ReadModel.GetProfile getProfile,
+        GetProfile getProfile,
         CancellationToken cancellationToken)
     {
         var currentUserId = JwtTokenService.GetUserId(context.User);
-        if (currentUserId is null) return ApiErrors.Unauthorized();
+        if (currentUserId is null)
+            return ApiErrors.Unauthorized();
 
         var targetUserOption = await findUserByUsername(username, cancellationToken)
             .ConfigureAwait(false);

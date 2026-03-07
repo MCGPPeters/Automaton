@@ -53,7 +53,8 @@ public static class CommentEndpoints
         CancellationToken cancellationToken)
     {
         var currentUserId = JwtTokenService.GetUserId(context.User);
-        if (currentUserId is null) return ApiErrors.Unauthorized();
+        if (currentUserId is null)
+            return ApiErrors.Unauthorized();
 
         var articleIdOption = await findArticleIdBySlug(slug, cancellationToken)
             .ConfigureAwait(false);
@@ -61,7 +62,8 @@ public static class CommentEndpoints
             return ApiErrors.NotFound("Article not found.");
 
         var bodyResult = CommentBody.Create(request.Comment.Body);
-        if (bodyResult.IsErr) return ApiErrors.FromArticleError(bodyResult.Error);
+        if (bodyResult.IsErr)
+            return ApiErrors.FromArticleError(bodyResult.Error);
 
         var commentId = CommentId.New();
         var command = new ArticleCommand.AddComment(
@@ -92,7 +94,7 @@ public static class CommentEndpoints
     private static async Task<IResult> GetComments(
         string slug,
         HttpContext context,
-        ReadModel.GetComments getComments,
+        GetComments getComments,
         CancellationToken cancellationToken)
     {
         var currentUserId = JwtTokenService.GetUserId(context.User);
@@ -119,7 +121,8 @@ public static class CommentEndpoints
         CancellationToken cancellationToken)
     {
         var currentUserId = JwtTokenService.GetUserId(context.User);
-        if (currentUserId is null) return ApiErrors.Unauthorized();
+        if (currentUserId is null)
+            return ApiErrors.Unauthorized();
 
         var articleIdOption = await findArticleIdBySlug(slug, cancellationToken)
             .ConfigureAwait(false);

@@ -81,13 +81,13 @@ public sealed class ConduitApiFactory : WebApplicationFactory<Program>
             RemoveService<FindUserByEmail>(services);
             RemoveService<FindUserById>(services);
             RemoveService<FindUserByUsername>(services);
-            RemoveService<ReadModel.GetProfile>(services);
-            RemoveService<ReadModel.ListArticles>(services);
-            RemoveService<ReadModel.GetFeed>(services);
+            RemoveService<GetProfile>(services);
+            RemoveService<ListArticles>(services);
+            RemoveService<GetFeed>(services);
             RemoveService<FindArticleBySlug>(services);
             RemoveService<FindArticleIdBySlug>(services);
-            RemoveService<ReadModel.GetComments>(services);
-            RemoveService<ReadModel.GetTags>(services);
+            RemoveService<GetComments>(services);
+            RemoveService<GetTags>(services);
 
             // Register in-memory event stores
             services.AddSingleton<EventStore<UserEvent>>(UserEventStore);
@@ -108,13 +108,13 @@ public sealed class ConduitApiFactory : WebApplicationFactory<Program>
             services.AddSingleton<FindUserByEmail>(FindUserByEmailImpl);
             services.AddSingleton<FindUserById>(FindUserByIdImpl);
             services.AddSingleton<FindUserByUsername>(FindUserByUsernameImpl);
-            services.AddSingleton<ReadModel.GetProfile>(GetProfileImpl);
-            services.AddSingleton<ReadModel.ListArticles>(ListArticlesImpl);
-            services.AddSingleton<ReadModel.GetFeed>(GetFeedImpl);
+            services.AddSingleton<GetProfile>(GetProfileImpl);
+            services.AddSingleton<ListArticles>(ListArticlesImpl);
+            services.AddSingleton<GetFeed>(GetFeedImpl);
             services.AddSingleton<FindArticleBySlug>(FindArticleBySlugImpl);
             services.AddSingleton<FindArticleIdBySlug>(FindArticleIdBySlugImpl);
-            services.AddSingleton<ReadModel.GetComments>(GetCommentsImpl);
-            services.AddSingleton<ReadModel.GetTags>(GetTagsImpl);
+            services.AddSingleton<GetComments>(GetCommentsImpl);
+            services.AddSingleton<GetTags>(GetTagsImpl);
         });
 
         // Remove the Schema.EnsureCreated call by skipping the startup filter
@@ -205,14 +205,15 @@ public sealed class ConduitApiFactory : WebApplicationFactory<Program>
     }
 
     private ValueTask<IReadOnlyList<string>> GetTagsImpl(CancellationToken ct) =>
-        new((IReadOnlyList<string>)Tags.Distinct().ToList());
+        new(Tags.Distinct().ToList());
 
     // ─── Helpers ───────────────────────────────────────────────────────────
 
     private static void RemoveService<T>(IServiceCollection services)
     {
         var descriptor = services.FirstOrDefault(d => d.ServiceType == typeof(T));
-        if (descriptor is not null) services.Remove(descriptor);
+        if (descriptor is not null)
+            services.Remove(descriptor);
     }
 
     /// <summary>

@@ -46,7 +46,8 @@ public static class UserEndpoints
         CancellationToken cancellationToken)
     {
         var userId = JwtTokenService.GetUserId(context.User);
-        if (userId is null) return ApiErrors.Unauthorized();
+        if (userId is null)
+            return ApiErrors.Unauthorized();
 
         var userOption = await findUserById(userId.Value, cancellationToken).ConfigureAwait(false);
 
@@ -77,7 +78,8 @@ public static class UserEndpoints
         CancellationToken cancellationToken)
     {
         var userId = JwtTokenService.GetUserId(context.User);
-        if (userId is null) return ApiErrors.Unauthorized();
+        if (userId is null)
+            return ApiErrors.Unauthorized();
 
         var body = request.User;
 
@@ -86,7 +88,8 @@ public static class UserEndpoints
         if (body.Email is not null)
         {
             var emailResult = EmailAddress.Create(body.Email);
-            if (emailResult.IsErr) return ApiErrors.FromUserError(emailResult.Error);
+            if (emailResult.IsErr)
+                return ApiErrors.FromUserError(emailResult.Error);
             emailOption = Option<EmailAddress>.Some(emailResult.Value);
         }
 
@@ -94,7 +97,8 @@ public static class UserEndpoints
         if (body.Username is not null)
         {
             var usernameResult = Username.Create(body.Username);
-            if (usernameResult.IsErr) return ApiErrors.FromUserError(usernameResult.Error);
+            if (usernameResult.IsErr)
+                return ApiErrors.FromUserError(usernameResult.Error);
             usernameOption = Option<Username>.Some(usernameResult.Value);
         }
 
@@ -102,7 +106,8 @@ public static class UserEndpoints
         if (body.Password is not null)
         {
             var passwordResult = Password.Create(body.Password);
-            if (passwordResult.IsErr) return ApiErrors.FromUserError(passwordResult.Error);
+            if (passwordResult.IsErr)
+                return ApiErrors.FromUserError(passwordResult.Error);
             passwordHashOption = Option<PasswordHash>.Some(PasswordHasher.Hash(passwordResult.Value));
         }
 
@@ -110,7 +115,8 @@ public static class UserEndpoints
         if (body.Bio is not null)
         {
             var bioResult = Bio.Create(body.Bio);
-            if (bioResult.IsErr) return ApiErrors.FromUserError(bioResult.Error);
+            if (bioResult.IsErr)
+                return ApiErrors.FromUserError(bioResult.Error);
             bioOption = Option<Bio>.Some(bioResult.Value);
         }
 
@@ -124,7 +130,8 @@ public static class UserEndpoints
             else
             {
                 var imageResult = ImageUrl.Create(body.Image);
-                if (imageResult.IsErr) return ApiErrors.FromUserError(imageResult.Error);
+                if (imageResult.IsErr)
+                    return ApiErrors.FromUserError(imageResult.Error);
                 imageOption = Option<ImageUrl>.Some(imageResult.Value);
             }
         }
