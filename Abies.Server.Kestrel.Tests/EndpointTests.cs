@@ -88,6 +88,7 @@ internal sealed class AbiesTestHost : IAsyncDisposable
 
         var app = builder.Build();
         app.UseWebSockets();
+        app.UseAbiesStaticFiles();
         app.MapAbies<TestCounter, TestModel, Unit>(path, mode);
 
         await app.StartAsync();
@@ -284,5 +285,47 @@ public class EndpointTests
         Assert.Contains("meta", html);
         Assert.Contains("description", html);
         Assert.Contains("stylesheet", html);
+    }
+
+    // =========================================================================
+    // Static File Serving — abies-server.js
+    // =========================================================================
+
+    [Fact]
+    public async Task StaticFiles_ServesAbiesServerJs()
+    {
+        await using var host = await AbiesTestHost.Create(new RenderMode.Static());
+        using var client = host.CreateClient();
+
+        var response = await client.GetAsync("/_abies/abies-server.js");
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        var content = await response.Content.ReadAsStringAsync();
+        Assert.Contains("abies-server.js", content);
+        Assert.Contains("WebSocket", content);
+    }
+
+    [Fact]
+    public async Task StaticFiles_ServesWithCorrectContentType()
+    {
+        await using var host = await AbiesTestHost.Create(new RenderMode.Static());
+        using var client = host.CreateClient();
+
+        var response = await client.GetAsync("/_abies/abies-server.js");
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        var contentType = response.Content.Headers.ContentType?.MediaType;
+        Assert.Equal("text/javascript", contentType);
+    }
+
+    [Fact]
+    public async Task StaticFiles_Returns404ForNonexistentFile()
+    {
+        await using var host = await AbiesTestHost.Create(new RenderMode.Static());
+        using var client = host.CreateClient();
+
+        var response = await client.GetAsync("/_abies/nonexistent.js");
+
+        Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
     }
 }
