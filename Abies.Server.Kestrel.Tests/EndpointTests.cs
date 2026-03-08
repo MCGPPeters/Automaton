@@ -23,6 +23,7 @@ using Microsoft.AspNetCore.Hosting.Server;
 using Microsoft.AspNetCore.TestHost;
 using static Abies.Html.Attributes;
 using static Abies.Html.Elements;
+using static Abies.Html.Events;
 
 namespace Abies.Server.Kestrel.Tests;
 
@@ -56,6 +57,8 @@ public sealed class TestCounter : Program<TestModel, Unit>
             div([class_("counter")],
             [
                 h1([], [text($"Count: {model.Count}")]),
+                button([class_("increment"), onclick(new Increment())], [text("+")]),
+                button([class_("decrement"), onclick(new Decrement())], [text("−")]),
                 p([], [text($"Page: {model.CurrentPage}")])
             ]),
             Head.meta("description", "A test counter app"),
