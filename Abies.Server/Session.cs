@@ -99,6 +99,14 @@ public sealed class Session<TProgram, TModel, TArgument> : IDisposable
 {
     private static readonly ActivitySource _activitySource = new("Abies.Server.Session");
 
+    /// <summary>
+    /// Reserved command ID used by <c>abies-server.js</c> to signal a
+    /// client-side URL change (pushState/popstate). This bypasses the
+    /// <see cref="HandlerRegistry"/> and dispatches a <see cref="UrlChanged"/>
+    /// message directly into the MVU loop.
+    /// </summary>
+    private const string _urlChangedCommandId = "__url_changed__";
+
     private readonly Runtime<TProgram, TModel, TArgument> _runtime;
     private readonly ReceiveEvent _receiveEvent;
     private readonly SendPatches _sendPatches;
@@ -187,9 +195,21 @@ public sealed class Session<TProgram, TModel, TArgument> : IDisposable
             if (domEvent is null)
                 break;
 
+            var evt = domEvent.Value;
+
+            // Handle URL change events from client-side navigation.
+            // These bypass the HandlerRegistry — there is no DOM element handler
+            // for navigation. Instead, the JS client sends a reserved commandId
+            // and the new path as eventData.
+            if (evt.CommandId == _urlChangedCommandId)
+            {
+                var url = Navigation.ParseUrl(evt.EventData);
+                await _runtime.Dispatch(new UrlChanged(url), cancellationToken);
+                continue;
+            }
+
             // Look up the handler in this session's registry and create a message
-            var message = _runtime.Handlers.CreateMessage(
-                domEvent.Value.CommandId, domEvent.Value.EventData);
+            var message = _runtime.Handlers.CreateMessage(evt.CommandId, evt.EventData);
             if (message is null)
                 continue;
 

@@ -29,6 +29,7 @@ using Automaton;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Routing;
+using Microsoft.Extensions.FileProviders;
 
 namespace Abies.Server.Kestrel;
 
@@ -196,4 +197,42 @@ public static class Endpoints
     /// </summary>
     private static ValueTask<Result<Message[], PipelineError>> NoOpInterpreter(Command _) =>
         new(Result<Message[], PipelineError>.Ok([]));
+
+    /// <summary>
+    /// Serves the Abies static files (e.g., <c>abies-server.js</c>) from the
+    /// <c>Abies.Server.Kestrel</c> package's embedded <c>wwwroot</c> directory.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Files are served under the <c>/_abies</c> path prefix, matching the
+    /// script references in <see cref="Page.RenderDocument"/>:
+    /// </para>
+    /// <code>
+    ///   &lt;script src="/_abies/abies-server.js" ...&gt;
+    /// </code>
+    /// <para>
+    /// This method is idempotent — calling it multiple times (e.g., from
+    /// multiple <see cref="MapAbies{TProgram,TModel,TArgument}"/> calls)
+    /// only registers the static files middleware once.
+    /// </para>
+    /// </remarks>
+    /// <param name="app">The application builder to add the static files middleware to.</param>
+    /// <returns>The application builder for chaining.</returns>
+    public static IApplicationBuilder UseAbiesStaticFiles(this IApplicationBuilder app)
+    {
+        var assembly = typeof(Endpoints).Assembly;
+        var contentRoot = Path.GetDirectoryName(assembly.Location)!;
+        var wwwrootPath = Path.Combine(contentRoot, "wwwroot");
+
+        if (!Directory.Exists(wwwrootPath))
+            return app;
+
+        app.UseStaticFiles(new StaticFileOptions
+        {
+            FileProvider = new PhysicalFileProvider(wwwrootPath),
+            RequestPath = ""
+        });
+
+        return app;
+    }
 }

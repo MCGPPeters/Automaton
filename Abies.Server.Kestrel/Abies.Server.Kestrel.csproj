@@ -7,6 +7,11 @@
     <GenerateDocumentationFile>true</GenerateDocumentationFile>
   </PropertyGroup>
 
+  <!-- Embed wwwroot as static web assets so consuming apps can serve them -->
+  <ItemGroup>
+    <Content Include="wwwroot\**" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+
   <!-- NuGet package metadata -->
   <PropertyGroup>
     <PackageId>Abies.Server.Kestrel</PackageId>
