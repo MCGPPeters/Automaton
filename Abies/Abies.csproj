@@ -30,6 +30,7 @@
     <InternalsVisibleTo Include="Abies.Tests" />
     <InternalsVisibleTo Include="Abies.Benchmarks" />
     <InternalsVisibleTo Include="Abies.Browser" />
+    <InternalsVisibleTo Include="Abies.Server" />
     <InternalsVisibleTo Include="AbiesBenchmark" />
   </ItemGroup>
 

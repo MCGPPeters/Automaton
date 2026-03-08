@@ -1,0 +1,28 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+  </PropertyGroup>
+
+  <!-- NuGet package metadata -->
+  <PropertyGroup>
+    <PackageId>Abies.Server</PackageId>
+    <Title>Abies.Server</Title>
+    <Description>Server-side rendering and interactive session support for the Abies MVU framework. A pure computational library with no server dependencies — supports Static SSR, Interactive Server (WebSocket), Interactive WASM, and Interactive Auto render modes.</Description>
+    <Authors>Maurice Peters</Authors>
+    <PackageTags>abies;ssr;server;mvu;elm;rendering;functional;automaton</PackageTags>
+    <PackageLicenseExpression>Apache-2.0</PackageLicenseExpression>
+    <RepositoryUrl>https://github.com/MCGPPeters/Automaton</RepositoryUrl>
+    <RepositoryType>git</RepositoryType>
+    <PackageProjectUrl>https://github.com/MCGPPeters/Automaton</PackageProjectUrl>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Abies\Abies.csproj" />
+    <InternalsVisibleTo Include="Abies.Server.Tests" />
+  </ItemGroup>
+
+</Project>
