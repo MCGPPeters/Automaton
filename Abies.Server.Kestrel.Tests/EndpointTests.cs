@@ -1,0 +1,288 @@
+// =============================================================================
+// Endpoint Tests — Integration Tests for MapAbies
+// =============================================================================
+// Tests the full HTTP pipeline: request → Kestrel → MapAbies → response.
+// Uses WebApplicationFactory to spin up a real Kestrel server in-process.
+//
+// Covers:
+//   1. Static mode serves HTML with correct content-type
+//   2. InteractiveServer mode serves HTML with WebSocket script
+//   3. WebSocket endpoint rejects non-WebSocket requests
+//   4. Page content includes rendered view output
+//   5. URL routing is applied from the request path
+//
+// No external dependencies — pure in-process testing.
+// =============================================================================
+
+using System.Net;
+using Abies.DOM;
+using Abies.Subscriptions;
+using Automaton;
+using Microsoft.AspNetCore.Builder;
+using Microsoft.AspNetCore.Hosting.Server;
+using Microsoft.AspNetCore.TestHost;
+using static Abies.Html.Attributes;
+using static Abies.Html.Elements;
+
+namespace Abies.Server.Kestrel.Tests;
+
+// ── Test Program: Counter ────────────────────────────────────────────────────
+
+public record TestModel(int Count, string CurrentPage);
+
+public interface TestMessage : Message;
+public record Increment : TestMessage;
+public record Decrement : TestMessage;
+
+public sealed class TestCounter : Program<TestModel, Unit>
+{
+    public static (TestModel, Command) Initialize(Unit argument) =>
+        (new TestModel(0, "home"), Commands.None);
+
+    public static (TestModel, Command) Transition(TestModel model, Message message) =>
+        message switch
+        {
+            Increment => (model with { Count = model.Count + 1 }, Commands.None),
+            Decrement => (model with { Count = model.Count - 1 }, Commands.None),
+            UrlChanged url => (model with
+            {
+                CurrentPage = url.Url.Path.Count > 0 ? url.Url.Path[0] : "home"
+            }, Commands.None),
+            _ => (model, Commands.None)
+        };
+
+    public static Document View(TestModel model) =>
+        new("Test Counter",
+            div([class_("counter")],
+            [
+                h1([], [text($"Count: {model.Count}")]),
+                p([], [text($"Page: {model.CurrentPage}")])
+            ]),
+            Head.meta("description", "A test counter app"),
+            Head.stylesheet("/styles.css"));
+
+    public static Subscription Subscriptions(TestModel model) =>
+        new Subscription.None();
+}
+
+// ── Test Host Factory ────────────────────────────────────────────────────────
+
+/// <summary>
+/// Creates a test server with the Abies application mapped to specific endpoints.
+/// </summary>
+internal sealed class AbiesTestHost : IAsyncDisposable
+{
+    private readonly WebApplication _app;
+
+    private AbiesTestHost(WebApplication app) => _app = app;
+
+    /// <summary>
+    /// Creates a test host with the given render mode.
+    /// </summary>
+    public static async Task<AbiesTestHost> Create(
+        RenderMode mode,
+        string path = "/")
+    {
+        var builder = WebApplication.CreateBuilder();
+        builder.WebHost.UseTestServer();
+
+        var app = builder.Build();
+        app.UseWebSockets();
+        app.MapAbies<TestCounter, TestModel, Unit>(path, mode);
+
+        await app.StartAsync();
+        return new AbiesTestHost(app);
+    }
+
+    /// <summary>
+    /// Gets an HttpClient connected to the test server.
+    /// </summary>
+    public HttpClient CreateClient() =>
+        _app.GetTestClient();
+
+    /// <summary>
+    /// Gets the test server for WebSocket testing.
+    /// </summary>
+    public TestServer Server =>
+        _app.Services.GetService(typeof(IServer)) as TestServer
+        ?? throw new InvalidOperationException("TestServer not available");
+
+    public async ValueTask DisposeAsync() =>
+        await _app.DisposeAsync();
+}
+
+// ── Tests ────────────────────────────────────────────────────────────────────
+
+public class EndpointTests
+{
+    // =========================================================================
+    // Static Mode — HTML Page Serving
+    // =========================================================================
+
+    [Fact]
+    public async Task Static_ServesHtmlWithCorrectContentType()
+    {
+        await using var host = await AbiesTestHost.Create(new RenderMode.Static());
+        using var client = host.CreateClient();
+
+        var response = await client.GetAsync("/");
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        Assert.Equal("text/html; charset=utf-8",
+            response.Content.Headers.ContentType?.ToString());
+    }
+
+    [Fact]
+    public async Task Static_ServesCompleteHtmlDocument()
+    {
+        await using var host = await AbiesTestHost.Create(new RenderMode.Static());
+        using var client = host.CreateClient();
+
+        var html = await client.GetStringAsync("/");
+
+        Assert.StartsWith("<!DOCTYPE html>", html);
+        Assert.Contains("<title>Test Counter</title>", html);
+        Assert.Contains("Count: 0", html);
+    }
+
+    [Fact]
+    public async Task Static_NoScriptsInOutput()
+    {
+        await using var host = await AbiesTestHost.Create(new RenderMode.Static());
+        using var client = host.CreateClient();
+
+        var html = await client.GetStringAsync("/");
+
+        Assert.DoesNotContain("<script", html);
+    }
+
+    [Fact]
+    public async Task Static_RoutesFromRequestPath()
+    {
+        await using var host = await AbiesTestHost.Create(
+            new RenderMode.Static(), path: "/{**catch-all}");
+        using var client = host.CreateClient();
+
+        var html = await client.GetStringAsync("/articles");
+
+        Assert.Contains("Page: articles", html);
+    }
+
+    // =========================================================================
+    // InteractiveServer Mode — HTML + WebSocket
+    // =========================================================================
+
+    [Fact]
+    public async Task InteractiveServer_ServesHtmlWithWebSocketScript()
+    {
+        await using var host = await AbiesTestHost.Create(
+            new RenderMode.InteractiveServer());
+        using var client = host.CreateClient();
+
+        var html = await client.GetStringAsync("/");
+
+        Assert.Contains("abies-server.js", html);
+        Assert.Contains("data-ws-path", html);
+    }
+
+    [Fact]
+    public async Task InteractiveServer_WebSocketEndpoint_RejectsNonWebSocket()
+    {
+        await using var host = await AbiesTestHost.Create(
+            new RenderMode.InteractiveServer());
+        using var client = host.CreateClient();
+
+        var response = await client.GetAsync("/_abies/ws");
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task InteractiveServer_CustomWebSocketPath()
+    {
+        await using var host = await AbiesTestHost.Create(
+            new RenderMode.InteractiveServer(WebSocketPath: "/custom/ws"));
+        using var client = host.CreateClient();
+
+        var html = await client.GetStringAsync("/");
+
+        Assert.Contains("""data-ws-path="/custom/ws""", html);
+    }
+
+    // =========================================================================
+    // InteractiveWasm Mode — HTML + WASM Script, No WebSocket
+    // =========================================================================
+
+    [Fact]
+    public async Task InteractiveWasm_ServesHtmlWithWasmScript()
+    {
+        await using var host = await AbiesTestHost.Create(
+            new RenderMode.InteractiveWasm());
+        using var client = host.CreateClient();
+
+        var html = await client.GetStringAsync("/");
+
+        Assert.Contains("dotnet.js", html);
+        Assert.DoesNotContain("abies-server.js", html);
+    }
+
+    // =========================================================================
+    // InteractiveAuto Mode — Both Scripts
+    // =========================================================================
+
+    [Fact]
+    public async Task InteractiveAuto_ServesBothScripts()
+    {
+        await using var host = await AbiesTestHost.Create(
+            new RenderMode.InteractiveAuto());
+        using var client = host.CreateClient();
+
+        var html = await client.GetStringAsync("/");
+
+        Assert.Contains("abies-server.js", html);
+        Assert.Contains("dotnet.js", html);
+        Assert.Contains("data-auto", html);
+    }
+
+    [Fact]
+    public async Task InteractiveAuto_WebSocketEndpoint_RejectsNonWebSocket()
+    {
+        await using var host = await AbiesTestHost.Create(
+            new RenderMode.InteractiveAuto());
+        using var client = host.CreateClient();
+
+        var response = await client.GetAsync("/_abies/ws");
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+    }
+
+    // =========================================================================
+    // Content Tests — Body and Head
+    // =========================================================================
+
+    [Fact]
+    public async Task Render_IncludesBodyContent()
+    {
+        await using var host = await AbiesTestHost.Create(new RenderMode.Static());
+        using var client = host.CreateClient();
+
+        var html = await client.GetStringAsync("/");
+
+        Assert.Contains("""class="counter""", html);
+        Assert.Contains("Count: 0", html);
+        Assert.Contains("Page: home", html);
+    }
+
+    [Fact]
+    public async Task Render_IncludesHeadElements()
+    {
+        await using var host = await AbiesTestHost.Create(new RenderMode.Static());
+        using var client = host.CreateClient();
+
+        var html = await client.GetStringAsync("/");
+
+        Assert.Contains("meta", html);
+        Assert.Contains("description", html);
+        Assert.Contains("stylesheet", html);
+    }
+}
