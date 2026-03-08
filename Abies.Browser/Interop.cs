@@ -190,6 +190,14 @@ public static partial class Interop
     // =========================================================================
 
     /// <summary>
+    /// The handler registry instance for the browser runtime.
+    /// Set during bootstrap by <see cref="Runtime.Run"/>. This static field
+    /// is safe because WASM is single-threaded — there is exactly one runtime
+    /// and one handler registry per browser tab.
+    /// </summary>
+    internal static HandlerRegistry? Handlers { get; set; }
+
+    /// <summary>
     /// Called by abies.js when a DOM event fires on an element with a
     /// <c>data-event-{eventType}</c> attribute. The commandId maps to
     /// a handler in the <see cref="HandlerRegistry"/>.
@@ -200,10 +208,10 @@ public static partial class Interop
     [JSExport]
     public static void DispatchDomEvent(string commandId, string eventName, string eventData)
     {
-        var message = HandlerRegistry.CreateMessage(commandId, eventData);
+        var message = Handlers?.CreateMessage(commandId, eventData);
         if (message is not null)
         {
-            HandlerRegistry.Dispatch?.Invoke(message);
+            Handlers?.Dispatch?.Invoke(message);
         }
     }
 

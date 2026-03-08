@@ -2,7 +2,8 @@
 // Session — Server-Side MVU Session for Interactive Modes
 // =============================================================================
 // Wraps the Abies Runtime for server-side interactive use. Each connected
-// client gets its own Session holding an MVU runtime instance.
+// client gets its own Session holding an MVU runtime instance with its own
+// HandlerRegistry — enabling isolated, concurrent sessions.
 //
 // The session bridges the transport (delegates) to the runtime:
 //
@@ -23,6 +24,8 @@
 //
 // Thread safety: The session uses threadSafe: true on the underlying
 // Automaton runtime since server sessions are accessed from async I/O threads.
+// Each session's HandlerRegistry is instance-based (not shared), so no
+// cross-session contention exists.
 // =============================================================================
 
 using System.Diagnostics;
@@ -163,7 +166,7 @@ public sealed class Session<TProgram, TModel, TArgument> : IDisposable
     /// The loop is simple:
     /// <list type="number">
     ///   <item>Receive next DOM event from client (via <see cref="ReceiveEvent"/>)</item>
-    ///   <item>Look up the handler in <see cref="HandlerRegistry"/></item>
+    ///   <item>Look up the handler in the runtime's <see cref="HandlerRegistry"/></item>
     ///   <item>Create a <see cref="Message"/> from the event data</item>
     ///   <item>Dispatch into the MVU runtime</item>
     ///   <item>The runtime's observer diffs and calls <see cref="Apply"/> → <see cref="SendPatches"/></item>
@@ -184,8 +187,9 @@ public sealed class Session<TProgram, TModel, TArgument> : IDisposable
             if (domEvent is null)
                 break;
 
-            // Look up the handler and create a message
-            var message = HandlerRegistry.CreateMessage(domEvent.Value.CommandId, domEvent.Value.EventData);
+            // Look up the handler in this session's registry and create a message
+            var message = _runtime.Handlers.CreateMessage(
+                domEvent.Value.CommandId, domEvent.Value.EventData);
             if (message is null)
                 continue;
 

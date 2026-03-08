@@ -12,8 +12,13 @@
 // the pure Abies core and the platform-specific renderer:
 //
 //     Browser (Abies.Browser):  Apply calls JS interop to patch the real DOM
-//     Server  (Abies.Server):   Apply produces an HTML string for SSR
+//     Server  (Abies.Server):   Apply produces binary patches sent over transport
 //     Tests:                    Apply captures patches for assertions
+//
+// Each runtime instance owns its own HandlerRegistry for event handler
+// registration and dispatch. This enables concurrent server-side sessions
+// to have isolated handler state. In WASM (single-threaded), the browser
+// runtime simply uses its single instance.
 //
 // Architecturally, this is the Automaton kernel's Observer/Interpreter pattern
 // specialized for MVU:
@@ -24,6 +29,7 @@
 // The runtime is single-threaded by design (WASM constraint). The Automaton
 // kernel's SemaphoreSlim serialization is disabled (threadSafe: false) and
 // event tracking is disabled (trackEvents: false) to minimize overhead.
+// Server-side sessions use threadSafe: true for async I/O thread safety.
 //
 // OpenTelemetry instrumentation is provided via System.Diagnostics.ActivitySource.
 // =============================================================================
@@ -203,6 +209,7 @@ public sealed class Runtime<TProgram, TModel, TArgument> : IDisposable
     private readonly Apply _apply;
     private readonly Action<string>? _titleChanged;
     private readonly Action<NavigationCommand>? _navigationExecutor;
+    private readonly HandlerRegistry _handlerRegistry;
     private Document? _currentDocument;
     private SubscriptionState _subscriptionState = SubscriptionState.Empty;
 
@@ -217,12 +224,22 @@ public sealed class Runtime<TProgram, TModel, TArgument> : IDisposable
     public Document? CurrentDocument => _currentDocument;
 
     /// <summary>
+    /// The handler registry for this runtime instance.
+    /// </summary>
+    /// <remarks>
+    /// Exposed so hosting adapters (browser interop, server session) can look up
+    /// handlers by commandId to create messages from DOM events.
+    /// </remarks>
+    public HandlerRegistry Handlers => _handlerRegistry;
+
+    /// <summary>
     /// Private constructor — use <see cref="Start"/> to create instances.
     /// The runtime uses two-phase initialization: construct first, then
     /// wire the kernel runtime via field assignment in <see cref="Start"/>.
     /// </summary>
     private Runtime(Apply apply, Action<string>? titleChanged, Action<NavigationCommand>? navigationExecutor) =>
-        (_apply, _titleChanged, _navigationExecutor) = (apply, titleChanged, navigationExecutor);
+        (_apply, _titleChanged, _navigationExecutor, _handlerRegistry) =
+            (apply, titleChanged, navigationExecutor, new HandlerRegistry());
 
     /// <summary>
     /// The observer callback: renders view, diffs, applies patches, updates subscriptions.
@@ -291,48 +308,48 @@ public sealed class Runtime<TProgram, TModel, TArgument> : IDisposable
     /// Registers new handlers and unregisters removed handlers so event delegation
     /// can dispatch messages correctly.
     /// </summary>
-    private static void UpdateHandlerRegistry(IReadOnlyList<Patch> patches)
+    private void UpdateHandlerRegistry(IReadOnlyList<Patch> patches)
     {
         foreach (var patch in patches)
         {
             switch (patch)
             {
                 case AddHandler p:
-                    HandlerRegistry.Register(p.Handler);
+                    _handlerRegistry.Register(p.Handler);
                     break;
 
                 case RemoveHandler p:
-                    HandlerRegistry.Unregister(p.Handler.CommandId);
+                    _handlerRegistry.Unregister(p.Handler.CommandId);
                     break;
 
                 case UpdateHandler p:
-                    HandlerRegistry.Unregister(p.OldHandler.CommandId);
-                    HandlerRegistry.Register(p.NewHandler);
+                    _handlerRegistry.Unregister(p.OldHandler.CommandId);
+                    _handlerRegistry.Register(p.NewHandler);
                     break;
 
                 // When adding children, register all handlers in the new subtree
                 case AddChild p:
-                    HandlerRegistry.RegisterHandlers(p.Child);
+                    _handlerRegistry.RegisterHandlers(p.Child);
                     break;
 
                 case AddRoot p:
-                    HandlerRegistry.RegisterHandlers(p.Element);
+                    _handlerRegistry.RegisterHandlers(p.Element);
                     break;
 
                 case ReplaceChild p:
-                    HandlerRegistry.UnregisterHandlers(p.OldElement);
-                    HandlerRegistry.RegisterHandlers(p.NewElement);
+                    _handlerRegistry.UnregisterHandlers(p.OldElement);
+                    _handlerRegistry.RegisterHandlers(p.NewElement);
                     break;
 
                 // When removing children, unregister all handlers in the old subtree
                 case RemoveChild p:
-                    HandlerRegistry.UnregisterHandlers(p.Child);
+                    _handlerRegistry.UnregisterHandlers(p.Child);
                     break;
 
                 case ClearChildren p:
                     foreach (var child in p.OldChildren)
                     {
-                        HandlerRegistry.UnregisterHandlers(child);
+                        _handlerRegistry.UnregisterHandlers(child);
                     }
                     break;
 
@@ -340,7 +357,7 @@ public sealed class Runtime<TProgram, TModel, TArgument> : IDisposable
                 case SetChildrenHtml p:
                     foreach (var child in p.Children)
                     {
-                        HandlerRegistry.RegisterHandlers(child);
+                        _handlerRegistry.RegisterHandlers(child);
                     }
                     break;
 
@@ -348,7 +365,7 @@ public sealed class Runtime<TProgram, TModel, TArgument> : IDisposable
                 case AppendChildrenHtml p:
                     foreach (var child in p.Children)
                     {
-                        HandlerRegistry.RegisterHandlers(child);
+                        _handlerRegistry.RegisterHandlers(child);
                     }
                     break;
             }
@@ -425,7 +442,7 @@ public sealed class Runtime<TProgram, TModel, TArgument> : IDisposable
         var runtime = new Runtime<TProgram, TModel, TArgument>(apply, titleChanged, navigationExecutor);
 
         // Wire the handler registry's dispatch to the runtime (needed for event delegation)
-        HandlerRegistry.Dispatch = runtime.DispatchFromSubscription;
+        runtime._handlerRegistry.Dispatch = runtime.DispatchFromSubscription;
 
         // Phase 2: Initialize the program
         var (model, initialCommand) = TProgram.Initialize(argument);
@@ -435,7 +452,7 @@ public sealed class Runtime<TProgram, TModel, TArgument> : IDisposable
         var patches = Operations.Diff(null, document.Body);
 
         // Register all event handlers from the initial view tree
-        HandlerRegistry.RegisterHandlers(document.Body);
+        runtime._handlerRegistry.RegisterHandlers(document.Body);
 
         apply(patches);
         runtime._currentDocument = document;
@@ -545,8 +562,8 @@ public sealed class Runtime<TProgram, TModel, TArgument> : IDisposable
         using var activity = _activitySource.StartActivity("Abies.Stop");
 
         SubscriptionManager.Stop(_subscriptionState);
-        HandlerRegistry.Dispatch = null;
-        HandlerRegistry.Clear();
+        _handlerRegistry.Dispatch = null;
+        _handlerRegistry.Clear();
         _core.Dispose();
 
         activity?.SetStatus(ActivityStatusCode.Ok);
