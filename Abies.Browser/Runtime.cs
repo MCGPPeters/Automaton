@@ -166,7 +166,7 @@ public static class Runtime
         var effectiveInterpreter = interpreter ?? NoOpInterpreter;
 
         // Step 8: Start the core MVU runtime.
-        _ = await Runtime<TProgram, TModel, TArgument>.Start(
+        var runtime = await Runtime<TProgram, TModel, TArgument>.Start(
             apply: BrowserApply,
             interpreter: effectiveInterpreter,
             argument: argument,
@@ -174,7 +174,13 @@ public static class Runtime
             navigationExecutor: NavigationExecutor,
             initialUrl: initialUrl);
 
-        // Step 9: Keep the WASM process alive indefinitely.
+        // Step 9: Wire the runtime's handler registry to the browser interop layer.
+        // The [JSExport] DispatchDomEvent method is static, so it needs a static
+        // reference to the runtime's handler registry. Safe because WASM is
+        // single-threaded — one runtime, one registry per browser tab.
+        Interop.Handlers = runtime.Handlers;
+
+        // Step 10: Keep the WASM process alive indefinitely.
         // Main must not return or the .NET runtime is torn down.
         await Task.Delay(Timeout.Infinite);
     }

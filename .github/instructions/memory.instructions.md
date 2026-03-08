@@ -15,6 +15,31 @@ Key reminders:
 - Follow the PR template at `.github/pull_request_template.md`
 - Use Conventional Commits format for PR titles
 
+## ✅ APPLIED: Instance-Based HandlerRegistry (2026-03-08)
+
+**Branch**: `feat/ssr`
+
+**Problem**: `HandlerRegistry` was a `static class` with static global state (`Dictionary<string, Handler>`).
+This made it impossible to run concurrent server-side MVU sessions — all sessions would share one handler map,
+causing cross-session event routing corruption.
+
+**Solution**: Converted `HandlerRegistry` from `static class` → `sealed class` with instance state.
+Each `Runtime` instance now owns its own `HandlerRegistry` via the `Handlers` property.
+
+**Files Changed**:
+- `Abies/HandlerRegistry.cs` — `static class` → `sealed class`, all members instance-based
+- `Abies/Runtime.cs` — Holds `_handlerRegistry` field, exposes `Handlers` property, `UpdateHandlerRegistry` now instance method
+- `Abies.Browser/Interop.cs` — Added `static HandlerRegistry? Handlers` property for `[JSExport]` bridge (safe: WASM is single-threaded)
+- `Abies.Browser/Runtime.cs` — Wires `Interop.Handlers = runtime.Handlers` after starting the runtime
+- `Abies.Server/Session.cs` — Uses `_runtime.Handlers.CreateMessage()` instead of static `HandlerRegistry.CreateMessage()`
+
+**Architectural Principle**: This is the *Instance per Session* pattern — each session gets isolated mutable state.
+The browser side bridges via a static field since WASM `[JSExport]` requires static methods, but this is safe
+because WASM is guaranteed single-threaded (one runtime per browser tab).
+
+**Test Impact**: Zero regressions — all 725 tests pass across 7 test projects. Tests that previously relied
+on static `HandlerRegistry` state now get implicit isolation since each `Runtime.Start()` creates its own registry.
+
 ## 📋 TODO: File GitHub Issue — C# Record Inheritance Property Shadowing (2026-03-06)
 
 **Status**: Ready to file — no duplicate found on `dotnet/roslyn` or `dotnet/csharplang`.
