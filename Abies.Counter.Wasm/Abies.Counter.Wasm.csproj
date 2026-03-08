@@ -15,6 +15,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\Abies.Browser\Abies.Browser.csproj" />
+    <ProjectReference Include="..\Abies.Counter\Abies.Counter.csproj" />
   </ItemGroup>
 
   <!-- Copy wwwroot files to the AppBundle output directory after WASM bundle generation. -->
