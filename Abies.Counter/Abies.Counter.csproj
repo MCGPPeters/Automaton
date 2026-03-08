@@ -1,0 +1,29 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+    <InterceptorsNamespaces>$(InterceptorsNamespaces);Praefixum</InterceptorsNamespaces>
+  </PropertyGroup>
+
+  <!-- NuGet package metadata -->
+  <PropertyGroup>
+    <PackageId>Abies.Counter</PackageId>
+    <Title>Abies.Counter</Title>
+    <Description>A minimal counter application demonstrating the Abies MVU framework. Contains the pure program definition (model, messages, view) with no platform dependencies — shared by both WASM and server hosts.</Description>
+    <Authors>Maurice Peters</Authors>
+    <PackageTags>abies;counter;mvu;elm;demo;functional;automaton</PackageTags>
+    <PackageLicenseExpression>Apache-2.0</PackageLicenseExpression>
+    <RepositoryUrl>https://github.com/MCGPPeters/Automaton</RepositoryUrl>
+    <RepositoryType>git</RepositoryType>
+    <PackageProjectUrl>https://github.com/MCGPPeters/Automaton</PackageProjectUrl>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Abies\Abies.csproj" />
+    <PackageReference Include="Praefixum" Version="2.0.1" />
+  </ItemGroup>
+
+</Project>

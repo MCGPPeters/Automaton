@@ -9,6 +9,10 @@
 //
 // Implements Program<CounterModel, Unit> which extends the Automaton kernel
 // with View and Subscriptions.
+//
+// This is a pure program definition with no platform dependencies. Both the
+// WASM host (Abies.Counter.Wasm) and server host (Abies.Counter.Server)
+// reference this library.
 // =============================================================================
 
 using Abies.DOM;
@@ -77,7 +81,7 @@ public sealed class CounterProgram : Program<CounterModel, Unit>
     /// <remarks>
     /// <para>
     /// The view is a pure function of the model. The CSS classes reference
-    /// styles defined in index.html's embedded stylesheet.
+    /// styles defined in the host's index.html stylesheet.
     /// </para>
     /// </remarks>
     public static Document View(CounterModel model) =>
