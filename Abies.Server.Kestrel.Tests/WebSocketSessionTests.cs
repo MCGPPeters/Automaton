@@ -40,7 +40,7 @@ public class WebSocketSessionTests
             new RenderMode.InteractiveServer());
 
         using var ws = await ConnectWebSocket(host);
-        var batch = await ReceiveAllInitialBatches(ws);
+        var batch = await ReceiveInitialBatch(ws);
 
         Assert.True(batch.PatchCount > 0, "Expected at least one patch in initial render");
         Assert.True(batch.Strings.Count > 0, "Expected strings in the string table");
@@ -53,7 +53,7 @@ public class WebSocketSessionTests
             new RenderMode.InteractiveServer());
 
         using var ws = await ConnectWebSocket(host);
-        var batch = await ReceiveAllInitialBatches(ws);
+        var batch = await ReceiveInitialBatch(ws);
 
         // The initial render should contain "Count: 0" in the string table
         var allStrings = string.Join(" ", batch.Strings);
@@ -71,7 +71,7 @@ public class WebSocketSessionTests
             new RenderMode.InteractiveServer());
 
         using var ws = await ConnectWebSocket(host);
-        var initialBatch = await ReceiveAllInitialBatches(ws);
+        var initialBatch = await ReceiveInitialBatch(ws);
 
         var incrementCommandId = FindHandlerCommandId(initialBatch, "increment");
         Assert.NotNull(incrementCommandId);
@@ -90,7 +90,7 @@ public class WebSocketSessionTests
             new RenderMode.InteractiveServer());
 
         using var ws = await ConnectWebSocket(host);
-        var initialBatch = await ReceiveAllInitialBatches(ws);
+        var initialBatch = await ReceiveInitialBatch(ws);
 
         var decrementCommandId = FindHandlerCommandId(initialBatch, "decrement");
         Assert.NotNull(decrementCommandId);
@@ -109,7 +109,7 @@ public class WebSocketSessionTests
             new RenderMode.InteractiveServer());
 
         using var ws = await ConnectWebSocket(host);
-        var batch = await ReceiveAllInitialBatches(ws);
+        var batch = await ReceiveInitialBatch(ws);
 
         var incrementCommandId = FindHandlerCommandId(batch, "increment");
         Assert.True(incrementCommandId is not null, "No initial increment handler");
@@ -144,7 +144,7 @@ public class WebSocketSessionTests
             new RenderMode.InteractiveServer());
 
         using var ws = await ConnectWebSocket(host);
-        _ = await ReceiveAllInitialBatches(ws); // consume initial
+        _ = await ReceiveInitialBatch(ws); // consume initial
 
         // Send a URL change event
         await SendUrlChangeEvent(ws, "/articles");
@@ -166,10 +166,10 @@ public class WebSocketSessionTests
 
         // Connect two independent sessions
         using var ws1 = await ConnectWebSocket(host);
-        var batch1 = await ReceiveAllInitialBatches(ws1);
+        var batch1 = await ReceiveInitialBatch(ws1);
 
         using var ws2 = await ConnectWebSocket(host);
-        var batch2 = await ReceiveAllInitialBatches(ws2);
+        var batch2 = await ReceiveInitialBatch(ws2);
 
         // Increment session 1 twice — must track commandId updates
         var cmdId1 = FindHandlerCommandId(batch1, "increment")!;
@@ -205,7 +205,7 @@ public class WebSocketSessionTests
             new RenderMode.InteractiveServer());
 
         var ws = await ConnectWebSocket(host);
-        _ = await ReceiveAllInitialBatches(ws);
+        _ = await ReceiveInitialBatch(ws);
 
         // Close gracefully — should not throw on the server
         await ws.CloseAsync(
@@ -272,30 +272,13 @@ public class WebSocketSessionTests
     // =========================================================================
 
     /// <summary>
-    /// Receives all binary WebSocket frames sent during the initial render
-    /// and merges them into a single PatchBatch. The runtime fires two
-    /// Apply calls on start: one for body patches, one for head patches.
-    /// Both are fire-and-forget, so we need to read both frames.
+    /// Receives the initial binary patch batch sent on WebSocket connect.
+    /// The runtime merges body + head patches into a single Apply call,
+    /// so a single binary frame contains the entire initial render.
     /// </summary>
-    private static async Task<PatchBatch> ReceiveAllInitialBatches(
-        WebSocket ws, int timeoutMs = 5000)
-    {
-        var allPatches = new List<PatchEntry>();
-        var allStrings = new List<string>();
-        var totalPatchCount = 0;
-
-        // Read frames until we get both body and head patches.
-        // The runtime sends exactly 2 apply calls on startup (body + head).
-        for (var i = 0; i < 2; i++)
-        {
-            var batch = await ReceiveBinaryBatch(ws, timeoutMs);
-            totalPatchCount += batch.PatchCount;
-            allPatches.AddRange(batch.Patches);
-            allStrings.AddRange(batch.Strings);
-        }
-
-        return new PatchBatch(totalPatchCount, allStrings, allPatches);
-    }
+    private static Task<PatchBatch> ReceiveInitialBatch(
+        WebSocket ws, int timeoutMs = 5000) =>
+        ReceiveBinaryBatch(ws, timeoutMs);
 
     /// <summary>
     /// Receives a single binary WebSocket frame and parses it as a patch batch.

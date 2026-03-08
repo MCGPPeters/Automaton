@@ -449,23 +449,36 @@ public sealed class Runtime<TProgram, TModel, TArgument> : IDisposable
 
         // Phase 3: Render initial view and apply
         var document = TProgram.View(model);
-        var patches = Operations.Diff(null, document.Body);
+        var bodyPatches = Operations.Diff(null, document.Body);
+        var headPatches = HeadDiff.Diff([], document.Head);
+
+        // Merge body + head into a single patch list (same as Observe does)
+        IReadOnlyList<Patch> allPatches;
+        if (headPatches.Count > 0)
+        {
+            var merged = new List<Patch>(bodyPatches.Count + headPatches.Count);
+            merged.AddRange(bodyPatches);
+            merged.AddRange(headPatches);
+            allPatches = merged;
+        }
+        else
+        {
+            allPatches = bodyPatches;
+        }
 
         // Register all event handlers from the initial view tree
         runtime._handlerRegistry.RegisterHandlers(document.Body);
 
-        apply(patches);
+        // Single apply call — one binary batch for the entire initial render
+        if (allPatches.Count > 0)
+        {
+            apply(allPatches);
+        }
+
         runtime._currentDocument = document;
 
         // Set initial title
         titleChanged?.Invoke(document.Title);
-
-        // Apply initial head content via the same binary protocol
-        var headPatches = HeadDiff.Diff([], document.Head);
-        if (headPatches.Count > 0)
-        {
-            apply(headPatches);
-        }
 
         // Phase 4: Wire the kernel runtime with the instance-method observer.
         // Wrap the caller-supplied interpreter with structural command handling:
