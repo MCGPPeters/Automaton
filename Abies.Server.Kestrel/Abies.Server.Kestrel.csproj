@@ -1,0 +1,33 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+  </PropertyGroup>
+
+  <!-- NuGet package metadata -->
+  <PropertyGroup>
+    <PackageId>Abies.Server.Kestrel</PackageId>
+    <Title>Abies.Server.Kestrel</Title>
+    <Description>Kestrel hosting adapter for the Abies MVU framework. Provides MapAbies endpoint routing for serving server-rendered pages and WebSocket-based interactive sessions.</Description>
+    <Authors>Maurice Peters</Authors>
+    <PackageTags>abies;ssr;server;kestrel;websocket;mvu;elm;functional;automaton</PackageTags>
+    <PackageLicenseExpression>Apache-2.0</PackageLicenseExpression>
+    <RepositoryUrl>https://github.com/MCGPPeters/Automaton</RepositoryUrl>
+    <RepositoryType>git</RepositoryType>
+    <PackageProjectUrl>https://github.com/MCGPPeters/Automaton</PackageProjectUrl>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <FrameworkReference Include="Microsoft.AspNetCore.App" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Abies.Server\Abies.Server.csproj" />
+    <ProjectReference Include="..\Abies\Abies.csproj" />
+    <InternalsVisibleTo Include="Abies.Server.Kestrel.Tests" />
+  </ItemGroup>
+
+</Project>
