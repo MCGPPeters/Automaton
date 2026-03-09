@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1772959662979,
+  "lastUpdate": 1773074421890,
   "repoUrl": "https://github.com/MCGPPeters/Automaton",
   "entries": {
     "Automaton Benchmarks": [
@@ -570,6 +570,120 @@ window.BENCHMARK_DATA = {
             "value": 3570.929292929293,
             "unit": "ns",
             "range": "± 383.4269813817694"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "me@mauricepeters.dev",
+            "name": "MCGPPeters",
+            "username": "MCGPPeters"
+          },
+          "committer": {
+            "email": "MCGPPeters@users.noreply.github.com",
+            "name": "Maurice CGP Peters",
+            "username": "MCGPPeters"
+          },
+          "distinct": true,
+          "id": "ce272087aaa3c1193b3e656fa3521b7d31928b16",
+          "message": "style: Fix import ordering in Wasm transition tests",
+          "timestamp": "2026-03-09T17:39:33+01:00",
+          "tree_id": "6706a500be53bd8392ba0ac909d65e726e6da0e4",
+          "url": "https://github.com/MCGPPeters/Automaton/commit/ce272087aaa3c1193b3e656fa3521b7d31928b16"
+        },
+        "date": 1773074421216,
+        "tool": "benchmarkdotnet",
+        "benches": [
+          {
+            "name": "Automaton.Benchmarks.AutomatonBenchmarks.Dispatch_Single",
+            "value": 5829,
+            "unit": "ns",
+            "range": "± 157.33721746617994"
+          },
+          {
+            "name": "Automaton.Benchmarks.AutomatonBenchmarks.Dispatch_WithObserver",
+            "value": 5900.933333333333,
+            "unit": "ns",
+            "range": "± 108.88031874275447"
+          },
+          {
+            "name": "Automaton.Benchmarks.AutomatonBenchmarks.Dispatch_Batch_100",
+            "value": 55808.61827956989,
+            "unit": "ns",
+            "range": "± 5081.181968044405"
+          },
+          {
+            "name": "Automaton.Benchmarks.AutomatonBenchmarks.Dispatch_WithFeedback",
+            "value": 7749.428571428572,
+            "unit": "ns",
+            "range": "± 137.34429745699688"
+          },
+          {
+            "name": "Automaton.Benchmarks.AutomatonBenchmarks.Dispatch_ComposedObserver",
+            "value": 6930.152173913043,
+            "unit": "ns",
+            "range": "± 177.90590176107966"
+          },
+          {
+            "name": "Automaton.Benchmarks.AutomatonBenchmarks.Handle_Accept",
+            "value": 7318.171717171717,
+            "unit": "ns",
+            "range": "± 504.9179169581809"
+          },
+          {
+            "name": "Automaton.Benchmarks.AutomatonBenchmarks.Handle_Reject",
+            "value": 3871.785714285714,
+            "unit": "ns",
+            "range": "± 57.516791623675594"
+          },
+          {
+            "name": "Automaton.Benchmarks.AutomatonBenchmarks.Safe_NoTrack_Dispatch_Single",
+            "value": 4810.95,
+            "unit": "ns",
+            "range": "± 110.61382563247973"
+          },
+          {
+            "name": "Automaton.Benchmarks.AutomatonBenchmarks.Safe_NoTrack_Dispatch_WithFeedback",
+            "value": 6800.6,
+            "unit": "ns",
+            "range": "± 117.8599653341686"
+          },
+          {
+            "name": "Automaton.Benchmarks.AutomatonBenchmarks.Safe_NoTrack_Handle_Accept",
+            "value": 5970.774193548387,
+            "unit": "ns",
+            "range": "± 186.78824189929074"
+          },
+          {
+            "name": "Automaton.Benchmarks.AutomatonBenchmarks.Safe_NoTrack_Handle_Reject",
+            "value": 3762.609756097561,
+            "unit": "ns",
+            "range": "± 141.64319222059007"
+          },
+          {
+            "name": "Automaton.Benchmarks.AutomatonBenchmarks.Lean_Dispatch_Single",
+            "value": 5072.22,
+            "unit": "ns",
+            "range": "± 133.86856738358463"
+          },
+          {
+            "name": "Automaton.Benchmarks.AutomatonBenchmarks.Lean_Dispatch_WithFeedback",
+            "value": 6152.857142857143,
+            "unit": "ns",
+            "range": "± 91.71662641222451"
+          },
+          {
+            "name": "Automaton.Benchmarks.AutomatonBenchmarks.Lean_Handle_Accept",
+            "value": 5496.590909090909,
+            "unit": "ns",
+            "range": "± 293.96666396299275"
+          },
+          {
+            "name": "Automaton.Benchmarks.AutomatonBenchmarks.Lean_Handle_Reject",
+            "value": 3214.3846153846152,
+            "unit": "ns",
+            "range": "± 141.67882123353397"
           }
         ]
       }
