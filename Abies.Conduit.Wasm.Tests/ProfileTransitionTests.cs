@@ -6,8 +6,8 @@
 // and navigation between own profile and other users' profiles.
 // =============================================================================
 
-using FluentAssertions;
 using Abies.Conduit.App;
+using FluentAssertions;
 
 namespace Abies.Conduit.Wasm.Tests;
 
