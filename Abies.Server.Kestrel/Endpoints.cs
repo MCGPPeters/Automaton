@@ -107,6 +107,21 @@ public static class Endpoints
     /// <summary>
     /// Maps the HTML page GET endpoint that serves the initial server-rendered page.
     /// </summary>
+    /// <remarks>
+    /// <para>
+    /// When the <paramref name="path"/> is a catch-all route (contains <c>**</c>),
+    /// <see cref="EndpointRouteBuilderExtensions.MapFallback(IEndpointRouteBuilder, Delegate)"/>
+    /// is used instead of <see cref="EndpointRouteBuilderExtensions.MapGet(IEndpointRouteBuilder, string, Delegate)"/>.
+    /// This ensures that static file middleware (e.g., <see cref="UseAbiesWasmFiles"/>)
+    /// gets priority over the HTML page handler. Without this, a <c>/{**catch-all}</c>
+    /// route would swallow requests for <c>/_framework/dotnet.js</c> and other static assets.
+    /// </para>
+    /// <para>
+    /// This follows the standard SPA fallback pattern from ASP.NET Core, where
+    /// <c>MapFallback</c> has the lowest route priority — matching only when no
+    /// other endpoint or middleware has handled the request.
+    /// </para>
+    /// </remarks>
     private static void MapPageEndpoint<TProgram, TModel, TArgument>(
         IEndpointRouteBuilder endpoints,
         string path,
@@ -114,7 +129,8 @@ public static class Endpoints
         TArgument argument)
         where TProgram : Program<TModel, TArgument>
     {
-        endpoints.MapGet(path, (HttpContext context) =>
+        // Handler shared by both MapGet and MapFallback
+        RequestDelegate handler = (HttpContext context) =>
         {
             using var activity = _activitySource.StartActivity("Abies.Kestrel.ServePage");
             activity?.SetTag("abies.program", typeof(TProgram).Name);
@@ -131,8 +147,16 @@ public static class Endpoints
 
             activity?.SetStatus(ActivityStatusCode.Ok);
 
-            return Results.Content(html, "text/html; charset=utf-8");
-        });
+            return Results.Content(html, "text/html; charset=utf-8").ExecuteAsync(context);
+        };
+
+        // Catch-all routes use MapFallback for lowest priority — lets static
+        // files middleware serve _framework/*, abies.js, etc. first.
+        // Specific routes use MapGet for normal priority.
+        if (path.Contains("**"))
+            endpoints.MapFallback(handler);
+        else
+            endpoints.MapGet(path, handler);
     }
 
     /// <summary>
@@ -285,7 +309,13 @@ public static class Endpoints
         app.UseStaticFiles(new StaticFileOptions
         {
             FileProvider = new PhysicalFileProvider(fullPath),
-            RequestPath = ""
+            RequestPath = "",
+            // The WASM AppBundle contains files with non-standard extensions
+            // (.dat, .blat, .symbols) that the default content type provider
+            // doesn't recognize. ServeUnknownFileTypes ensures all files are
+            // served, using application/octet-stream as the fallback MIME type.
+            ServeUnknownFileTypes = true,
+            DefaultContentType = "application/octet-stream"
         });
 
         return app;
