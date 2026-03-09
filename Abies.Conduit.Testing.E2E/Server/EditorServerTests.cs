@@ -34,7 +34,7 @@ public sealed class EditorServerTests : IAsyncLifetime
         await _seeder.RegisterUserAsync(username, email, "password123");
         await LoginViaUi(email, "password123");
 
-        await _page.NavigateInAppAsync("/editor");
+        await _page.NavigateInApp("/editor");
         await _page.WaitForSelectorAsync(".editor-page", new() { Timeout = 10000 });
         await _page.GetByPlaceholder("Article Title").WaitForAsync(new() { Timeout = 10000 });
 
@@ -42,12 +42,12 @@ public sealed class EditorServerTests : IAsyncLifetime
         const string description = "A description for server E2E testing";
         const string body = "This article was created by a server E2E test.";
 
-        await _page.GetByPlaceholder("Article Title").FillAndWaitForPatchAsync(title);
-        await _page.GetByPlaceholder("What's this article about?").FillAndWaitForPatchAsync(description);
-        await _page.GetByPlaceholder("Write your article (in markdown)").FillAndWaitForPatchAsync(body);
+        await _page.GetByPlaceholder("Article Title").FillAndWaitForPatch(title);
+        await _page.GetByPlaceholder("What's this article about?").FillAndWaitForPatch(description);
+        await _page.GetByPlaceholder("Write your article (in markdown)").FillAndWaitForPatch(body);
 
         var tagInput = _page.GetByPlaceholder("Enter tags");
-        await tagInput.FillAndWaitForPatchAsync("server");
+        await tagInput.FillAndWaitForPatch("server");
         await tagInput.PressAsync("Enter");
 
         var publishBtn = _page.GetByRole(AriaRole.Button, new() { Name = "Publish Article" });
@@ -55,7 +55,7 @@ public sealed class EditorServerTests : IAsyncLifetime
         await publishBtn.ClickAsync();
 
         // Wait for navigation to article page
-        await _page.WaitForTimeoutAsync(8000);
+        await _page.WaitForURLAsync("**/article/**", new() { Timeout = 15000 });
         var currentPath = new Uri(_page.Url).AbsolutePath;
 
         if (!currentPath.StartsWith("/article/"))
@@ -69,7 +69,7 @@ public sealed class EditorServerTests : IAsyncLifetime
 
         var slug = currentPath.Split('/').Last();
         await _seeder.WaitForArticleAsync(slug);
-        await _page.NavigateInAppAsync($"/article/{slug}");
+        await _page.NavigateInApp($"/article/{slug}");
 
         await Expect(_page.Locator("h1")).ToContainTextAsync(title, new() { Timeout = 15000 });
     }
@@ -82,17 +82,17 @@ public sealed class EditorServerTests : IAsyncLifetime
         await _seeder.RegisterUserAsync(username, email, "password123");
         await LoginViaUi(email, "password123");
 
-        await _page.NavigateInAppAsync("/editor");
+        await _page.NavigateInApp("/editor");
         await _page.WaitForSelectorAsync(".editor-page", new() { Timeout = 10000 });
 
         var tagInput = _page.GetByPlaceholder("Enter tags");
-        await tagInput.FillAndWaitForPatchAsync("alpha");
+        await tagInput.FillAndWaitForPatch("alpha");
         await tagInput.PressAsync("Enter");
         // Wait for the tag pill to appear and input to clear before adding next tag
         await Expect(_page.Locator(".tag-list .tag-default").Nth(0)).ToContainTextAsync("alpha", new() { Timeout = 5000 });
         await Expect(tagInput).ToHaveValueAsync("", new() { Timeout = 5000 });
 
-        await tagInput.FillAndWaitForPatchAsync("beta");
+        await tagInput.FillAndWaitForPatch("beta");
         await tagInput.PressAsync("Enter");
         // Wait for second tag pill
         await Expect(_page.Locator(".tag-list .tag-default").Nth(1)).ToContainTextAsync("beta", new() { Timeout = 5000 });
@@ -105,8 +105,8 @@ public sealed class EditorServerTests : IAsyncLifetime
     {
         await _page.GotoAsync("/login");
         await _page.WaitForSelectorAsync("h1:has-text('Sign in')");
-        await _page.GetByPlaceholder("Email").FillAndWaitForPatchAsync(email);
-        await _page.GetByPlaceholder("Password").FillAndWaitForPatchAsync(password);
+        await _page.GetByPlaceholder("Email").FillAndWaitForPatch(email);
+        await _page.GetByPlaceholder("Password").FillAndWaitForPatch(password);
         await _page.GetByRole(AriaRole.Button, new() { Name = "Sign in" }).ClickAsync();
         await _page.WaitForSelectorAsync(".home-page", new() { Timeout = 15000 });
     }

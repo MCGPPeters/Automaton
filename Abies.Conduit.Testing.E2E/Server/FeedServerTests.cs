@@ -45,7 +45,6 @@ public sealed class FeedServerTests : IAsyncLifetime
         await _page.WaitForSelectorAsync(".home-page", new() { Timeout = 15000 });
 
         await _page.Locator(".feed-toggle").GetByText("Global Feed").ClickAsync();
-        await _page.WaitForTimeoutAsync(2000);
 
         await Expect(_page.Locator(".article-preview").First).ToBeVisibleAsync(
             new() { Timeout = 10000 });

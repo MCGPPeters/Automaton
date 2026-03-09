@@ -66,7 +66,7 @@ public sealed class ArticleServerTests : IAsyncLifetime
 
         await LoginViaUi(readerEmail, "password123");
 
-        await _page.NavigateInAppAsync($"/article/{article.Slug}");
+        await _page.NavigateInApp($"/article/{article.Slug}");
         await Expect(_page.Locator("h1")).ToContainTextAsync(article.Title,
             new() { Timeout = 15000 });
 
@@ -84,8 +84,8 @@ public sealed class ArticleServerTests : IAsyncLifetime
     {
         await _page.GotoAsync("/login");
         await _page.WaitForSelectorAsync("h1:has-text('Sign in')");
-        await _page.GetByPlaceholder("Email").FillAndWaitForPatchAsync(email);
-        await _page.GetByPlaceholder("Password").FillAndWaitForPatchAsync(password);
+        await _page.GetByPlaceholder("Email").FillAndWaitForPatch(email);
+        await _page.GetByPlaceholder("Password").FillAndWaitForPatch(password);
         await _page.GetByRole(AriaRole.Button, new() { Name = "Sign in" }).ClickAsync();
         await _page.WaitForSelectorAsync(".home-page", new() { Timeout = 15000 });
     }

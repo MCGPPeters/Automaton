@@ -56,7 +56,7 @@ public sealed class EditorTests : IAsyncLifetime
         };
 
         // Navigate to new article editor (SPA navigation to preserve session)
-        await _page.NavigateInAppAsync("/editor");
+        await _page.NavigateInApp("/editor");
         await _page.WaitForSelectorAsync(".editor-page", new() { Timeout = 10000 });
         await _page.GetByPlaceholder("Article Title").WaitForAsync(new() { Timeout = 10000 });
 
@@ -105,7 +105,7 @@ public sealed class EditorTests : IAsyncLifetime
         await _seeder.WaitForArticleAsync(slug);
 
         // Re-navigate so the WASM re-fetches the now-available article
-        await _page.NavigateInAppAsync($"/article/{slug}");
+        await _page.NavigateInApp($"/article/{slug}");
 
         // Assert — should show the article title
         await Expect(_page.Locator("h1")).ToContainTextAsync(title, new() { Timeout = 15000 });
@@ -129,7 +129,7 @@ public sealed class EditorTests : IAsyncLifetime
 
         // Navigate to the editor directly (avoids relying on <a> click interception
         // to transition from /article/ to /editor/ which could race with WaitForFunction)
-        await _page.NavigateInAppAsync($"/editor/{article.Slug}");
+        await _page.NavigateInApp($"/editor/{article.Slug}");
         await _page.WaitForSelectorAsync(".editor-page", new() { Timeout = 10000 });
 
         // Wait for the editor form to populate with the existing article data
@@ -153,7 +153,7 @@ public sealed class EditorTests : IAsyncLifetime
         await _seeder.WaitForArticleWithTitleAsync(updatedSlug, newTitle);
 
         // Re-navigate to force a fresh fetch of the updated article
-        await _page.NavigateInAppAsync($"/article/{updatedSlug}");
+        await _page.NavigateInApp($"/article/{updatedSlug}");
 
         // Assert — should show the updated title on the article page
         await Expect(_page.Locator("h1")).ToContainTextAsync(newTitle, new() { Timeout = 15000 });
@@ -168,7 +168,7 @@ public sealed class EditorTests : IAsyncLifetime
         await _seeder.RegisterUserAsync(username, email, "password123");
         await LoginViaUi(email, "password123");
 
-        await _page.NavigateInAppAsync("/editor");
+        await _page.NavigateInApp("/editor");
         await _page.WaitForSelectorAsync(".editor-page", new() { Timeout = 10000 });
 
         // Act — add tags

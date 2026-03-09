@@ -84,7 +84,7 @@ public sealed class ArticleTests : IAsyncLifetime
         await LoginViaUi(email, "password123");
 
         // Navigate to article (SPA navigation to preserve session)
-        await _page.NavigateInAppAsync($"/article/{article.Slug}");
+        await _page.NavigateInApp($"/article/{article.Slug}");
 
         // Wait for article content to load (not just the loading state)
         await _page.WaitForSelectorAsync("text='Delete Article'", new() { Timeout = 15000 });
@@ -120,7 +120,7 @@ public sealed class ArticleTests : IAsyncLifetime
         await LoginViaUi(readerEmail, "password123");
 
         // Navigate to article (SPA navigation to preserve session)
-        await _page.NavigateInAppAsync($"/article/{article.Slug}");
+        await _page.NavigateInApp($"/article/{article.Slug}");
 
         // Wait for article content to load with favorite button visible
         await _page.WaitForSelectorAsync(
