@@ -128,7 +128,7 @@ public static class Page
     ///   <item>DOCTYPE and html/head/body structure</item>
     ///   <item>Title from <see cref="Document.Title"/></item>
     ///   <item>Head elements from <see cref="Document.Head"/> via <c>ToHtml()</c></item>
-    ///   <item>Body content from <see cref="Document.Body"/> via <see cref="Abies.Render.Html"/></item>
+    ///   <item>Body content from <see cref="Document.Body"/> via <see cref="Render.Html"/></item>
     ///   <item>Bootstrap scripts based on <see cref="RenderMode"/></item>
     /// </list>
     /// </para>
@@ -195,8 +195,14 @@ public static class Page
                 break;
 
             case RenderMode.InteractiveWasm:
-                // .NET WASM bootstrap — the standard dotnet.js loader.
-                sb.Append("  <script type=\"module\" src=\"_framework/dotnet.js\"></script>\n");
+                // Inline module that imports dotnet.js and starts the .NET runtime.
+                // This replaces the standalone main.js used in pure-WASM hosting.
+                // The import path is relative to the page URL (root), so
+                // "./_framework/dotnet.js" resolves to the AppBundle's _framework dir.
+                sb.Append("  <script type=\"module\">\n");
+                sb.Append("    import { dotnet } from './_framework/dotnet.js';\n");
+                sb.Append("    await dotnet.run();\n");
+                sb.Append("  </script>\n");
                 break;
 
             case RenderMode.InteractiveAuto auto:
@@ -204,7 +210,10 @@ public static class Page
                 sb.Append("  <script src=\"/_abies/abies-server.js\" data-ws-path=\"");
                 sb.Append(System.Web.HttpUtility.HtmlAttributeEncode(auto.WebSocketPath));
                 sb.Append("\" data-auto=\"true\"></script>\n");
-                sb.Append("  <script type=\"module\" src=\"_framework/dotnet.js\"></script>\n");
+                sb.Append("  <script type=\"module\">\n");
+                sb.Append("    import { dotnet } from './_framework/dotnet.js';\n");
+                sb.Append("    await dotnet.run();\n");
+                sb.Append("  </script>\n");
                 break;
         }
     }

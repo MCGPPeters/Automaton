@@ -235,4 +235,59 @@ public static class Endpoints
 
         return app;
     }
+
+    /// <summary>
+    /// Serves the WASM application files (e.g., <c>_framework/dotnet.js</c>) from the
+    /// published AppBundle directory of a WASM project.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// This enables the <see cref="RenderMode.InteractiveWasm"/> hosting model where:
+    /// <list type="number">
+    ///   <item>The server renders the initial HTML page (fast first paint)</item>
+    ///   <item>The browser downloads the WASM bundle from <c>/_framework/</c></item>
+    ///   <item>The .NET WASM runtime boots and the MVU loop starts client-side</item>
+    /// </list>
+    /// </para>
+    /// <para>
+    /// The <paramref name="appBundlePath"/> should point to the directory containing
+    /// <c>_framework/</c> and <c>abies.js</c> — typically the output of
+    /// <c>dotnet publish</c> for a browser-wasm project.
+    /// </para>
+    /// <example>
+    /// <code>
+    /// app.UseAbiesWasmFiles(
+    ///     Path.Combine("..", "Abies.Counter.Wasm", "bin", "Release",
+    ///         "net10.0", "browser-wasm", "publish", "wwwroot"));
+    /// </code>
+    /// </example>
+    /// </remarks>
+    /// <param name="app">The application builder.</param>
+    /// <param name="appBundlePath">
+    /// Absolute or relative path to the WASM AppBundle directory.
+    /// Must contain <c>_framework/dotnet.js</c> and other WASM runtime files.
+    /// </param>
+    /// <returns>The application builder for chaining.</returns>
+    /// <exception cref="DirectoryNotFoundException">
+    /// Thrown when <paramref name="appBundlePath"/> does not exist.
+    /// </exception>
+    public static IApplicationBuilder UseAbiesWasmFiles(
+        this IApplicationBuilder app,
+        string appBundlePath)
+    {
+        var fullPath = Path.GetFullPath(appBundlePath);
+
+        if (!Directory.Exists(fullPath))
+            throw new DirectoryNotFoundException(
+                $"WASM AppBundle directory not found: {fullPath}. " +
+                "Ensure the WASM project has been published before starting the server.");
+
+        app.UseStaticFiles(new StaticFileOptions
+        {
+            FileProvider = new PhysicalFileProvider(fullPath),
+            RequestPath = ""
+        });
+
+        return app;
+    }
 }

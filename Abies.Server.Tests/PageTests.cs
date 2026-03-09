@@ -14,12 +14,10 @@
 // =============================================================================
 
 using Abies.DOM;
-using Abies.Server;
 using Abies.Subscriptions;
 using Automaton;
 using static Abies.Html.Attributes;
 using static Abies.Html.Elements;
-using static Abies.Html.Events;
 
 namespace Abies.Server.Tests;
 
@@ -197,7 +195,8 @@ public class PageTests
         var html = Page.Render<TestCounter, TestModel, Unit>(
             new RenderMode.InteractiveWasm());
 
-        Assert.Contains("""<script type="module" src="_framework/dotnet.js"></script>""", html);
+        Assert.Contains("import { dotnet } from './_framework/dotnet.js'", html);
+        Assert.Contains("await dotnet.run()", html);
     }
 
     [Fact]
