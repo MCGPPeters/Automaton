@@ -1,7 +1,7 @@
 // =============================================================================
-// Login Page — Sign In Form
+// Register Page — Sign Up Form
 // =============================================================================
-// Authentication form with email and password fields.
+// Registration form with username, email, and password fields.
 // Shows validation errors from the API.
 // =============================================================================
 
@@ -10,17 +10,17 @@ using static Abies.Html.Attributes;
 using static Abies.Html.Elements;
 using static Abies.Html.Events;
 
-namespace Abies.Conduit.Wasm.Pages;
+namespace Abies.Conduit.App.Pages;
 
 /// <summary>
-/// Login page view — sign in form.
+/// Register page view — sign up form.
 /// </summary>
-public static class Login
+public static class Register
 {
     /// <summary>
-    /// Renders the login page.
+    /// Renders the registration page.
     /// </summary>
-    public static Node View(LoginModel model) =>
+    public static Node View(RegisterModel model) =>
         div([class_("auth-page")],
         [
             div([class_("container page")],
@@ -29,12 +29,12 @@ public static class Login
                 [
                     div([class_("col-md-6 offset-md-3 col-xs-12")],
                     [
-                        h1([class_("text-xs-center")], [text("Sign in")]),
+                        h1([class_("text-xs-center")], [text("Sign up")]),
                         p([class_("text-xs-center")],
                         [
-                            a([href("/register")], [text("Need an account?")])
+                            a([href("/login")], [text("Have an account?")])
                         ]),
-                        ErrorList(model.Errors),
+                        Login.ErrorList(model.Errors),
                         Form(model)
                     ])
                 ])
@@ -42,11 +42,20 @@ public static class Login
         ]);
 
     /// <summary>
-    /// Renders the login form.
+    /// Renders the registration form.
     /// </summary>
-    private static Node Form(LoginModel model) =>
-        form([onsubmit(new LoginSubmitted())],
+    private static Node Form(RegisterModel model) =>
+        form([onsubmit(new RegisterSubmitted())],
         [
+            fieldset([class_("form-group")],
+            [
+                input([
+                    class_("form-control form-control-lg"),
+                    type("text"),
+                    placeholder("Your Name"),
+                    value(model.Username),
+                    oninput(e => new RegisterUsernameChanged(e?.Value ?? ""))])
+            ]),
             fieldset([class_("form-group")],
             [
                 input([
@@ -54,7 +63,7 @@ public static class Login
                     type("email"),
                     placeholder("Email"),
                     value(model.Email),
-                    oninput(e => new LoginEmailChanged(e?.Value ?? ""))])
+                    oninput(e => new RegisterEmailChanged(e?.Value ?? ""))])
             ]),
             fieldset([class_("form-group")],
             [
@@ -63,22 +72,12 @@ public static class Login
                     type("password"),
                     placeholder("Password"),
                     value(model.Password),
-                    oninput(e => new LoginPasswordChanged(e?.Value ?? ""))])
+                    oninput(e => new RegisterPasswordChanged(e?.Value ?? ""))])
             ]),
             button([
                 class_("btn btn-lg btn-primary pull-xs-right"),
                 type("submit"),
                 ..model.IsSubmitting ? [disabled()] : Array.Empty<DOM.Attribute>()],
-                [text(model.IsSubmitting ? "Signing in..." : "Sign in")])
+                [text(model.IsSubmitting ? "Signing up..." : "Sign up")])
         ]);
-
-    /// <summary>
-    /// Renders API error messages.
-    /// </summary>
-    internal static Node ErrorList(IReadOnlyList<string> errors) =>
-        errors.Count == 0
-            ? new Empty()
-            : ul([class_("error-messages")],
-                errors.Select(error =>
-                    li([], [text(error)])).ToArray());
 }

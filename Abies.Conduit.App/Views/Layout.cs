@@ -9,7 +9,7 @@ using Abies.DOM;
 using static Abies.Html.Attributes;
 using static Abies.Html.Elements;
 
-namespace Abies.Conduit.Wasm.Views;
+namespace Abies.Conduit.App.Views;
 
 /// <summary>
 /// Shared layout components: navigation bar and footer.

@@ -11,7 +11,7 @@ using static Abies.Html.Attributes;
 using static Abies.Html.Elements;
 using static Abies.Html.Events;
 
-namespace Abies.Conduit.Wasm.Views;
+namespace Abies.Conduit.App.Views;
 
 /// <summary>
 /// Renders article preview cards for feed lists.

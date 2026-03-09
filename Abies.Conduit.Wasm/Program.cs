@@ -13,7 +13,7 @@
 // The interpreter converts ConduitCommands into HTTP API calls.
 // =============================================================================
 
-using Abies.Conduit.Wasm;
+using Abies.Conduit.App;
 using Automaton;
 
 await Abies.Browser.Runtime.Run<ConduitProgram, Model, Unit>(

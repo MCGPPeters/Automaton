@@ -8,7 +8,7 @@
 // response Messages back into the MVU loop.
 // =============================================================================
 
-namespace Abies.Conduit.Wasm;
+namespace Abies.Conduit.App;
 
 /// <summary>
 /// All Conduit-specific commands extend this marker.

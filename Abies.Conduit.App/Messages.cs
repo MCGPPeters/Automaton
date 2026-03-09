@@ -12,7 +12,7 @@
 //   - UI interaction messages (tab change, pagination, favorite, follow)
 // =============================================================================
 
-namespace Abies.Conduit.Wasm;
+namespace Abies.Conduit.App;
 
 /// <summary>
 /// All application-specific messages implement this marker interface.

@@ -10,7 +10,7 @@ using static Abies.Html.Attributes;
 using static Abies.Html.Elements;
 using static Abies.Html.Events;
 
-namespace Abies.Conduit.Wasm.Pages;
+namespace Abies.Conduit.App.Pages;
 
 /// <summary>
 /// Home page view — feed tabs, article list, and popular tags.

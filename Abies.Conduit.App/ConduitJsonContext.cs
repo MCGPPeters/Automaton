@@ -10,7 +10,7 @@
 
 using System.Text.Json.Serialization;
 
-namespace Abies.Conduit.Wasm;
+namespace Abies.Conduit.App;
 
 // ─── Request DTOs (for POST/PUT bodies) ──────────────────────────────────────
 

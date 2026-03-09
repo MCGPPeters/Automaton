@@ -16,7 +16,7 @@ using Abies.Subscriptions;
 using Automaton;
 using static Abies.Html.Elements;
 
-namespace Abies.Conduit.Wasm;
+namespace Abies.Conduit.App;
 
 /// <summary>
 /// The Conduit MVU program — implements the full Abies contract.
