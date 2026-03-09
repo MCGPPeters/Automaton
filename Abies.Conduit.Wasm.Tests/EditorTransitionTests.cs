@@ -6,8 +6,8 @@
 // article creation vs update dispatch, and API response processing.
 // =============================================================================
 
-using FluentAssertions;
 using Abies.Conduit.App;
+using FluentAssertions;
 
 namespace Abies.Conduit.Wasm.Tests;
 

@@ -6,8 +6,8 @@
 // and logout behavior — all as pure function tests.
 // =============================================================================
 
-using FluentAssertions;
 using Abies.Conduit.App;
+using FluentAssertions;
 
 namespace Abies.Conduit.Wasm.Tests;
 
