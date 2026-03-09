@@ -7,6 +7,7 @@
 // =============================================================================
 
 using FluentAssertions;
+using Abies.Conduit.App;
 
 namespace Abies.Conduit.Wasm.Tests;
 

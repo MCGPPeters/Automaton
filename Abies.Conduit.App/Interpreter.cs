@@ -15,7 +15,7 @@
 using System.Net.Http.Json;
 using Automaton;
 
-namespace Abies.Conduit.Wasm;
+namespace Abies.Conduit.App;
 
 /// <summary>
 /// HTTP interpreter that converts commands into API calls and feedback messages.

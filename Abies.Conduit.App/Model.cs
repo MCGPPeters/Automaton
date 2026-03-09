@@ -10,7 +10,7 @@
 // - ADR-003: Virtual DOM
 // =============================================================================
 
-namespace Abies.Conduit.Wasm;
+namespace Abies.Conduit.App;
 
 // ─── Top-Level Model ──────────────────────────────────────────────────────────
 

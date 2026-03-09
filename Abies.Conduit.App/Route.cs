@@ -9,7 +9,7 @@
 
 using Automaton;
 
-namespace Abies.Conduit.Wasm;
+namespace Abies.Conduit.App;
 /// <summary>
 /// Pure URL routing functions.
 /// </summary>

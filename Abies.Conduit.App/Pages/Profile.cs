@@ -11,7 +11,7 @@ using static Abies.Html.Attributes;
 using static Abies.Html.Elements;
 using static Abies.Html.Events;
 
-namespace Abies.Conduit.Wasm.Pages;
+namespace Abies.Conduit.App.Pages;
 
 /// <summary>
 /// Profile page view — user profile with article tabs.

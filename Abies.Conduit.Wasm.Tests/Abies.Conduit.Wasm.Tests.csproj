@@ -22,11 +22,7 @@
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\Abies.Conduit.Wasm\Abies.Conduit.Wasm.csproj">
-      <!-- Override the RuntimeIdentifier from browser-wasm for test compatibility. -->
-      <SetTargetFramework>TargetFramework=net10.0</SetTargetFramework>
-      <SkipGetTargetFrameworkProperties>true</SkipGetTargetFrameworkProperties>
-    </ProjectReference>
+    <ProjectReference Include="..\Abies.Conduit.App\Abies.Conduit.App.csproj" />
   </ItemGroup>
 
 </Project>
