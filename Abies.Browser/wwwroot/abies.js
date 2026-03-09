@@ -418,6 +418,15 @@ function applyPatch(type, f1, f2, f3) {
             const el = document.getElementById(f1);
             if (el) {
                 el.setAttribute(f2, f3);
+                // For properties that diverge from their HTML attributes after
+                // user interaction (value, checked), also set the DOM property
+                // directly. setAttribute("value", "") only sets the default value,
+                // not the live value that the user sees.
+                if (f2 === "value" && "value" in el) {
+                    el.value = f3;
+                } else if (f2 === "checked" && "checked" in el) {
+                    el.checked = f3 === "" || f3 === "true" || f3 === "checked";
+                }
             }
             break;
         }
@@ -662,6 +671,15 @@ export function applyBinaryBatch(batchData) {
         const f3 = f3Idx >= 0 ? strings[f3Idx] : null;
 
         applyPatch(type, f1, f2, f3);
+    }
+
+    // Signal that WASM has taken over rendering after the first batch.
+    // In InteractiveAuto mode, the server renders the page initially,
+    // then WASM boots and applies patches. This attribute tells tests
+    // and tooling that WASM is ready for interaction.
+    if (!applyBinaryBatch._signaled) {
+        applyBinaryBatch._signaled = true;
+        document.body.setAttribute("data-abies-mode", "wasm");
     }
 }
 

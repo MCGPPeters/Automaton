@@ -73,6 +73,12 @@ public sealed class WebSocketTransport : IDisposable
     public ReceiveEvent CreateReceiveEvent() => ReceiveEventImpl;
 
     /// <summary>
+    /// Returns a <see cref="SendText"/> delegate bound to this WebSocket.
+    /// Sends text messages (e.g., navigation commands) as WebSocket text frames.
+    /// </summary>
+    public SendText CreateSendText() => SendTextImpl;
+
+    /// <summary>
     /// Sends a binary patch batch over the WebSocket as a binary frame.
     /// </summary>
     private async ValueTask SendPatchesImpl(ReadOnlyMemory<byte> patchBatch)
@@ -86,6 +92,28 @@ public sealed class WebSocketTransport : IDisposable
         await _webSocket.SendAsync(
             patchBatch,
             WebSocketMessageType.Binary,
+            endOfMessage: true,
+            CancellationToken.None);
+
+        activity?.SetStatus(ActivityStatusCode.Ok);
+    }
+
+    /// <summary>
+    /// Sends a text message over the WebSocket as a text frame.
+    /// Used for out-of-band server-to-client messages (e.g., navigation commands).
+    /// </summary>
+    private async ValueTask SendTextImpl(string text)
+    {
+        using var activity = _activitySource.StartActivity("Abies.WebSocket.SendText");
+        activity?.SetTag("abies.text.length", text.Length);
+
+        if (_webSocket.State is not WebSocketState.Open)
+            return;
+
+        var bytes = System.Text.Encoding.UTF8.GetBytes(text);
+        await _webSocket.SendAsync(
+            bytes.AsMemory(),
+            WebSocketMessageType.Text,
             endOfMessage: true,
             CancellationToken.None);
 

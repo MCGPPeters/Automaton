@@ -9,6 +9,10 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <Content Include="xunit.runner.json" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+
+  <ItemGroup>
     <FrameworkReference Include="Microsoft.AspNetCore.App" />
   </ItemGroup>
 
@@ -27,6 +31,8 @@
 
   <ItemGroup>
     <ProjectReference Include="..\Abies.AppHost\Abies.AppHost.csproj" />
+    <ProjectReference Include="..\Abies.Conduit.App\Abies.Conduit.App.csproj" />
+    <ProjectReference Include="..\Abies.Server.Kestrel\Abies.Server.Kestrel.csproj" />
   </ItemGroup>
 
 </Project>

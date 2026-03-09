@@ -197,10 +197,12 @@ public static class Page
             case RenderMode.InteractiveWasm:
                 // Inline module that imports dotnet.js and starts the .NET runtime.
                 // This replaces the standalone main.js used in pure-WASM hosting.
-                // The import path is relative to the page URL (root), so
-                // "./_framework/dotnet.js" resolves to the AppBundle's _framework dir.
+                // The import path MUST be absolute (leading /) so it resolves
+                // correctly regardless of the current page URL. A relative path
+                // like "./_framework/dotnet.js" would resolve to
+                // "/article/_framework/dotnet.js" when the page is at "/article/slug".
                 sb.Append("  <script type=\"module\">\n");
-                sb.Append("    import { dotnet } from './_framework/dotnet.js';\n");
+                sb.Append("    import { dotnet } from '/_framework/dotnet.js';\n");
                 sb.Append("    await dotnet.run();\n");
                 sb.Append("  </script>\n");
                 break;
@@ -211,7 +213,7 @@ public static class Page
                 sb.Append(System.Web.HttpUtility.HtmlAttributeEncode(auto.WebSocketPath));
                 sb.Append("\" data-auto=\"true\"></script>\n");
                 sb.Append("  <script type=\"module\">\n");
-                sb.Append("    import { dotnet } from './_framework/dotnet.js';\n");
+                sb.Append("    import { dotnet } from '/_framework/dotnet.js';\n");
                 sb.Append("    await dotnet.run();\n");
                 sb.Append("  </script>\n");
                 break;

@@ -284,7 +284,18 @@
             case OP_UPDATE_ATTRIBUTE:
             case OP_ADD_ATTRIBUTE: {
                 const el = document.getElementById(f1);
-                if (el) el.setAttribute(f2, f3);
+                if (el) {
+                    el.setAttribute(f2, f3);
+                    // For properties that diverge from their HTML attributes after
+                    // user interaction (value, checked), also set the DOM property
+                    // directly. setAttribute("value", "") only sets the default value,
+                    // not the live value that the user sees.
+                    if (f2 === "value" && "value" in el) {
+                        el.value = f3;
+                    } else if (f2 === "checked" && "checked" in el) {
+                        el.checked = f3 === "" || f3 === "true" || f3 === "checked";
+                    }
+                }
                 break;
             }
 
@@ -559,12 +570,53 @@
     }
 
     // =========================================================================
+    // Server-Initiated Navigation
+    // =========================================================================
+    // When the MVU runtime on the server produces a NavigationCommand (e.g.,
+    // Navigation.PushUrl after saving an article), the server sends a text
+    // frame with a JSON navigation message. The client applies it to the
+    // browser's history API without triggering a full page reload.
+    // =========================================================================
+
+    function handleNavigationMessage(msg) {
+        switch (msg.action) {
+            case "push":
+                if (msg.url) {
+                    history.pushState(null, "", msg.url);
+                }
+                break;
+            case "replace":
+                if (msg.url) {
+                    history.replaceState(null, "", msg.url);
+                }
+                break;
+            case "back":
+                history.back();
+                break;
+            case "forward":
+                history.forward();
+                break;
+            case "external":
+                if (msg.url) {
+                    window.location.href = msg.url;
+                }
+                break;
+        }
+    }
+
+    // =========================================================================
     // WebSocket Connection
     // =========================================================================
 
     function connect(wsPath) {
         const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
-        const wsUrl = protocol + "//" + window.location.host + wsPath;
+        // Append the current page path as a query parameter so the server
+        // can initialize the MVU session at the correct route. The Origin
+        // header only contains scheme+host (no path), and Referer is not
+        // always sent on WebSocket upgrade requests.
+        const currentPath = window.location.pathname + window.location.search + window.location.hash;
+        const wsUrl = protocol + "//" + window.location.host + wsPath
+            + "?url=" + encodeURIComponent(currentPath);
 
         ws = new WebSocket(wsUrl);
         ws.binaryType = "arraybuffer";
@@ -580,8 +632,17 @@
                 // Binary frame: patch batch from server
                 const bytes = new Uint8Array(event.data);
                 applyBinaryBatch(bytes);
+            } else if (typeof event.data === "string") {
+                // Text frame: server-to-client message (e.g., navigation command)
+                try {
+                    const msg = JSON.parse(event.data);
+                    if (msg.type === "navigate") {
+                        handleNavigationMessage(msg);
+                    }
+                } catch (e) {
+                    // Ignore malformed text frames
+                }
             }
-            // Text frames are not expected from the server, ignore them.
         };
 
         ws.onclose = function () {

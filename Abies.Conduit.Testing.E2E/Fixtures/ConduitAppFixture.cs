@@ -1,22 +1,13 @@
 // =============================================================================
-// ConduitAppFixture — Aspire-Based E2E Test Infrastructure
+// ConduitAppFixture — Aspire-Based E2E Test Infrastructure (WASM Mode)
 // =============================================================================
-// Starts the full Conduit stack via Aspire:
-//   - KurrentDB (container) — event store
-//   - PostgreSQL (container) — read model
-//   - Conduit API — REST backend
-//   - Static file server — WASM frontend
-//   - Playwright browser — test automation
+// Serves the WASM frontend as static files with Playwright route interception
+// to redirect API calls from http://localhost:5000 to the shared Aspire backend.
 //
-// Uses DistributedApplicationTestingBuilder for full-stack orchestration.
+// Uses SharedInfra to share the Aspire backend across all render-mode fixtures.
 // The WASM app is published once and served as static files.
-// API calls from the WASM app are intercepted via Playwright route
-// and redirected to the Aspire-managed API endpoint.
 // =============================================================================
 
-using System.Net.Http.Json;
-using Aspire.Hosting;
-using Aspire.Hosting.Testing;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.StaticFiles;
@@ -25,17 +16,17 @@ using Microsoft.Playwright;
 namespace Abies.Conduit.Testing.E2E.Fixtures;
 
 /// <summary>
-/// Shared fixture that starts the full Conduit stack for E2E testing.
+/// Shared fixture that serves the Conduit WASM app for E2E testing.
 /// Implements <see cref="IAsyncLifetime"/> for xUnit lifecycle management.
 /// </summary>
 public sealed class ConduitAppFixture : IAsyncLifetime
 {
-    private DistributedApplication? _app;
+    private ConduitInfraFixture? _infra;
     private IPlaywright? _playwright;
     private IBrowser? _browser;
 
     /// <summary>The base URL of the Conduit API (Aspire-managed).</summary>
-    public string ApiUrl { get; private set; } = "";
+    public string ApiUrl => _infra?.ApiUrl ?? throw new InvalidOperationException("Fixture not initialized.");
 
     /// <summary>The base URL of the WASM frontend (static file server).</summary>
     public string FrontendUrl { get; private set; } = "";
@@ -56,18 +47,19 @@ public sealed class ConduitAppFixture : IAsyncLifetime
 
         // Log browser console messages for diagnostics
         page.Console += (_, msg) =>
-            Console.WriteLine($"[Browser {msg.Type}] {msg.Text}");
+            Console.WriteLine($"[Browser:WASM {msg.Type}] {msg.Text}");
 
         page.PageError += (_, error) =>
-            Console.WriteLine($"[Browser ERROR] {error}");
+            Console.WriteLine($"[Browser:WASM ERROR] {error}");
 
         // Intercept API calls from the WASM app and redirect to the Aspire-managed API.
         // The WASM app hardcodes http://localhost:5000 as the API URL.
         // We rewrite those requests to point at the real Aspire-assigned API endpoint.
+        var apiUrl = ApiUrl;
         await page.RouteAsync("http://localhost:5000/api/**", async route =>
         {
             var originalUrl = route.Request.Url;
-            var redirectedUrl = originalUrl.Replace("http://localhost:5000", ApiUrl);
+            var redirectedUrl = originalUrl.Replace("http://localhost:5000", apiUrl);
 
             // Forward the request to the real API
             var response = await route.FetchAsync(new RouteFetchOptions
@@ -89,31 +81,8 @@ public sealed class ConduitAppFixture : IAsyncLifetime
     /// <inheritdoc />
     public async Task InitializeAsync()
     {
-        // ─── Start the Aspire AppHost ──────────────────────────────────
-        var builder = await DistributedApplicationTestingBuilder
-            .CreateAsync<Projects.Abies_AppHost>();
-
-        // Build and start the distributed application
-        _app = await builder.BuildAsync();
-        await _app.StartAsync();
-
-        // Get the API endpoint from Aspire
-        var apiEndpoint = _app.GetEndpoint("conduit-api", "http");
-        ApiUrl = apiEndpoint.ToString().TrimEnd('/');
-
-        // Log the KurrentDB endpoint for diagnostics
-        try
-        {
-            var kurrentDbEndpoint = _app.GetEndpoint("kurrentdb", "http");
-            Console.WriteLine($"[E2E Fixture] KurrentDB endpoint: {kurrentDbEndpoint}");
-        }
-        catch (Exception ex)
-        {
-            Console.WriteLine($"[E2E Fixture] Could not get KurrentDB endpoint: {ex.Message}");
-        }
-
-        // Wait for the API to be healthy
-        await WaitForApiHealthy(ApiUrl);
+        // Get the shared Aspire backend (starts once per test run)
+        _infra = await SharedInfra.GetAsync();
 
         // ─── Publish and serve the WASM frontend ──────────────────────
         FrontendUrl = await PublishAndServeWasmApp();
@@ -122,7 +91,7 @@ public sealed class ConduitAppFixture : IAsyncLifetime
         _playwright = await Playwright.CreateAsync();
         _browser = await _playwright.Chromium.LaunchAsync(new BrowserTypeLaunchOptions
         {
-            Headless = Environment.GetEnvironmentVariable("HEADED") == "1" ? false : true,
+            Headless = Environment.GetEnvironmentVariable("HEADED") != "1",
             SlowMo = Environment.GetEnvironmentVariable("HEADED") == "1" ? 300 : 0
         });
     }
@@ -134,76 +103,6 @@ public sealed class ConduitAppFixture : IAsyncLifetime
             await _browser.DisposeAsync();
 
         _playwright?.Dispose();
-
-        if (_app is not null)
-            await _app.DisposeAsync();
-    }
-
-    /// <summary>
-    /// Polls the API until it can handle both reads AND writes, or timeout expires.
-    /// First checks the read endpoint (/api/tags), then performs a test registration
-    /// to verify the event store and read model are fully operational.
-    /// </summary>
-    private static async Task WaitForApiHealthy(string apiUrl, int timeoutSeconds = 300)
-    {
-        using var http = new HttpClient();
-        var deadline = DateTime.UtcNow.AddSeconds(timeoutSeconds);
-        var started = DateTime.UtcNow;
-
-        // Phase 1: Wait for the API process to respond at all
-        Console.WriteLine($"[E2E Fixture] Phase 1: Waiting for API at {apiUrl} to respond...");
-        while (DateTime.UtcNow < deadline)
-        {
-            try
-            {
-                var response = await http.GetAsync($"{apiUrl}/api/tags");
-                if (response.IsSuccessStatusCode)
-                {
-                    var elapsed = (DateTime.UtcNow - started).TotalSeconds;
-                    Console.WriteLine($"[E2E Fixture] Phase 1 complete: API responding after {elapsed:F1}s");
-                    break;
-                }
-            }
-            catch
-            {
-                // API not ready yet
-            }
-
-            await Task.Delay(500);
-        }
-
-        // Phase 2: Wait for write path (event store + read model) to be ready
-        // by attempting a probe registration
-        Console.WriteLine("[E2E Fixture] Phase 2: Waiting for write path (KurrentDB) to be ready...");
-        var probeId = Guid.NewGuid().ToString("N")[..10];
-        while (DateTime.UtcNow < deadline)
-        {
-            try
-            {
-                var response = await http.PostAsJsonAsync(
-                    $"{apiUrl}/api/users",
-                    new { user = new { username = $"probe{probeId}", email = $"probe{probeId}@test.com", password = "probe12345" } });
-
-                if (response.IsSuccessStatusCode || (int)response.StatusCode == 422)
-                {
-                    var elapsed = (DateTime.UtcNow - started).TotalSeconds;
-                    Console.WriteLine($"[E2E Fixture] Phase 2 complete: Write path ready after {elapsed:F1}s (status: {(int)response.StatusCode})");
-                    return; // 200 = success, 422 = validation error (infra is fine)
-                }
-
-                var body = await response.Content.ReadAsStringAsync();
-                Console.WriteLine($"[E2E Fixture] Write probe returned {(int)response.StatusCode} at {(DateTime.UtcNow - started).TotalSeconds:F1}s, retrying...");
-            }
-            catch (Exception ex)
-            {
-                Console.WriteLine($"[E2E Fixture] Write probe error: {ex.GetType().Name}, retrying...");
-            }
-
-            await Task.Delay(2000);
-        }
-
-        throw new TimeoutException(
-            $"Conduit API at {apiUrl} did not become fully healthy within {timeoutSeconds} seconds.");
     }
 
     /// <summary>

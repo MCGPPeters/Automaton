@@ -188,12 +188,23 @@ public static class Endpoints
             // Create the transport adapter
             using var transport = new WebSocketTransport(webSocket);
 
-            // Parse the initial URL from the Referer header (the page URL)
+            // Parse the initial URL from the WebSocket connection.
+            // The JS client appends the current page path as a ?url= query
+            // parameter on the WebSocket URL (e.g., /_abies/ws?url=%2Fregister).
+            // This is the most reliable method since:
+            //   - Origin header has no path (only scheme+host)
+            //   - Referer header is not always sent on WebSocket upgrades
+            //   - Query parameters are always available on the upgrade request
             Url? initialUrl = null;
-            if (context.Request.Headers.TryGetValue("Origin", out var origin) &&
-                Uri.TryCreate(origin.ToString(), UriKind.Absolute, out var originUri))
+            var urlParam = context.Request.Query["url"].FirstOrDefault();
+            if (urlParam is not null)
             {
-                initialUrl = Url.FromUri(originUri);
+                initialUrl = Navigation.ParseUrl(urlParam);
+            }
+            else if (context.Request.Headers.TryGetValue("Referer", out var referer) &&
+                     Uri.TryCreate(referer.ToString(), UriKind.Absolute, out var refererUri))
+            {
+                initialUrl = Url.FromUri(refererUri);
             }
 
             activity?.SetTag("abies.initialUrl", initialUrl?.ToString());
@@ -203,6 +214,7 @@ public static class Endpoints
                 sendPatches: transport.CreateSendPatches(),
                 receiveEvent: transport.CreateReceiveEvent(),
                 interpreter: interpreter,
+                sendText: transport.CreateSendText(),
                 argument: argument,
                 initialUrl: initialUrl);
 
