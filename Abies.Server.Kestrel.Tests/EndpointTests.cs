@@ -226,7 +226,7 @@ public class EndpointTests
 
         var html = await client.GetStringAsync("/");
 
-        Assert.Contains("import { dotnet } from './_framework/dotnet.js'", html);
+        Assert.Contains("import { dotnet } from '/_framework/dotnet.js'", html);
         Assert.Contains("await dotnet.run()", html);
         Assert.DoesNotContain("abies-server.js", html);
     }
@@ -245,7 +245,7 @@ public class EndpointTests
         var html = await client.GetStringAsync("/");
 
         Assert.Contains("abies-server.js", html);
-        Assert.Contains("import { dotnet } from './_framework/dotnet.js'", html);
+        Assert.Contains("import { dotnet } from '/_framework/dotnet.js'", html);
         Assert.Contains("await dotnet.run()", html);
         Assert.Contains("data-auto", html);
     }
@@ -361,7 +361,7 @@ public class EndpointTests
         var html = await client.GetStringAsync("/articles");
 
         Assert.Contains("Page: articles", html);
-        Assert.Contains("import { dotnet } from './_framework/dotnet.js'", html);
+        Assert.Contains("import { dotnet } from '/_framework/dotnet.js'", html);
     }
 
     // =========================================================================
