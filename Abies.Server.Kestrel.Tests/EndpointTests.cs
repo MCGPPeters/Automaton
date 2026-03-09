@@ -226,7 +226,8 @@ public class EndpointTests
 
         var html = await client.GetStringAsync("/");
 
-        Assert.Contains("dotnet.js", html);
+        Assert.Contains("import { dotnet } from './_framework/dotnet.js'", html);
+        Assert.Contains("await dotnet.run()", html);
         Assert.DoesNotContain("abies-server.js", html);
     }
 
@@ -244,7 +245,8 @@ public class EndpointTests
         var html = await client.GetStringAsync("/");
 
         Assert.Contains("abies-server.js", html);
-        Assert.Contains("dotnet.js", html);
+        Assert.Contains("import { dotnet } from './_framework/dotnet.js'", html);
+        Assert.Contains("await dotnet.run()", html);
         Assert.Contains("data-auto", html);
     }
 
@@ -330,5 +332,88 @@ public class EndpointTests
         var response = await client.GetAsync("/_abies/nonexistent.js");
 
         Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
+    }
+
+    // =========================================================================
+    // InteractiveWasm Mode — No WebSocket Endpoint
+    // =========================================================================
+
+    [Fact]
+    public async Task InteractiveWasm_NoWebSocketEndpoint()
+    {
+        await using var host = await AbiesTestHost.Create(
+            new RenderMode.InteractiveWasm());
+        using var client = host.CreateClient();
+
+        // The /_abies/ws endpoint should not exist in InteractiveWasm mode
+        var response = await client.GetAsync("/_abies/ws");
+
+        Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task InteractiveWasm_RoutesFromRequestPath()
+    {
+        await using var host = await AbiesTestHost.Create(
+            new RenderMode.InteractiveWasm(), path: "/{**catch-all}");
+        using var client = host.CreateClient();
+
+        var html = await client.GetStringAsync("/articles");
+
+        Assert.Contains("Page: articles", html);
+        Assert.Contains("import { dotnet } from './_framework/dotnet.js'", html);
+    }
+
+    // =========================================================================
+    // UseAbiesWasmFiles — WASM Static File Serving
+    // =========================================================================
+
+    [Fact]
+    public void UseAbiesWasmFiles_ThrowsForMissingDirectory()
+    {
+        var builder = WebApplication.CreateBuilder();
+        var app = builder.Build();
+
+        Assert.Throws<DirectoryNotFoundException>(() =>
+            app.UseAbiesWasmFiles("/nonexistent/path/to/wasm"));
+    }
+
+    [Fact]
+    public async Task UseAbiesWasmFiles_ServesFilesFromAppBundle()
+    {
+        // Create a temporary directory simulating an AppBundle
+        var tempDir = Path.Combine(Path.GetTempPath(), $"abies-wasm-test-{Guid.NewGuid():N}");
+        var frameworkDir = Path.Combine(tempDir, "_framework");
+        Directory.CreateDirectory(frameworkDir);
+
+        try
+        {
+            // Write a fake dotnet.js
+            await File.WriteAllTextAsync(
+                Path.Combine(frameworkDir, "dotnet.js"),
+                "// mock dotnet.js for testing\nexport const dotnet = {};");
+
+            var builder = WebApplication.CreateBuilder();
+            builder.WebHost.UseTestServer();
+
+            var app = builder.Build();
+            app.UseAbiesWasmFiles(tempDir);
+            app.MapAbies<TestCounter, TestModel, Unit>("/", new RenderMode.InteractiveWasm());
+
+            await app.StartAsync();
+
+            using var client = app.GetTestClient();
+            var response = await client.GetAsync("/_framework/dotnet.js");
+
+            Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+            var content = await response.Content.ReadAsStringAsync();
+            Assert.Contains("mock dotnet.js", content);
+
+            await app.DisposeAsync();
+        }
+        finally
+        {
+            Directory.Delete(tempDir, recursive: true);
+        }
     }
 }
