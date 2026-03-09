@@ -172,7 +172,8 @@ public sealed class Session<TProgram, TModel, TArgument> : IDisposable
                     _ => (null, null)
                 };
 
-                if (action is null) return;
+                if (action is null)
+                    return;
 
                 var json = url is not null
                     ? $$"""{"type":"navigate","action":"{{action}}","url":"{{url}}"}"""
@@ -255,7 +256,8 @@ public sealed class Session<TProgram, TModel, TArgument> : IDisposable
     /// <inheritdoc/>
     public void Dispose()
     {
-        if (_disposed) return;
+        if (_disposed)
+            return;
         _disposed = true;
         _runtime.Dispose();
     }

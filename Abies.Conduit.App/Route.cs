@@ -26,7 +26,7 @@ public static class Route
     public static (Page Page, Command Command) FromUrl(Url url, Session? session, string apiUrl) =>
         url.Path switch
         {
-            [] or [""] => HomeRoute(session, apiUrl),
+        [] or [""] => HomeRoute(session, apiUrl),
             ["login"] => LoginRoute(),
             ["register"] => RegisterRoute(),
             ["settings"] => SettingsRoute(session),

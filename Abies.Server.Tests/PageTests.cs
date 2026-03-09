@@ -195,7 +195,7 @@ public class PageTests
         var html = Page.Render<TestCounter, TestModel, Unit>(
             new RenderMode.InteractiveWasm());
 
-        Assert.Contains("import { dotnet } from './_framework/dotnet.js'", html);
+        Assert.Contains("import { dotnet } from '/_framework/dotnet.js'", html);
         Assert.Contains("await dotnet.run()", html);
     }
 
