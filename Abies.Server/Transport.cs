@@ -86,3 +86,23 @@ public delegate ValueTask<DomEvent?> ReceiveEvent(CancellationToken cancellation
 /// For click events this may be empty; for input events it contains the value.
 /// </param>
 public readonly record struct DomEvent(string CommandId, string EventName, string EventData);
+
+/// <summary>
+/// Sends a text message to the client over the transport.
+/// </summary>
+/// <remarks>
+/// <para>
+/// Used for out-of-band server-to-client messages that are not DOM patches.
+/// The primary use case is <see cref="NavigationCommand"/> execution: when the
+/// MVU runtime produces a <see cref="NavigationCommand.Push"/> or
+/// <see cref="NavigationCommand.Replace"/>, the server sends a text frame
+/// instructing the client to call <c>history.pushState</c> or <c>replaceState</c>.
+/// </para>
+/// <para>
+/// The text format is a JSON object with a <c>type</c> discriminator field.
+/// Navigation messages use: <c>{"type":"navigate","action":"push|replace|back|forward|external","url":"..."}</c>
+/// </para>
+/// </remarks>
+/// <param name="text">The text message to send.</param>
+/// <returns>A task that completes when the data has been sent.</returns>
+public delegate ValueTask SendText(string text);

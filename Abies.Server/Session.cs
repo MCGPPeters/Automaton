@@ -72,6 +72,7 @@ public static class Session
     /// <param name="sendPatches">Delegate to send binary patch batches to the client.</param>
     /// <param name="receiveEvent">Delegate to receive DOM events from the client.</param>
     /// <param name="interpreter">Command interpreter for side effects.</param>
+    /// <param name="sendText">Delegate to send text messages (e.g., navigation commands) to the client.</param>
     /// <param name="argument">Initialization parameters for the program.</param>
     /// <param name="initialUrl">Optional initial URL for routing.</param>
     /// <returns>A started session ready to run the event loop.</returns>
@@ -79,12 +80,13 @@ public static class Session
         SendPatches sendPatches,
         ReceiveEvent receiveEvent,
         Interpreter<Command, Message> interpreter,
+        SendText? sendText = null,
         TArgument argument = default!,
         Url? initialUrl = null)
         where TProgram : Program<TModel, TArgument>
     {
         return Session<TProgram, TModel, TArgument>.Start(
-            sendPatches, receiveEvent, interpreter, argument, initialUrl);
+            sendPatches, receiveEvent, interpreter, sendText, argument, initialUrl);
     }
 }
 
@@ -134,6 +136,7 @@ public sealed class Session<TProgram, TModel, TArgument> : IDisposable
         SendPatches sendPatches,
         ReceiveEvent receiveEvent,
         Interpreter<Command, Message> interpreter,
+        SendText? sendText = null,
         TArgument argument = default!,
         Url? initialUrl = null)
     {
@@ -151,11 +154,40 @@ public sealed class Session<TProgram, TModel, TArgument> : IDisposable
             _ = sendPatches(binaryData);
         }
 
+        // Wire the navigation executor: NavigationCommand → JSON text frame → client
+        // The client-side JS (abies-server.js) handles the text frame and calls
+        // history.pushState/replaceState/back/forward accordingly.
+        Action<NavigationCommand>? navigationExecutor = null;
+        if (sendText is not null)
+        {
+            navigationExecutor = navCommand =>
+            {
+                (string? action, string? url) = navCommand switch
+                {
+                    NavigationCommand.Push push => ("push", FormatUrl(push.Url)),
+                    NavigationCommand.Replace replace => ("replace", FormatUrl(replace.Url)),
+                    NavigationCommand.GoBack => ("back", null),
+                    NavigationCommand.GoForward => ("forward", null),
+                    NavigationCommand.External ext => ("external", ext.Href),
+                    _ => (null, null)
+                };
+
+                if (action is null) return;
+
+                var json = url is not null
+                    ? $$"""{"type":"navigate","action":"{{action}}","url":"{{url}}"}"""
+                    : $$"""{"type":"navigate","action":"{{action}}"}""";
+
+                _ = sendText(json);
+            };
+        }
+
         // Start the core runtime with thread safety enabled (server is multi-threaded)
         var runtime = await Runtime<TProgram, TModel, TArgument>.Start(
             apply: ServerApply,
             interpreter: interpreter,
             argument: argument,
+            navigationExecutor: navigationExecutor,
             initialUrl: initialUrl,
             threadSafe: true);
 
@@ -227,4 +259,10 @@ public sealed class Session<TProgram, TModel, TArgument> : IDisposable
         _disposed = true;
         _runtime.Dispose();
     }
+
+    /// <summary>
+    /// Formats an Abies <see cref="Url"/> record as a path string suitable
+    /// for <c>history.pushState</c> (e.g., <c>/articles/my-slug?key=value#section</c>).
+    /// </summary>
+    private static string FormatUrl(Url url) => url.ToRelativeUri();
 }
