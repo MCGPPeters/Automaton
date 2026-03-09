@@ -152,7 +152,7 @@ public sealed class FeedTests : IAsyncLifetime
         await LoginViaUi(readerEmail, "password123");
 
         // Act — navigate to home (SPA navigation to preserve session), "Your Feed" should be available
-        await _page.NavigateInAppAsync("/");
+        await _page.NavigateInApp("/");
         await _page.WaitForSelectorAsync(".home-page", new() { Timeout = 15000 });
         await _page.Locator(".feed-toggle").GetByText("Your Feed").ClickAsync();
         await _page.WaitForTimeoutAsync(2000); // Allow feed to load

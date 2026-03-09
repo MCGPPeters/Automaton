@@ -37,7 +37,7 @@ public sealed class AuthenticationAutoTests : IAsyncLifetime
         // Wait for WASM takeover before interacting with form fields.
         // In Auto mode, the server renders the page initially, then WASM
         // replaces the DOM tree. Filling fields before takeover loses values.
-        await _page.WaitForWasmReadyAsync();
+        await _page.WaitForWasmReady();
         await _page.WaitForSelectorAsync("h1:has-text('Sign up')");
 
         var uniqueName = $"autoreguser{Guid.NewGuid():N}"[..20];
@@ -64,7 +64,7 @@ public sealed class AuthenticationAutoTests : IAsyncLifetime
         await _seeder.RegisterUserAsync(username, email, password);
 
         await _page.GotoAsync("/login");
-        await _page.WaitForWasmReadyAsync();
+        await _page.WaitForWasmReady();
         await _page.WaitForSelectorAsync("h1:has-text('Sign in')");
 
         await _page.GetByPlaceholder("Email").FillAsync(email);
@@ -79,7 +79,7 @@ public sealed class AuthenticationAutoTests : IAsyncLifetime
     public async Task Login_WithInvalidCredentials_ShouldShowErrors()
     {
         await _page.GotoAsync("/login");
-        await _page.WaitForWasmReadyAsync();
+        await _page.WaitForWasmReady();
         await _page.WaitForSelectorAsync("h1:has-text('Sign in')");
 
         await _page.GetByPlaceholder("Email").FillAsync("nonexistent@test.com");

@@ -6,10 +6,10 @@
 // from Url → Page (with side effects handled via Commands).
 // =============================================================================
 
-
 using Automaton;
 
 namespace Abies.Conduit.App;
+
 /// <summary>
 /// Pure URL routing functions.
 /// </summary>
@@ -26,7 +26,7 @@ public static class Route
     public static (Page Page, Command Command) FromUrl(Url url, Session? session, string apiUrl) =>
         url.Path switch
         {
-        [] or [""] => HomeRoute(session, apiUrl),
+            [] or [""] => HomeRoute(session, apiUrl),
             ["login"] => LoginRoute(),
             ["register"] => RegisterRoute(),
             ["settings"] => SettingsRoute(session),

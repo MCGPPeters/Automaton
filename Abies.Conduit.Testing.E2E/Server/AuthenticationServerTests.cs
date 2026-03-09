@@ -42,9 +42,9 @@ public sealed class AuthenticationServerTests : IAsyncLifetime
         // In InteractiveServer mode, each input event round-trips through
         // the WebSocket and causes a DOM patch. We must wait for the server
         // to process and patch back before filling the next field.
-        await _page.GetByPlaceholder("Your Name").FillAndWaitForPatchAsync(uniqueName);
-        await _page.GetByPlaceholder("Email").FillAndWaitForPatchAsync(email);
-        await _page.GetByPlaceholder("Password").FillAndWaitForPatchAsync("password123");
+        await _page.GetByPlaceholder("Your Name").FillAndWaitForPatch(uniqueName);
+        await _page.GetByPlaceholder("Email").FillAndWaitForPatch(email);
+        await _page.GetByPlaceholder("Password").FillAndWaitForPatch("password123");
         await _page.GetByRole(AriaRole.Button, new() { Name = "Sign up" }).ClickAsync();
 
         await _page.WaitForSelectorAsync(".home-page", new() { Timeout = 15000 });
@@ -66,8 +66,8 @@ public sealed class AuthenticationServerTests : IAsyncLifetime
         await _page.GotoAsync("/login");
         await _page.WaitForSelectorAsync("h1:has-text('Sign in')");
 
-        await _page.GetByPlaceholder("Email").FillAndWaitForPatchAsync(email);
-        await _page.GetByPlaceholder("Password").FillAndWaitForPatchAsync(password);
+        await _page.GetByPlaceholder("Email").FillAndWaitForPatch(email);
+        await _page.GetByPlaceholder("Password").FillAndWaitForPatch(password);
         await _page.GetByRole(AriaRole.Button, new() { Name = "Sign in" }).ClickAsync();
 
         await _page.WaitForSelectorAsync(".home-page", new() { Timeout = 15000 });
@@ -80,8 +80,8 @@ public sealed class AuthenticationServerTests : IAsyncLifetime
         await _page.GotoAsync("/login");
         await _page.WaitForSelectorAsync("h1:has-text('Sign in')");
 
-        await _page.GetByPlaceholder("Email").FillAndWaitForPatchAsync("nonexistent@test.com");
-        await _page.GetByPlaceholder("Password").FillAndWaitForPatchAsync("wrongpassword");
+        await _page.GetByPlaceholder("Email").FillAndWaitForPatch("nonexistent@test.com");
+        await _page.GetByPlaceholder("Password").FillAndWaitForPatch("wrongpassword");
         await _page.GetByRole(AriaRole.Button, new() { Name = "Sign in" }).ClickAsync();
 
         await Expect(_page.Locator(".error-messages")).ToBeVisibleAsync(
@@ -112,8 +112,8 @@ public sealed class AuthenticationServerTests : IAsyncLifetime
     {
         await _page.GotoAsync("/login");
         await _page.WaitForSelectorAsync("h1:has-text('Sign in')");
-        await _page.GetByPlaceholder("Email").FillAndWaitForPatchAsync(email);
-        await _page.GetByPlaceholder("Password").FillAndWaitForPatchAsync(password);
+        await _page.GetByPlaceholder("Email").FillAndWaitForPatch(email);
+        await _page.GetByPlaceholder("Password").FillAndWaitForPatch(password);
         await _page.GetByRole(AriaRole.Button, new() { Name = "Sign in" }).ClickAsync();
         await _page.WaitForSelectorAsync(".home-page", new() { Timeout = 15000 });
     }

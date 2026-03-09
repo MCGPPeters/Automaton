@@ -32,14 +32,14 @@ public sealed class JwtTokenService
     /// <summary>
     /// Creates a new JWT token service.
     /// </summary>
-    /// <param name="secret">The HMAC-SHA256 signing secret (minimum 32 bytes).</param>
+    /// <param name="secret">The HMAC-SHA256 signing secret (minimum 32 UTF-8 bytes).</param>
     /// <param name="issuer">The JWT issuer claim.</param>
     /// <param name="expiration">Token expiration duration. Defaults to 7 days.</param>
     public JwtTokenService(string secret, string issuer = "conduit", TimeSpan? expiration = null)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(secret);
-        if (secret.Length < 32)
-            throw new ArgumentException("JWT secret must be at least 32 characters.", nameof(secret));
+        if (System.Text.Encoding.UTF8.GetByteCount(secret) < 32)
+            throw new ArgumentException("JWT secret must be at least 32 bytes (UTF-8 encoded).", nameof(secret));
 
         _signingKey = new SymmetricSecurityKey(System.Text.Encoding.UTF8.GetBytes(secret));
         _credentials = new SigningCredentials(_signingKey, SecurityAlgorithms.HmacSha256);

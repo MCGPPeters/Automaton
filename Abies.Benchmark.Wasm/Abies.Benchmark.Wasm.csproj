@@ -20,19 +20,19 @@
   <!-- Copy wwwroot files to the AppBundle output directory after WASM bundle generation. -->
   <Target Name="CopyWwwrootToAppBundle" AfterTargets="WasmGenerateAppBundle">
     <ItemGroup>
-      <WwwrootFiles Include="wwwroot\**\*" />
+      <WwwrootFiles Include="wwwroot/**/*" />
     </ItemGroup>
     <Copy SourceFiles="@(WwwrootFiles)"
-          DestinationFiles="@(WwwrootFiles->'$(OutputPath)AppBundle\%(RecursiveDir)%(Filename)%(Extension)')"
+          DestinationFiles="@(WwwrootFiles->'$(OutputPath)AppBundle/%(RecursiveDir)%(Filename)%(Extension)')"
           SkipUnchangedFiles="true" />
   </Target>
 
   <!-- Copy the canonical abies.js from the Abies.Browser library to AppBundle. -->
   <Target Name="CopyAbiesJs" AfterTargets="CopyWwwrootToAppBundle"
-          Inputs="..\Abies.Browser\wwwroot\abies.js"
-          Outputs="$(OutputPath)AppBundle\abies.js">
-    <Copy SourceFiles="..\Abies.Browser\wwwroot\abies.js"
-          DestinationFiles="$(OutputPath)AppBundle\abies.js" />
+          Inputs="../Abies.Browser/wwwroot/abies.js"
+          Outputs="$(OutputPath)AppBundle/abies.js">
+    <Copy SourceFiles="../Abies.Browser/wwwroot/abies.js"
+          DestinationFiles="$(OutputPath)AppBundle/abies.js" />
   </Target>
 
 </Project>

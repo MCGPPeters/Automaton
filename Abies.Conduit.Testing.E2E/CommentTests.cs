@@ -57,7 +57,7 @@ public sealed class CommentTests : IAsyncLifetime
         await LoginViaUi(email, "password123");
 
         // Navigate to article (SPA navigation to preserve session)
-        await _page.NavigateInAppAsync($"/article/{article.Slug}");
+        await _page.NavigateInApp($"/article/{article.Slug}");
 
         // Wait for article content to load with comment form visible
         await _page.GetByPlaceholder("Write a comment...").WaitForAsync(new() { State = WaitForSelectorState.Visible, Timeout = 15000 });
@@ -93,7 +93,7 @@ public sealed class CommentTests : IAsyncLifetime
         await LoginViaUi(email, "password123");
 
         // Navigate to article (SPA navigation to preserve session)
-        await _page.NavigateInAppAsync($"/article/{article.Slug}");
+        await _page.NavigateInApp($"/article/{article.Slug}");
 
         // Wait for comment to be visible (article fully loaded)
         await Expect(_page.Locator(".card .card-block p").First)
@@ -127,7 +127,7 @@ public sealed class CommentTests : IAsyncLifetime
         await LoginViaUi(email, "password123");
 
         // Navigate to article (SPA navigation to preserve session)
-        await _page.NavigateInAppAsync($"/article/{article.Slug}");
+        await _page.NavigateInApp($"/article/{article.Slug}");
 
         // Wait for article content to load with comment form visible
         await _page.GetByPlaceholder("Write a comment...").WaitForAsync(new() { State = WaitForSelectorState.Visible, Timeout = 15000 });

@@ -145,6 +145,7 @@ jobs:
           echo "🔍 Checking formatting for changed files..."
           dotnet format whitespace --verify-no-changes --include $FILES --verbosity diagnostic
           dotnet format style --verify-no-changes --include $FILES --severity error --verbosity diagnostic
+          dotnet format analyzers --verify-no-changes --include $FILES --severity error --verbosity diagnostic
 
       - name: Skip format check
         if: steps.changed-files.outputs.has_cs_files == 'false'

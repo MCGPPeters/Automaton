@@ -53,7 +53,7 @@ public sealed class SettingsServerTests : IAsyncLifetime
         await _page.WaitForSelectorAsync(".settings-page", new() { Timeout = 10000 });
 
         const string newBio = "Updated bio from server mode E2E test";
-        await _page.GetByPlaceholder("Short bio about you").FillAndWaitForPatchAsync(newBio);
+        await _page.GetByPlaceholder("Short bio about you").FillAndWaitForPatch(newBio);
         await _page.GetByRole(AriaRole.Button, new() { Name = "Update Settings" }).ClickAsync();
 
         await _page.WaitForSelectorAsync("button:has-text('Update Settings'):not([disabled])",
@@ -67,8 +67,8 @@ public sealed class SettingsServerTests : IAsyncLifetime
     {
         await _page.GotoAsync("/login");
         await _page.WaitForSelectorAsync("h1:has-text('Sign in')");
-        await _page.GetByPlaceholder("Email").FillAndWaitForPatchAsync(email);
-        await _page.GetByPlaceholder("Password").FillAndWaitForPatchAsync(password);
+        await _page.GetByPlaceholder("Email").FillAndWaitForPatch(email);
+        await _page.GetByPlaceholder("Password").FillAndWaitForPatch(password);
         await _page.GetByRole(AriaRole.Button, new() { Name = "Sign in" }).ClickAsync();
         await _page.WaitForSelectorAsync(".home-page", new() { Timeout = 15000 });
     }

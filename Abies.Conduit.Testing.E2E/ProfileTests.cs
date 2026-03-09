@@ -83,7 +83,7 @@ public sealed class ProfileTests : IAsyncLifetime
         await LoginViaUi(followerEmail, "password123");
 
         // Navigate to target's profile (SPA navigation to preserve session)
-        await _page.NavigateInAppAsync($"/profile/{target}");
+        await _page.NavigateInApp($"/profile/{target}");
 
         // Wait for profile content to load
         await Expect(_page.Locator(".user-info h4")).ToContainTextAsync(target, new() { Timeout = 15000 });
@@ -117,7 +117,7 @@ public sealed class ProfileTests : IAsyncLifetime
         await LoginViaUi(followerEmail, "password123");
 
         // Navigate to target's profile (SPA navigation to preserve session)
-        await _page.NavigateInAppAsync($"/profile/{target}");
+        await _page.NavigateInApp($"/profile/{target}");
 
         // Wait for profile content to load with unfollow button visible
         await Expect(_page.Locator($"button:has-text('Unfollow {target}')").First)
@@ -163,7 +163,7 @@ public sealed class ProfileTests : IAsyncLifetime
         await LoginViaUi(authorEmail, "password123");
 
         // Navigate to own profile (SPA navigation to preserve session)
-        await _page.NavigateInAppAsync($"/profile/{author}");
+        await _page.NavigateInApp($"/profile/{author}");
 
         // Wait for profile content to load
         await Expect(_page.Locator(".user-info h4")).ToContainTextAsync(author, new() { Timeout = 15000 });
@@ -195,7 +195,7 @@ public sealed class ProfileTests : IAsyncLifetime
         await LoginViaUi(email, "password123");
 
         // Act — navigate to own profile (SPA navigation to preserve session)
-        await _page.NavigateInAppAsync($"/profile/{username}");
+        await _page.NavigateInApp($"/profile/{username}");
 
         // Wait for profile content to load
         await Expect(_page.Locator(".user-info h4")).ToContainTextAsync(username, new() { Timeout = 15000 });
