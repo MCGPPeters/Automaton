@@ -19,14 +19,14 @@ dotnet add package Automaton
 ## The Kernel
 
 ```csharp
-public interface Automaton<TState, TEvent, TEffect>
+public interface Automaton<TState, TEvent, TEffect, TParameters>
 {
-    static abstract (TState State, TEffect Effect) Initialize();
+    static abstract (TState State, TEffect Effect) Initialize(TParameters parameters);
     static abstract (TState State, TEffect Effect) Transition(TState state, TEvent @event);
 }
 ```
 
-Two methods. Zero dependencies. The rest is runtime.
+Two methods. Zero dependencies. The rest is runtime. Use `Unit` as `TParameters` for automata that require no initialization parameters.
 
 ## Example: Counter
 
@@ -44,9 +44,9 @@ public interface CounterEffect
     record struct None : CounterEffect;
 }
 
-public class Counter : Automaton<CounterState, CounterEvent, CounterEffect>
+public class Counter : Automaton<CounterState, CounterEvent, CounterEffect, Unit>
 {
-    public static (CounterState, CounterEffect) Initialize() =>
+    public static (CounterState, CounterEffect) Initialize(Unit _) =>
         (new CounterState(0), new CounterEffect.None());
 
     public static (CounterState, CounterEffect) Transition(CounterState state, CounterEvent @event) =>
@@ -62,14 +62,16 @@ public class Counter : Automaton<CounterState, CounterEvent, CounterEffect>
 ## The Shared Runtime
 
 ```csharp
-var runtime = await AutomatonRuntime<Counter, CounterState, CounterEvent, CounterEffect>
+var runtime = await AutomatonRuntime<Counter, CounterState, CounterEvent, CounterEffect, Unit>
     .Start(
+        default,
         observer: (state, @event, effect) =>
         {
             Console.WriteLine($"{@event} → {state}");
-            return ValueTask.CompletedTask;
+            return PipelineResult.Ok;
         },
-        interpreter: _ => new ValueTask<CounterEvent[]>([]));
+        interpreter: _ => new ValueTask<Result<CounterEvent[], PipelineError>>(
+            Result<CounterEvent[], PipelineError>.Ok([])));
 
 await runtime.Dispatch(new CounterEvent.Increment());
 // Prints: Increment → CounterState { Count = 1 }
@@ -79,18 +81,32 @@ await runtime.Dispatch(new CounterEvent.Increment());
 
 | Property | Guarantee |
 | -------- | --------- |
-| **Thread safety** | All public mutating methods are serialized via `SemaphoreSlim`. Concurrent callers are queued, never interleaved. |
+| **Thread safety** | All public mutating methods are serialized via `SemaphoreSlim`. Concurrent callers are queued, never interleaved. Pass `threadSafe: false` for single-threaded scenarios (actors, UI loops). |
 | **Cancellation** | All async methods accept `CancellationToken`. |
 | **Feedback depth** | Interpreter feedback loops are bounded (max 64 depth). Runaway cycles throw `InvalidOperationException`. |
-| **Null safety** | Observer and Interpreter are validated at construction. |
+| **Error propagation** | Observer and Interpreter return `Result<T, PipelineError>` — errors propagate as values, not exceptions. Use `PipelineResult.Ok` for the zero-alloc happy path. |
 
 ### Observer Composition
 
-Observers compose sequentially with `Then`:
+Observers compose with monadic combinators:
 
 ```csharp
-var combined = renderObserver.Then(logObserver).Then(metricsObserver);
+var pipeline = renderObserver
+    .Then(logObserver)              // sequential, short-circuits on Err
+    .Then(metricsObserver)
+    .Where((s, e, eff) =>           // guard with predicate
+        eff is not CounterEffect.None)
+    .Catch(err =>                   // recover from errors
+        Result<Unit, PipelineError>.Ok(Unit.Value));
 ```
+
+| Combinator | Behavior |
+| ---------- | -------- |
+| `Then` | Sequential composition, short-circuits on `Err` (Kleisli) |
+| `Where` | Guard — skips observer when predicate is `false` |
+| `Select` | Contramap — adapts observer from one type to another |
+| `Catch` | Error recovery — handle or transform errors |
+| `Combine` | Both run regardless of individual failures (applicative) |
 
 ### Building Custom Runtimes
 
@@ -105,8 +121,8 @@ See the [test project](https://github.com/MCGPPeters/Automaton/tree/main/Automat
 ## The Decider — Command Validation
 
 ```csharp
-public interface Decider<TState, TCommand, TEvent, TEffect, TError>
-    : Automaton<TState, TEvent, TEffect>
+public interface Decider<TState, TCommand, TEvent, TEffect, TError, TParameters>
+    : Automaton<TState, TEvent, TEffect, TParameters>
 {
     static abstract Result<TEvent[], TError> Decide(TState state, TCommand command);
     static virtual bool IsTerminal(TState state) => false;
@@ -115,7 +131,7 @@ public interface Decider<TState, TCommand, TEvent, TEffect, TError>
 
 ```csharp
 var runtime = await DecidingRuntime<Counter, CounterState, CounterCommand,
-    CounterEvent, CounterEffect, CounterError>.Start(observer, interpreter);
+    CounterEvent, CounterEffect, CounterError, Unit>.Start(default, observer, interpreter);
 
 var result = await runtime.Handle(new CounterCommand.Add(5));
 // result is Ok(CounterState { Count = 5 })
@@ -147,14 +163,18 @@ When no listener is registered, instrumentation has near-zero overhead.
 
 | Type | Purpose |
 | ---- | ------- |
-| `Automaton<TState, TEvent, TEffect>` | Mealy machine interface (Initialize + Transition) |
-| `AutomatonRuntime<TAutomaton, TState, TEvent, TEffect>` | Thread-safe async runtime |
+| `Automaton<TState, TEvent, TEffect, TParameters>` | Mealy machine interface (Initialize + Transition) |
+| `AutomatonRuntime<TAutomaton, TState, TEvent, TEffect, TParameters>` | Thread-safe async runtime |
 | `Observer<TState, TEvent, TEffect>` | Transition observer delegate |
 | `Interpreter<TEffect, TEvent>` | Effect interpreter delegate |
-| `ObserverExtensions.Then` | Sequential observer composition |
-| `Decider<TState, TCommand, TEvent, TEffect, TError>` | Command validation interface |
+| `ObserverExtensions` | `Then`, `Where`, `Select`, `Catch`, `Combine` |
+| `InterpreterExtensions` | `Then`, `Where`, `Select`, `Catch` |
+| `Decider<TState, TCommand, TEvent, TEffect, TError, TParameters>` | Command validation interface |
 | `DecidingRuntime<...>` | Command-validating runtime wrapper |
-| `Result<TSuccess, TError>` | Discriminated union with Match, Map, Bind, MapError |
+| `Result<TSuccess, TError>` | Discriminated union with Map, Bind, MapError, LINQ query syntax |
+| `Unit` | Unit type for parameterless automata |
+| `PipelineError` | Structured error from Observer/Interpreter pipeline stages |
+| `PipelineResult` | Pre-allocated `Ok` value for the zero-alloc happy path |
 | `AutomatonDiagnostics` | OpenTelemetry-compatible tracing (ActivitySource) |
 
 ## License
